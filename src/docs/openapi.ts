@@ -379,6 +379,72 @@ export const openApiSpec = {
             },
         },
 
+        '/api/auth/refresh': {
+            post: {
+                tags: ['Auth — public'],
+                summary: 'Exchange a refresh token for a new session',
+                description:
+                    'Called by the frontend interceptor when an access token has expired. ' +
+                    'Supabase rotates the refresh token on every call; the response always ' +
+                    'contains a new refresh_token alongside the new access_token.',
+                security: [],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                required: ['refresh_token'],
+                                properties: {
+                                    refresh_token: {
+                                        type: 'string',
+                                        description: 'The refresh token from a prior login or refresh response.',
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: 'New session issued',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    required: ['session'],
+                                    properties: {
+                                        session: {
+                                            type: 'object',
+                                            required: ['access_token', 'refresh_token'],
+                                            properties: {
+                                                access_token: { type: 'string' },
+                                                refresh_token: { type: 'string' },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: {
+                        description: 'Refresh token is missing, invalid, or expired',
+                        content: {
+                            'application/json': {
+                                schema: { $ref: '#/components/schemas/Error' },
+                                example: {
+                                    error: 'انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.',
+                                    code: 'UNAUTHORIZED',
+                                    requestId: '00000000-0000-0000-0000-000000000000',
+                                },
+                            },
+                        },
+                    },
+                    429: { $ref: '#/components/responses/TooManyRequests' },
+                },
+            },
+        },
+
         '/api/auth/check-license': {
             post: {
                 tags: ['Auth — public'],

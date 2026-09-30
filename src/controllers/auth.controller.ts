@@ -100,3 +100,9 @@ export async function logout(_req: Request, res: Response) {
     // (session revocation) is deferred to v1.1 — see ADR-0004.
     return res.json({ success: true });
 }
+
+export async function refresh(req: Request, res: Response) {
+    const { refresh_token } = (req.body ?? {}) as Record<string, unknown>;
+    const result = await authService.refreshSession(refresh_token as string);
+    return res.json(result);
+}

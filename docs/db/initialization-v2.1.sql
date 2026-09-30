@@ -2023,8 +2023,9 @@ BEGIN
     END IF;
 
     UPDATE employees
-       SET username = btrim(p_username)
-     WHERE id = v_owner_id;
+    SET username             = btrim(p_username),
+        must_change_password = false
+    WHERE id = v_owner_id;
 
     UPDATE saaslicenses
        SET is_used    = true,

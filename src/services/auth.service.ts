@@ -644,3 +644,37 @@ export async function changePassword(
         );
     }
 }
+
+// ============================================================================
+// refreshSession
+// ============================================================================
+//
+// Exchanges a Supabase refresh token for a new access + refresh token pair.
+// Pre-auth flow: the caller's access token has expired by definition, so we
+// use supabaseAnon (no JWT to attach). Supabase rotates the refresh token on
+// every call, so we return the new one alongside the new access token.
+
+export interface RefreshResult {
+    session: { access_token: string; refresh_token: string };
+}
+
+export async function refreshSession(refreshToken: string): Promise<RefreshResult> {
+    if (!isNonEmptyString(refreshToken)) {
+        throw Unauthorized('رمز التحديث مطلوب.', 'UNAUTHORIZED');
+    }
+
+    const { data, error } = await supabaseAnon.auth.refreshSession({
+        refresh_token: refreshToken,
+    });
+
+    if (error || !data?.session) {
+        throw Unauthorized('انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.', 'UNAUTHORIZED');
+    }
+
+    return {
+        session: {
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+        },
+    };
+}

@@ -29,6 +29,7 @@ const router = Router();
 // --- Public (rate-limited) --------------------------------------------------
 
 router.post('/login', loginLimiter, asyncHandler(authController.login));
+router.post('/refresh', loginLimiter, asyncHandler(authController.refresh));  // ← NEW
 router.post('/check-license', licenseLimiter, asyncHandler(authController.checkLicense));
 router.post('/activate-workspace', licenseLimiter, asyncHandler(authController.activateWorkspace));
 router.post('/forgot-password', forgotPasswordLimiter, asyncHandler(authController.forgotPassword));
