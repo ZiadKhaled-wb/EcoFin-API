@@ -1,9 +1,10 @@
 // server/src/server.ts
 import { createApp } from './app.js';
+import { docsRouter } from './docs/router.js';
 import { env } from './utils/env.js';
 import { logger } from './utils/logger.js';
 
-const app = createApp();
+const app = createApp(docsRouter);
 
 const server = app.listen(env.PORT, () => {
     logger.info({ port: env.PORT, env: env.NODE_ENV }, 'API listening');

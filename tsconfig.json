@@ -4,7 +4,7 @@
         "module": "ES2022",
         "moduleResolution": "bundler",
         "lib": ["ES2022"],
-        "types": ["node", "vitest/globals"],
+        "types": ["node", "vitest/globals", "@cloudflare/workers-types"],
         "outDir": "dist",
         "rootDir": "src",
 

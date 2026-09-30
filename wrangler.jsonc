@@ -3,5 +3,25 @@
   "name": "ecofin-api",
   "main": "dist/worker.js",
   "compatibility_date": "2026-09-30",
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Build configuration — compiles TypeScript before deploying
+  "build": {
+    "command": "npm run build"
+  },
+
+  // Non-sensitive environment variables
+  // Sensitive values (SUPABASE_URL, SUPABASE_ANON_KEY, etc.) should be set
+  // via `wrangler secret put <NAME>` — see README for the full list.
+  "vars": {
+    "NODE_ENV": "production",
+    "SERVICE_NAME": "ecofin-api",
+    "PORT": "3001",
+    "LOG_LEVEL": "info"
+  },
+
+  // Observability — enable Workers logging
+  "observability": {
+    "enabled": true
+  }
 }

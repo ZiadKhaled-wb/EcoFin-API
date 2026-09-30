@@ -9,6 +9,7 @@
 // the app must set `app.set('trust proxy', 1)` behind a reverse proxy.
 
 import rateLimit from 'express-rate-limit';
+import type { RedisReply } from 'rate-limit-redis';
 import type { Request } from 'express';
 import { env } from '../utils/env';
 import { logger } from '../utils/logger';
@@ -16,35 +17,66 @@ import { logger } from '../utils/logger';
 type RateLimitOptions = NonNullable<Parameters<typeof rateLimit>[0]>;
 type StoreOption = NonNullable<RateLimitOptions['store']>;
 
-function buildStore(): StoreOption | undefined {
+async function buildStore(): Promise<StoreOption | undefined> {
     if (!env.RATE_LIMIT_REDIS_URL) return undefined;
+
     try {
-        // Lazy require so the app doesn't fail to boot when Redis isn't
-        // installed (the packages are optional peer deps for this module).
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { RedisStore } = require('rate-limit-redis') as {
-            RedisStore: new (opts: {
-                sendCommand: (...args: string[]) => Promise<unknown>;
-            }) => StoreOption;
-        };
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const Redis = require('ioredis') as new (url: string) => {
-            call: (...args: string[]) => Promise<unknown>;
-        };
+        // Dynamic import for ESM compatibility — require() is not available
+        // in ESM modules. ioredis uses raw TCP which is not supported in
+        // Cloudflare Workers, so this will fail gracefully there.
+        const { RedisStore } = await import('rate-limit-redis');
+        const { default: Redis } = await import('ioredis');
         const client = new Redis(env.RATE_LIMIT_REDIS_URL);
         return new RedisStore({
-            sendCommand: (...args: string[]) => client.call(...args),
+            sendCommand: (command: string, ...args: string[]) =>
+                client.call(command, ...args) as Promise<RedisReply>,
         });
     } catch (err) {
-        logger.error(
+        logger.warn(
             { err },
-            'RATE_LIMIT_REDIS_URL is set but Redis store could not be loaded; falling back to in-memory',
+            'RATE_LIMIT_REDIS_URL is set but Redis store could not be loaded; falling back to in-memory rate limiting',
         );
         return undefined;
     }
 }
 
-const store = buildStore();
+const store = await buildStore();
+
+function createMemoryStore(windowMs: number): StoreOption {
+    const clients = new Map<string, { totalHits: number; resetTime: Date }>();
+    let nextCleanupAt = 0;
+
+    return {
+        localKeys: true,
+        async increment(key) {
+            const now = Date.now();
+            if (now >= nextCleanupAt) {
+                for (const [clientKey, client] of clients) {
+                    if (client.resetTime.getTime() <= now) clients.delete(clientKey);
+                }
+                nextCleanupAt = now + windowMs;
+            }
+
+            let client = clients.get(key);
+            if (!client || client.resetTime.getTime() <= now) {
+                client = { totalHits: 0, resetTime: new Date(now + windowMs) };
+                clients.set(key, client);
+            }
+            client.totalHits += 1;
+            return client;
+        },
+        async decrement(key) {
+            const client = clients.get(key);
+            if (client && client.totalHits > 0) client.totalHits -= 1;
+        },
+        async resetKey(key) {
+            clients.delete(key);
+        },
+        async resetAll() {
+            clients.clear();
+        },
+    };
+}
 
 // Key on IP + tenant_slug when the body has one. A shared NAT (a customer's
 // office) should not be able to lock out an unrelated tenant, and a single
@@ -60,7 +92,6 @@ const shared = {
     standardHeaders: 'draft-7' as const,
     legacyHeaders: false,
     keyGenerator,
-    ...(store ? { store } : {}),
 };
 
 const TOO_MANY_MESSAGE = {
@@ -70,6 +101,7 @@ const TOO_MANY_MESSAGE = {
 
 export const loginLimiter = rateLimit({
     ...shared,
+    store: store ?? createMemoryStore(15 * 60 * 1000),
     windowMs: 15 * 60 * 1000,
     limit: 10,
     message: TOO_MANY_MESSAGE,
@@ -77,6 +109,7 @@ export const loginLimiter = rateLimit({
 
 export const licenseLimiter = rateLimit({
     ...shared,
+    store: store ?? createMemoryStore(15 * 60 * 1000),
     windowMs: 15 * 60 * 1000,
     limit: 20,
     message: TOO_MANY_MESSAGE,
@@ -84,6 +117,7 @@ export const licenseLimiter = rateLimit({
 
 export const forgotPasswordLimiter = rateLimit({
     ...shared,
+    store: store ?? createMemoryStore(60 * 60 * 1000),
     windowMs: 60 * 60 * 1000,
     limit: 5,
     message: TOO_MANY_MESSAGE,
