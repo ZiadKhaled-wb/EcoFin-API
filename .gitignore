@@ -29,6 +29,9 @@ logs/
 coverage/
 .vitest/
 
+# Wrangler local state
+.wrangler/
+
 # OS
 Thumbs.db
 '@ | Out-File -Encoding utf8 .gitignore
