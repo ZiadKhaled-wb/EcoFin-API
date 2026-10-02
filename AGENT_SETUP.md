@@ -21,7 +21,7 @@ Check against **your own list of available tools and files**. Don't guess, and n
 | M2 | **Context7** MCP (current library docs) | everything | You have a tool named like `resolve-library-id` |
 | M3 | **security-guidance** plugin | everything, **Claude Code only** | `/plugin` lists `security-guidance`. Other agents: mark `n.a.` and run the security part of the `ecotech-review` checklist on your own diff instead. |
 | M4 | **Playwright** MCP (real browser) | client UI and E2E tasks | You have tools named like `browser_navigate`, `browser_snapshot` |
-| M5 | Node version | everything | `node --version` matches `v22.x` (see `.nvmrc` / `engines`) |
+| M5 | Node version | everything | `node --version` matches `v24.x` (see `.nvmrc` / `engines`) |
 | M6 | Shell access | everything | You can run `typecheck`, `lint` and `test` and see the output |
 
 ## Step 3: Install what's missing
@@ -31,7 +31,7 @@ If an install needs a slash command, a config file you can't edit, or a restart:
 **M1 (skills, docs):** these live in the repo. If they're missing, the repo is out of date. Stop and say so; don't recreate them.
 
 **M2 Context7:**
-- Claude Code: `claude mcp add context7 -- npx -y @upstash/context7-mcp`
+- Claude Code: `claude mcp add --scope user context7 -- npx -y @upstash/context7-mcp`
 - Codex CLI, in `~/.codex/config.toml`:
   ```toml
   [mcp_servers.context7]
@@ -47,7 +47,7 @@ If an install needs a slash command, a config file you can't edit, or a restart:
 **M3 security-guidance (Claude Code):** the user runs `/plugin install security-guidance@claude-plugins-official`
 
 **M4 Playwright:** same as Context7, with command `npx @playwright/mcp@latest`
-- Claude Code: `claude mcp add playwright -- npx @playwright/mcp@latest`
+- Claude Code: `claude mcp add --scope user playwright -- npx @playwright/mcp@latest`
 
 **M5 Node:** `nvm install && nvm use` (reads `.nvmrc`). If nvm isn't available, tell the user which version is needed.
 

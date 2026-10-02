@@ -15,6 +15,7 @@ If you haven't done it this session, run `AGENT_SETUP.md` (repo root). If a mand
 
 1. Read **only** your task file. It names the slice ID, the files you may touch, and the "Done when" checks.
 2. Open the slice in `docs/EcoTech_Pro_Slices.md` (search for its ID, e.g. `### S01`). Read only that slice plus the "Rules that apply to every slice" section.
+   If the task touches the database: read only the tables it names in `docs/EcoTech_Pro_Data_Model.md`, plus §1 (conventions) and §2 (access model). Never add or rename a table, column or enum that isn't there. If you need one, stop and ask.
 3. Find code cheaply: read `graphify-out/GRAPH_REPORT.md` first; use `graphify query/explain/path` if you have the CLI; then search for the exact symbol. Open only the files you need.
 4. Before using any library API, look it up with **Context7**. Don't code library APIs from memory.
 5. If the task is unclear or conflicts with the slices doc: **stop and ask**. Never guess a business rule.
