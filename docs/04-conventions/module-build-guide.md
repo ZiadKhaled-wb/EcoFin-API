@@ -1,3 +1,5 @@
+> ⚠️ **Outdated: don't copy these templates.** Follow the `ecotech-build` skill and `docs/EcoTech_Pro_Data_Model.md`.
+
 # Module build guide
 
 **Audience:** AI agents and human developers building the next module
