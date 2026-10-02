@@ -78,7 +78,7 @@ Built first. Everything else depends on it. Mostly smart agents.
 **Plan:** V1 · **Agent:** Smart · **Reuse:** New · **Depends on:** F01
 **What it does:** makes the database rebuildable from the repo, and makes every schema change a reviewed file.
 **Includes:**
-- Migration tool (Drizzle) with a `migrations/` folder; a fresh empty database builds from zero with one command
+- Supabase CLI migrations (plain SQL files in `supabase/migrations/`); a fresh empty database builds from zero with one command (`supabase db reset`). Drizzle is used only for typed queries, not migrations. Table and column spec: `docs/EcoTech_Pro_Data_Model.md`
 - Separate seed script for dev data and for the first super admin
 - Table conventions: `id` (uuid), `organization_id`, `created_at`, `updated_at`, `created_by`; money as `numeric(18,2)`; status fields as real enums; soft delete (`archived_at`) instead of hard delete for business records
 - Foreign keys use `(id, organization_id)` so a row can't point to another shop's row
