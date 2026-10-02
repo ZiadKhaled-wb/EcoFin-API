@@ -1,3 +1,4 @@
+-- DEPRECATED: replaced by docs/EcoTech_Pro_Data_Model.md. Don't use for new work.
 -- =============================================================================
 -- EcoFin Pro — Database Initialization Script (v2.1)
 -- Target: PostgreSQL 15+ / Supabase
