@@ -4,11 +4,11 @@
 --
 -- Purpose: close the direct-PostgREST holes found in REPO_AUDIT.md
 --          (§4.2 Critical balance views, §4.2 High `plans`, §4.3 Critical
---          tenant DML, §4.3 Critical `organizations_tenant_update`, §4.3
---          Medium `activate_workspace`; §6 point 1). The browser must never
---          write to the database directly (F05). The API keeps working:
---          service_role is untouched, and the two reads the API makes with
---          the user's JWT still pass (see "Who uses what" below).
+--          tenant DML and reads, §4.3 Critical `organizations_tenant_update`,
+--          §4.3 Medium `activate_workspace`; §6 point 1). The browser must
+--          never read or write the database directly (F05). The API keeps
+--          working: service_role is untouched, and the two reads the API makes
+--          with the user's JWT still pass (see "Who uses what" below).
 --
 -- Date: 2026-10-02
 --
@@ -16,22 +16,32 @@
 --
 -- Idempotent. Safe to re-run. Runs in one transaction (BEGIN ... COMMIT) and
 -- checks its own result at the end; if any check fails, nothing is applied.
--- Requires Postgres 15+ (security_invoker views). Run as `postgres`.
+-- Re-running it after 0004 recreates migration_backup with a snapshot of the
+-- already-locked state (harmless: a rollback from it changes nothing); run
+-- 0004 again afterwards.
+-- Requires Postgres 15+ (security_invoker views) and Supabase's auth.uid().
+-- Run as `postgres`.
 --
 -- Companion files:
 --   0003_db_lockdown.verify.sql    run after applying; every row must say PASS
 --   0003_db_lockdown.rollback.sql  restores the pre-0003 grants and policies
---                                  from the snapshot taken in step 0
+--                                  from the snapshot taken in step 0. Valid
+--                                  only right after 0003, before any later
+--                                  migration, and before 0004 drops the
+--                                  snapshot.
 --
 -- -----------------------------------------------------------------------------
 -- Who uses what (grep of src/ for .from( / .rpc( / supabaseUser / supabaseAnon)
 -- -----------------------------------------------------------------------------
 --   supabaseUser(jwt)  -> role `authenticated`, RLS applies
 --     employees     SELECT  src/middleware/auth.ts:78-85 (attachEmployee)
---                           policy employees_tenant_all -> current_user_org_id()
+--                           columns: id, organization_id, auth_id, branch_id,
+--                           role, permissions, is_active, username, email,
+--                           must_change_password; filter auth_id = caller
 --     super_admins  SELECT  src/middleware/auth.ts:127-131 (loadSuperAdmin)
 --                           src/services/auth.service.ts:176-179 (login step 5)
---                           policy super_admins_self -> is_super_admin()
+--                           columns: id, auth_user_id, email, full_name,
+--                           is_active; filter auth_user_id = caller
 --   supabaseAnon       -> only GoTrue calls (auth.getUser, signInWithPassword,
 --                         resetPasswordForEmail, refreshSession). No .from()
 --                         or .rpc(), so it needs no table or function grant.
@@ -40,31 +50,39 @@
 --     rpc('activate_workspace')            src/services/auth.service.ts
 --   EcoFin-Web         -> supabase.auth.* only (ResetPasswordPage). No tables.
 --
--- So after this migration `authenticated` needs: SELECT on employees and
--- super_admins (kept: SELECT stays on every table) and EXECUTE on
--- current_user_org_id() and is_super_admin() (kept). `anon` needs nothing.
+-- So after this migration `authenticated` gets exactly:
+--   * column SELECT on those 10 employees columns and 5 super_admins columns
+--     (no table-level SELECT anywhere, so salary, national_id, phone, every
+--     other table, the balance views and every ledger are denied);
+--   * RLS on both tables limited to the caller's own row
+--     (employees.auth_id / super_admins.auth_user_id = auth.uid()); all other
+--     policies on those two tables are dropped;
+--   * EXECUTE on auth.uid() (Supabase default, checked, not changed).
+-- `anon` gets nothing.
 --
--- NOT closed here (by decision, pending review): `authenticated` keeps SELECT
--- on every table and view, scoped only by org. Any employee holding their
--- JWT can still read their own org's salaries, national IDs, payments and
--- ledgers through PostgREST (read side of audit §4.3 Critical 1; §6.1 and
--- F05 ask for SELECT to be revoked too). The API itself needs SELECT on only
--- employees and super_admins.
+-- Side effect, intended: an inactive employee can now read their own row, so
+-- attachEmployee returns ACCOUNT_DISABLED (as its code intends) instead of
+-- "no employee". The old org policy hid the row via current_user_org_id(),
+-- which filters is_active. Super admins: same result as before; the code
+-- checks is_active itself.
 --
 -- -----------------------------------------------------------------------------
 -- Function inventory: every function in schema public
 -- (bootstrap initialization-v2.1.sql + 0001 + 0002)
 -- -----------------------------------------------------------------------------
 --   function                          decision  reason
---   current_user_org_id()             KEEP      used by every tenant RLS policy,
---                                               incl. employees_tenant_all
---                                               (attachEmployee). EXECUTE kept
---                                               for authenticated, service_role;
---                                               revoked from PUBLIC, anon (anon
---                                               has no table access left, so
---                                               no policy ever runs as anon).
---   is_super_admin()                  KEEP      used by policies on super_admins
---                                               (loadSuperAdmin, login step 5),
+--   current_user_org_id()             KEEP      used inside the tenant RLS
+--                                               policies (org-scoped tables,
+--                                               organizations, audit_logs).
+--                                               No live API path needs it any
+--                                               more (authenticated has no
+--                                               SELECT on those tables), but the
+--                                               policies must keep working if a
+--                                               later migration grants a table.
+--                                               EXECUTE kept for authenticated,
+--                                               service_role; revoked from
+--                                               PUBLIC, anon.
+--   is_super_admin()                  KEEP      used inside policies on
 --                                               organizations, saaslicenses,
 --                                               organization_plans/addons,
 --                                               audit_logs. Same grants as above.
@@ -131,6 +149,9 @@ BEGIN
        OR to_regrole('service_role') IS NULL THEN
         RAISE EXCEPTION '0003: Supabase roles anon / authenticated / service_role not found';
     END IF;
+    IF to_regprocedure('auth.uid()') IS NULL THEN
+        RAISE EXCEPTION '0003: auth.uid() not found (the own-row policies need it)';
+    END IF;
     IF NOT pg_has_role('postgres', 'MEMBER') THEN
         RAISE EXCEPTION '0003: run as postgres (needed for ALTER DEFAULT PRIVILEGES FOR ROLE postgres), not %',
             current_user;
@@ -160,7 +181,10 @@ CREATE TABLE IF NOT EXISTS migration_backup.m0003_pre_lockdown (
     taken_at        timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (kind, object_identity)
 );
-REVOKE ALL ON TABLE migration_backup.m0003_pre_lockdown FROM PUBLIC, anon, authenticated;
+-- Lock the whole schema, not just this table.
+REVOKE ALL ON ALL TABLES    IN SCHEMA migration_backup FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA migration_backup FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA migration_backup FROM PUBLIC, anon, authenticated;
 
 DO $$
 DECLARE
@@ -245,12 +269,13 @@ BEGIN
           AND d.defaclnamespace = CASE WHEN t.scope = 'global' THEN 0::oid
                                        ELSE 'public'::regnamespace::oid END;
 
-    -- The policy dropped in step 4.
+    -- Every policy 0003 drops: organizations_tenant_update (step 4) and all
+    -- policies on employees and super_admins (step 4b).
     INSERT INTO migration_backup.m0003_pre_lockdown (kind, object_identity, detail)
     SELECT 'policy',
-           'public.organizations.' || pol.polname,
+           format('%I.%I.%I', n.nspname, c.relname, pol.polname),
            jsonb_build_object(
-               'table',      'public.organizations',
+               'table',      format('%I.%I', n.nspname, c.relname),
                'name',       pol.polname,
                'permissive', pol.polpermissive,
                'cmd',        CASE pol.polcmd WHEN 'r' THEN 'SELECT' WHEN 'a' THEN 'INSERT'
@@ -262,8 +287,12 @@ BEGIN
                'using',      pg_get_expr(pol.polqual, pol.polrelid),
                'with_check', pg_get_expr(pol.polwithcheck, pol.polrelid))
     FROM pg_policy pol
-    WHERE pol.polrelid = to_regclass('public.organizations')
-      AND pol.polname = 'organizations_tenant_update';
+    JOIN pg_class c     ON c.oid = pol.polrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE (pol.polrelid = to_regclass('public.organizations')
+           AND pol.polname = 'organizations_tenant_update')
+       OR pol.polrelid = to_regclass('public.employees')
+       OR pol.polrelid = to_regclass('public.super_admins');
 
     PERFORM set_config('search_path', v_old_path, true);
 
@@ -277,33 +306,29 @@ END $$;
 -- -----------------------------------------------------------------------------
 -- ALL TABLES covers tables, views, materialized views and foreign tables.
 
--- anon: nothing at all.
-REVOKE ALL ON ALL TABLES    IN SCHEMA public FROM anon;
-REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon;
+-- anon and authenticated: nothing at table level. A table-level REVOKE also
+-- removes every column-level grant, so the GRANTs below start from zero on
+-- every run (idempotent). ALL also covers MAINTAIN on Postgres 17+.
+REVOKE ALL ON ALL TABLES    IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
 
--- authenticated: read-only. SELECT stays; RLS still scopes it by org.
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
-    ON ALL TABLES IN SCHEMA public FROM authenticated;
--- nextval()/setval() are writes too.
-REVOKE USAGE, UPDATE ON ALL SEQUENCES IN SCHEMA public FROM authenticated;
-
--- MAINTAIN only exists on Postgres 17+.
-DO $$
-BEGIN
-    IF current_setting('server_version_num')::int >= 170000 THEN
-        EXECUTE 'REVOKE MAINTAIN ON ALL TABLES IN SCHEMA public FROM authenticated';
-    END IF;
-END $$;
+-- authenticated: only the columns the API reads with the user's JWT.
+-- attachEmployee (src/middleware/auth.ts:81-83)
+GRANT SELECT (id, organization_id, auth_id, branch_id, role, permissions,
+              is_active, username, email, must_change_password)
+    ON TABLE public.employees TO authenticated;
+-- loadSuperAdmin (src/middleware/auth.ts:130), login step 5 (auth.service.ts:178)
+GRANT SELECT (id, auth_user_id, email, full_name, is_active)
+    ON TABLE public.super_admins TO authenticated;
 
 
 -- -----------------------------------------------------------------------------
 -- 2. Balance views: run with the caller's rights so RLS applies
 -- -----------------------------------------------------------------------------
--- authenticated keeps SELECT on the views and on their base tables
--- (vaults, vault_transactions, wallets, wallet_transactions, installments,
--- payment_installment_applications, contracts), so reads still work, now
--- scoped by the base tables' tenant policies. anon lost them in step 1; the
--- explicit revoke below just documents it.
+-- anon and authenticated lost SELECT on the views in step 1. security_invoker
+-- is defence in depth: if a later migration grants a view again, it runs
+-- with the caller's rights, so the base tables' RLS applies instead of the
+-- owner's. The explicit revoke below just documents step 1.
 
 ALTER VIEW IF EXISTS public.vault_balances       SET (security_invoker = true);
 ALTER VIEW IF EXISTS public.wallet_balances      SET (security_invoker = true);
@@ -318,15 +343,15 @@ BEGIN
                              'public.installment_balances', 'public.contract_balances']
     LOOP
         IF to_regclass(v) IS NOT NULL THEN
-            EXECUTE format('REVOKE ALL ON TABLE %s FROM anon', v);
+            EXECUTE format('REVOKE ALL ON TABLE %s FROM anon, authenticated', v);
         END IF;
     END LOOP;
 END $$;
 
 
 -- -----------------------------------------------------------------------------
--- 3. plans: turn RLS on (the existing plans_read policy keeps it readable by
---    authenticated; writes were revoked in step 1)
+-- 3. plans: turn RLS on (anon and authenticated lost every grant in step 1;
+--    RLS is the backstop if one comes back)
 -- -----------------------------------------------------------------------------
 ALTER TABLE IF EXISTS public.plans ENABLE ROW LEVEL SECURITY;
 
@@ -336,6 +361,44 @@ ALTER TABLE IF EXISTS public.plans ENABLE ROW LEVEL SECURITY;
 --    (is_suspended, plan_key, subscription_end_date, ...). Service role only.
 -- -----------------------------------------------------------------------------
 DROP POLICY IF EXISTS organizations_tenant_update ON public.organizations;
+
+
+-- -----------------------------------------------------------------------------
+-- 4b. employees / super_admins: a user reads only their own row
+-- -----------------------------------------------------------------------------
+-- Drops every other policy on the two tables (permissive policies are OR-ed,
+-- so any wider one left behind would re-open other rows). Writes have no
+-- policy at all, so RLS also denies them if a write grant ever comes back.
+-- service_role bypasses RLS; the SECURITY DEFINER helpers run as the table
+-- owner and bypass it too (the self-check asserts RLS is not FORCEd).
+
+DO $$
+DECLARE
+    pol record;
+BEGIN
+    FOR pol IN
+        SELECT p.polname, p.polrelid::regclass::text AS tbl
+        FROM pg_policy p
+        WHERE p.polrelid IN (to_regclass('public.employees'), to_regclass('public.super_admins'))
+          AND p.polname NOT IN ('employees_self_read', 'super_admins_self_read')
+    LOOP
+        EXECUTE format('DROP POLICY %I ON %s', pol.polname, pol.tbl);
+        RAISE NOTICE '0003: dropped policy % on %', pol.polname, pol.tbl;
+    END LOOP;
+END $$;
+
+ALTER TABLE public.employees    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.super_admins ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS employees_self_read ON public.employees;
+CREATE POLICY employees_self_read ON public.employees
+    FOR SELECT TO authenticated
+    USING (auth_id = (SELECT auth.uid()));
+
+DROP POLICY IF EXISTS super_admins_self_read ON public.super_admins;
+CREATE POLICY super_admins_self_read ON public.super_admins
+    FOR SELECT TO authenticated
+    USING (auth_user_id = (SELECT auth.uid()));
 
 
 -- -----------------------------------------------------------------------------
@@ -425,26 +488,98 @@ BEGIN
         RAISE EXCEPTION '0003 self-check: anon still has privileges on %', v_bad;
     END IF;
 
-    -- authenticated: no write on any relation in public
+    -- authenticated: no table-level privilege of any kind (SELECT included)
     SELECT string_agg(format('%I.%I', n.nspname, c.relname), ', ') INTO v_bad
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public'
       AND (   (c.relkind IN ('r', 'p', 'v', 'm', 'f')
                AND has_table_privilege('authenticated', c.oid,
-                     'INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'))
+                     'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'))
            OR (c.relkind = 'S'
-               AND has_sequence_privilege('authenticated', c.oid, 'USAGE, UPDATE')));
+               AND has_sequence_privilege('authenticated', c.oid, 'USAGE, SELECT, UPDATE')));
     IF v_bad IS NOT NULL THEN
-        RAISE EXCEPTION '0003 self-check: authenticated can still write to %', v_bad;
+        RAISE EXCEPTION '0003 self-check: authenticated still has table-level privileges on %', v_bad;
     END IF;
 
-    -- the API's user-client reads still work (NULL = object absent, skip)
-    IF NOT COALESCE(has_table_privilege('authenticated', to_regclass('public.employees'), 'SELECT'), true) THEN
-        RAISE EXCEPTION '0003 self-check: authenticated lost SELECT on employees (attachEmployee)';
+    -- authenticated: column SELECT on exactly the columns the API reads.
+    -- "missing" breaks the API; "extra" leaks data.
+    WITH expected(tbl, col) AS (VALUES
+        ('employees', 'id'), ('employees', 'organization_id'), ('employees', 'auth_id'),
+        ('employees', 'branch_id'), ('employees', 'role'), ('employees', 'permissions'),
+        ('employees', 'is_active'), ('employees', 'username'), ('employees', 'email'),
+        ('employees', 'must_change_password'),
+        ('super_admins', 'id'), ('super_admins', 'auth_user_id'), ('super_admins', 'email'),
+        ('super_admins', 'full_name'), ('super_admins', 'is_active')),
+    actual AS (
+        SELECT c.relname::text AS tbl, a.attname::text AS col
+        FROM pg_attribute a
+        JOIN pg_class c     ON c.oid = a.attrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public'
+          AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+          AND a.attnum > 0
+          AND NOT a.attisdropped
+          AND has_column_privilege('authenticated', c.oid, a.attnum, 'SELECT'))
+    SELECT string_agg(COALESCE(e.tbl, x.tbl) || '.' || COALESCE(e.col, x.col)
+                      || CASE WHEN x.col IS NULL THEN ' (missing)' ELSE ' (extra)' END, ', ')
+    INTO v_bad
+    FROM expected e
+    FULL JOIN actual x ON x.tbl = e.tbl AND x.col = e.col
+    WHERE e.col IS NULL OR x.col IS NULL;
+    IF v_bad IS NOT NULL THEN
+        RAISE EXCEPTION '0003 self-check: authenticated column SELECT is not exactly the API columns: %', v_bad;
     END IF;
-    IF NOT COALESCE(has_table_privilege('authenticated', to_regclass('public.super_admins'), 'SELECT'), true) THEN
-        RAISE EXCEPTION '0003 self-check: authenticated lost SELECT on super_admins (loadSuperAdmin)';
+
+    -- authenticated: no column-level write
+    SELECT string_agg(format('%I.%I.%I', n.nspname, c.relname, a.attname), ', ') INTO v_bad
+    FROM pg_attribute a
+    JOIN pg_class c     ON c.oid = a.attrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND a.attnum > 0
+      AND NOT a.attisdropped
+      AND has_column_privilege('authenticated', c.oid, a.attnum, 'INSERT, UPDATE, REFERENCES');
+    IF v_bad IS NOT NULL THEN
+        RAISE EXCEPTION '0003 self-check: authenticated can still write columns %', v_bad;
     END IF;
+
+    -- own-row policies: the only policies on employees / super_admins, RLS on
+    -- and not FORCEd (FORCE would make the SECURITY DEFINER helpers see nothing)
+    IF EXISTS (SELECT 1 FROM pg_policy
+               WHERE polrelid = to_regclass('public.employees')
+                 AND polname <> 'employees_self_read')
+       OR EXISTS (SELECT 1 FROM pg_policy
+                  WHERE polrelid = to_regclass('public.super_admins')
+                    AND polname <> 'super_admins_self_read')
+       OR NOT EXISTS (SELECT 1 FROM pg_policy
+                      WHERE polrelid = to_regclass('public.employees')
+                        AND polname = 'employees_self_read' AND polcmd = 'r'
+                        AND polpermissive
+                        AND polroles = ARRAY['authenticated'::regrole::oid])
+       OR NOT EXISTS (SELECT 1 FROM pg_policy
+                      WHERE polrelid = to_regclass('public.super_admins')
+                        AND polname = 'super_admins_self_read' AND polcmd = 'r'
+                        AND polpermissive
+                        AND polroles = ARRAY['authenticated'::regrole::oid]) THEN
+        RAISE EXCEPTION '0003 self-check: employees / super_admins policies are not exactly the own-row SELECT policies';
+    END IF;
+    SELECT string_agg(relname, ', ') INTO v_bad
+    FROM pg_class
+    WHERE oid IN (to_regclass('public.employees'), to_regclass('public.super_admins'))
+      AND (NOT relrowsecurity OR relforcerowsecurity);
+    IF v_bad IS NOT NULL THEN
+        RAISE EXCEPTION '0003 self-check: RLS must be enabled and not forced on %', v_bad;
+    END IF;
+
+    -- the own-row policies call auth.uid(); policy expressions run with the
+    -- caller's rights, so authenticated needs USAGE on schema auth as well
+    IF NOT has_schema_privilege('authenticated', 'auth', 'USAGE')
+       OR NOT has_function_privilege('authenticated', to_regprocedure('auth.uid()')::oid, 'EXECUTE') THEN
+        RAISE EXCEPTION '0003 self-check: authenticated cannot use auth.uid() (needs USAGE on schema auth and EXECUTE)';
+    END IF;
+
+    -- RLS helpers kept (header: KEEP)
     IF NOT COALESCE(has_function_privilege('authenticated',
                         to_regprocedure('public.current_user_org_id()')::oid, 'EXECUTE'), true) THEN
         RAISE EXCEPTION '0003 self-check: authenticated lost EXECUTE on current_user_org_id()';
@@ -514,6 +649,20 @@ BEGIN
                  acldefault('f', v_postgres))) e
         WHERE e.grantee = 0::oid) THEN
         RAISE EXCEPTION '0003 self-check: new functions would still get PUBLIC EXECUTE';
+    END IF;
+
+    -- migration_backup: no access for PUBLIC, anon, authenticated
+    IF has_schema_privilege('anon', 'migration_backup', 'USAGE, CREATE')
+       OR has_schema_privilege('authenticated', 'migration_backup', 'USAGE, CREATE') THEN
+        RAISE EXCEPTION '0003 self-check: anon/authenticated can use schema migration_backup';
+    END IF;
+    SELECT string_agg(c.relname, ', ') INTO v_bad
+    FROM pg_class c
+    WHERE c.relnamespace = 'migration_backup'::regnamespace
+      AND (   has_table_privilege('anon', c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
+           OR has_table_privilege('authenticated', c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'));
+    IF v_bad IS NOT NULL THEN
+        RAISE EXCEPTION '0003 self-check: anon/authenticated can access migration_backup.%', v_bad;
     END IF;
 
     RAISE NOTICE '0003: lockdown applied and self-check passed';

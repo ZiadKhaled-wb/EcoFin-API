@@ -9,8 +9,11 @@
 --            * default privileges of role postgres (global + IN SCHEMA public)
 --              for PUBLIC, anon, authenticated
 --            * security_invoker on the four balance views
---            * RLS flag on plans
---            * policy organizations_tenant_update
+--            * RLS flags on plans, employees, super_admins
+--            * policy organizations_tenant_update and every policy that was
+--              on employees / super_admins (employees_tenant_all,
+--              super_admins_self on the documented schema); drops the
+--              own-row policies employees_self_read / super_admins_self_read
 --          Then compares every restored item with the snapshot and aborts if
 --          anything differs. On success it drops the snapshot.
 --
@@ -25,6 +28,9 @@
 -- snapshot and the pre-0003 state, and does nothing. If the lockdown is in
 -- place but the snapshot is missing, it stops with an error instead of
 -- guessing.
+--
+-- Only valid immediately after applying 0003, before any later migration
+-- and before 0004 drops the snapshot.
 --
 -- Scope: every object in the snapshot gets its anon / authenticated (and, for
 -- functions, PUBLIC / service_role) grants reset to the snapshot, so a grant
@@ -73,7 +79,7 @@ BEGIN
                          AND polname = 'organizations_tenant_update')
            AND NOT COALESCE(has_table_privilege('anon', to_regclass('public.vault_balances'), 'SELECT'), true)
         THEN
-            RAISE EXCEPTION 'rollback 0003: the lockdown is in place but the snapshot migration_backup.m0003_pre_lockdown is missing. Cannot restore exactly; restore from migrations/0001__role_grants.sql and the policy in docs/db/initialization-v2.1.sql section 21 by hand.';
+            RAISE EXCEPTION 'rollback 0003: the lockdown is in place but the snapshot migration_backup.m0003_pre_lockdown is missing. Cannot restore exactly; 0004 may already have dropped it. Restore from migrations/0001__role_grants.sql and the policies in docs/db/initialization-v2.1.sql section 21 by hand.';
         END IF;
         RAISE NOTICE 'rollback 0003: no snapshot and no lockdown found; nothing to do';
         RETURN;
@@ -213,40 +219,60 @@ BEGIN
     END LOOP;
 
     -- -------------------------------------------------------------------------
-    -- 6. RLS on plans (0003 only ever enabled it)
+    -- 6. RLS flags on plans, employees, super_admins (0003 only ever enabled)
     -- -------------------------------------------------------------------------
-    IF to_regclass('public.plans') IS NOT NULL
-       AND (SELECT (detail->>'relrowsecurity')::boolean
-            FROM migration_backup.m0003_pre_lockdown
-            WHERE kind = 'relation' AND object_identity = 'public.plans') IS FALSE
-    THEN
-        ALTER TABLE public.plans DISABLE ROW LEVEL SECURITY;
-    END IF;
+    FOR r IN SELECT * FROM migration_backup.m0003_pre_lockdown
+             WHERE kind = 'relation'
+               AND object_identity IN ('public.plans', 'public.employees', 'public.super_admins')
+               AND (detail->>'relrowsecurity')::boolean IS FALSE
+    LOOP
+        IF to_regclass(r.object_identity) IS NOT NULL THEN
+            EXECUTE format('ALTER TABLE %s DISABLE ROW LEVEL SECURITY', r.object_identity);
+        END IF;
+    END LOOP;
 
     -- -------------------------------------------------------------------------
-    -- 7. Policy organizations_tenant_update
+    -- 7. Policies: drop the own-row policies 0003 created, recreate every
+    --    snapshotted policy that is missing
     -- -------------------------------------------------------------------------
-    SELECT detail INTO v_pol
-    FROM migration_backup.m0003_pre_lockdown
-    WHERE kind = 'policy' AND object_identity = 'public.organizations.organizations_tenant_update';
+    FOR r IN SELECT * FROM (VALUES ('public.employees', 'employees_self_read'),
+                                   ('public.super_admins', 'super_admins_self_read')) AS t(tbl, name)
+    LOOP
+        IF to_regclass(r.tbl) IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM migration_backup.m0003_pre_lockdown
+                           WHERE kind = 'policy'
+                             AND detail->>'table' = r.tbl
+                             AND detail->>'name' = r.name)
+        THEN
+            EXECUTE format('DROP POLICY IF EXISTS %I ON %s', r.name, r.tbl);
+        END IF;
+    END LOOP;
 
-    IF v_pol IS NOT NULL
-       AND to_regclass(v_pol->>'table') IS NOT NULL
-       AND NOT EXISTS (SELECT 1 FROM pg_policy
+    FOR r IN SELECT * FROM migration_backup.m0003_pre_lockdown
+             WHERE kind = 'policy' ORDER BY object_identity
+    LOOP
+        v_pol := r.detail;
+        IF to_regclass(v_pol->>'table') IS NULL THEN
+            RAISE NOTICE 'rollback 0003: % no longer exists, policy % skipped',
+                v_pol->>'table', v_pol->>'name';
+            CONTINUE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_policy
                        WHERE polrelid = to_regclass(v_pol->>'table')
                          AND polname = v_pol->>'name')
-    THEN
-        EXECUTE format('CREATE POLICY %I ON %s AS %s FOR %s TO %s%s%s',
-            v_pol->>'name',
-            v_pol->>'table',
-            CASE WHEN (v_pol->>'permissive')::boolean THEN 'PERMISSIVE' ELSE 'RESTRICTIVE' END,
-            v_pol->>'cmd',
-            (SELECT string_agg(x, ', ') FROM jsonb_array_elements_text(v_pol->'roles') AS x),
-            CASE WHEN v_pol->>'using' IS NOT NULL
-                 THEN ' USING (' || (v_pol->>'using') || ')' ELSE '' END,
-            CASE WHEN v_pol->>'with_check' IS NOT NULL
-                 THEN ' WITH CHECK (' || (v_pol->>'with_check') || ')' ELSE '' END);
-    END IF;
+        THEN
+            EXECUTE format('CREATE POLICY %I ON %s AS %s FOR %s TO %s%s%s',
+                v_pol->>'name',
+                v_pol->>'table',
+                CASE WHEN (v_pol->>'permissive')::boolean THEN 'PERMISSIVE' ELSE 'RESTRICTIVE' END,
+                v_pol->>'cmd',
+                (SELECT string_agg(x, ', ') FROM jsonb_array_elements_text(v_pol->'roles') AS x),
+                CASE WHEN v_pol->>'using' IS NOT NULL
+                     THEN ' USING (' || (v_pol->>'using') || ')' ELSE '' END,
+                CASE WHEN v_pol->>'with_check' IS NOT NULL
+                     THEN ' WITH CHECK (' || (v_pol->>'with_check') || ')' ELSE '' END);
+        END IF;
+    END LOOP;
 
     -- -------------------------------------------------------------------------
     -- 8. Self-check: everything matches the snapshot
@@ -282,6 +308,23 @@ BEGIN
               FROM aclexplode(a.attacl) e WHERE e.grantee = ANY (v_rel_grantees)) q);
     IF v_bad IS NOT NULL THEN
         RAISE EXCEPTION 'rollback 0003 self-check: column grants differ from snapshot on %', v_bad;
+    END IF;
+
+    -- Columns with no snapshot row had no column grants: none may remain
+    -- (e.g. the employees / super_admins column SELECT that 0003 added).
+    SELECT string_agg(format('%I.%I.%I', n.nspname, c.relname, a.attname), ', ') INTO v_bad
+    FROM pg_attribute a
+    JOIN pg_class c     ON c.oid = a.attrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public'
+      AND a.attnum > 0
+      AND NOT a.attisdropped
+      AND EXISTS (SELECT 1 FROM aclexplode(a.attacl) e WHERE e.grantee = ANY (v_rel_grantees))
+      AND NOT EXISTS (SELECT 1 FROM migration_backup.m0003_pre_lockdown s
+                      WHERE s.kind = 'column'
+                        AND s.object_identity = format('%I.%I.%I', n.nspname, c.relname, a.attname));
+    IF v_bad IS NOT NULL THEN
+        RAISE EXCEPTION 'rollback 0003 self-check: column grants left that were not there before: %', v_bad;
     END IF;
 
     -- Functions
@@ -335,22 +378,47 @@ BEGIN
       AND (   (s.object_identity IN ('public.vault_balances', 'public.wallet_balances',
                                      'public.installment_balances', 'public.contract_balances')
                AND COALESCE(to_jsonb(c.reloptions), '[]'::jsonb) <> s.detail->'reloptions')
-           OR (s.object_identity = 'public.plans'
+           OR (s.object_identity IN ('public.plans', 'public.employees', 'public.super_admins')
                AND c.relrowsecurity <> (s.detail->>'relrowsecurity')::boolean));
     IF v_bad IS NOT NULL THEN
         RAISE EXCEPTION 'rollback 0003 self-check: view options / RLS flag differ from snapshot on %', v_bad;
     END IF;
 
-    -- Policy
-    IF v_pol IS NOT NULL AND NOT EXISTS (
-        SELECT 1 FROM pg_policy pol
-        WHERE pol.polrelid = to_regclass(v_pol->>'table')
-          AND pol.polname = v_pol->>'name'
-          AND pol.polpermissive = (v_pol->>'permissive')::boolean
-          AND pg_get_expr(pol.polqual, pol.polrelid) IS NOT DISTINCT FROM v_pol->>'using'
-          AND pg_get_expr(pol.polwithcheck, pol.polrelid) IS NOT DISTINCT FROM v_pol->>'with_check')
-    THEN
-        RAISE EXCEPTION 'rollback 0003 self-check: policy % was not restored as it was', v_pol->>'name';
+    -- Policies: every snapshotted policy is back with the same definition ...
+    SELECT string_agg(s.object_identity, ', ') INTO v_bad
+    FROM migration_backup.m0003_pre_lockdown s
+    WHERE s.kind = 'policy'
+      AND to_regclass(s.detail->>'table') IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM pg_policy pol
+          WHERE pol.polrelid = to_regclass(s.detail->>'table')
+            AND pol.polname = s.detail->>'name'
+            AND pol.polpermissive = (s.detail->>'permissive')::boolean
+            AND (SELECT array_agg(x ORDER BY x)
+                 FROM (SELECT CASE WHEN r = 0 THEN 'PUBLIC'
+                                   ELSE quote_ident(pg_get_userbyid(r)) END AS x
+                       FROM unnest(pol.polroles) AS r) q)
+                = (SELECT array_agg(x ORDER BY x)
+                   FROM jsonb_array_elements_text(s.detail->'roles') AS x)
+            AND CASE pol.polcmd WHEN 'r' THEN 'SELECT' WHEN 'a' THEN 'INSERT'
+                                WHEN 'w' THEN 'UPDATE' WHEN 'd' THEN 'DELETE'
+                                ELSE 'ALL' END = s.detail->>'cmd'
+            AND pg_get_expr(pol.polqual, pol.polrelid) IS NOT DISTINCT FROM s.detail->>'using'
+            AND pg_get_expr(pol.polwithcheck, pol.polrelid) IS NOT DISTINCT FROM s.detail->>'with_check');
+    IF v_bad IS NOT NULL THEN
+        RAISE EXCEPTION 'rollback 0003 self-check: policies not restored as they were: %', v_bad;
+    END IF;
+
+    -- ... and employees / super_admins carry no policy that wasn't there before.
+    SELECT string_agg(format('%s.%I', pol.polrelid::regclass::text, pol.polname), ', ') INTO v_bad
+    FROM pg_policy pol
+    WHERE pol.polrelid IN (to_regclass('public.employees'), to_regclass('public.super_admins'))
+      AND NOT EXISTS (SELECT 1 FROM migration_backup.m0003_pre_lockdown s
+                      WHERE s.kind = 'policy'
+                        AND to_regclass(s.detail->>'table') = pol.polrelid
+                        AND s.detail->>'name' = pol.polname);
+    IF v_bad IS NOT NULL THEN
+        RAISE EXCEPTION 'rollback 0003 self-check: policies left that were not there before: %', v_bad;
     END IF;
 
     PERFORM set_config('search_path', v_old_path, true);
