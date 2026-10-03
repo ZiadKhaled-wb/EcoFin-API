@@ -82,3 +82,12 @@ Publishing `EcoFin-Contracts` to GitHub (D1) removes the single point of failure
 
 ### D22. A story starts once its real dependencies are merged, not the whole previous wave (user OK, 3 Oct)
 To finish sooner, F09 (B9, client only) starts as soon as F03 and the F04 client half (B7) are merged, without waiting for the F04 server half (B6). F05 still waits for B6, and wave 4 still waits for F05 and F09.
+
+### D23. `select-shop` returns `{ user, shop }`, not new tokens (contract fix in 0.1.0)
+Supabase tokens carry no shop. The active shop is chosen per request by the `x-org-id` header, which the DB checks against the caller's memberships. So `POST /api/auth/select-shop` checks that the shop is one of the caller's (`my_shops()`), writes `auth.login` in that shop, and returns `{ user, shop }`. The client keeps its tokens and sends `x-org-id`. The contract stays at `0.1.0` because it hasn't been published yet.
+
+### D24. Auth hardening found while building F04
+- `must_change_password` is cleared only by the API, through the service-role client in `auth.admin.ts` (an extension of D14), **after** Supabase confirms the password change. The DB function isn't executable by `authenticated`, so a user can't clear the flag directly through PostgREST.
+- Local `jwt_expiry` is 900 s (15 min). A logged-out access token is refused by the API at once, but PostgREST accepts it until it expires, so a short expiry narrows that window. **Production:** set the same JWT expiry in the Supabase project settings.
+- `/refresh` has its own generous per-IP limiter (not the login limiter), so silent refreshes from one shop IP can't block logins.
+- The error handler recognises zod errors by name, as well as with `instanceof`, because the contracts package carries its own zod copy.
