@@ -60,3 +60,9 @@ The API returns the access and refresh tokens in the JSON body (contracts `auth`
 
 ### D17. Failed-login limits
 Lockout after **5 failed attempts per identifier (per shop) in 15 minutes**, counted from `login_attempts`, which returns `TOO_MANY_LOGIN_ATTEMPTS` (429). Both numbers are env-configurable (`LOGIN_MAX_FAILURES`, `LOGIN_WINDOW_MINUTES`). This sits on top of the per-IP `loginLimiter`. It's a technical default, not a business rule; change it if the business sets one.
+
+### D18. Client permission code is split between F09 and F06
+F09 (wave 3) builds `usePermissions()` (reads `GET /api/me/permissions` through the contract) and the `<RequirePermission>` route guard. F06 (wave 4) adds `useCan`, `<Can>` and `useBranchAccess` on top of it, plus the server half. Both are coded against the same contract, so neither needs a stand-in.
+
+### D19. Route markers make a forgotten check fail CI
+Every API route carries a permission marker (`requirePermission(key)`, `authenticatedOnly()` or `publicRoute()`), a cross-shop case (F05) and an audit-registry entry for writes (F07). Scripts and unit tests fail when a route is missing any of them.
