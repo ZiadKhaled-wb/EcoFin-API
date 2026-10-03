@@ -48,6 +48,10 @@ interface MembershipQueryRow {
   } | null;
 }
 
+/** Identifiers are stored and compared capped, so a huge body can't bloat login_attempts. */
+const MAX_IDENTIFIER = 320;
+const capped = (identifier: string) => identifier.slice(0, MAX_IDENTIFIER);
+
 function fail(err: unknown, what: string): never {
   logger.error({ err }, `auth.admin: ${what} failed`);
   throw ServerError('Login failed.');
@@ -121,7 +125,7 @@ export async function countRecentFailures(
   let query = supabaseAdmin
     .from('login_attempts')
     .select('id', { count: 'exact', head: true })
-    .eq('identifier', identifier)
+    .eq('identifier', capped(identifier))
     .eq('success', false)
     .gte('created_at', since);
   if (tenantSlug !== null) query = query.eq('tenant_slug', tenantSlug);
@@ -141,7 +145,7 @@ export interface LoginAttempt {
 /** One row per attempt. The ip column is inet: anything that isn't an IP is stored as NULL. */
 export async function recordLoginAttempt(attempt: LoginAttempt): Promise<void> {
   const { error } = await supabaseAdmin.from('login_attempts').insert({
-    identifier: attempt.identifier,
+    identifier: capped(attempt.identifier),
     tenant_slug: attempt.tenantSlug,
     success: attempt.success,
     ip: attempt.ip && isIp(attempt.ip) ? attempt.ip : null,
