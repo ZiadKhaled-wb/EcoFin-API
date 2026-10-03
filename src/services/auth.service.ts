@@ -232,7 +232,7 @@ export interface CheckLicenseResult {
 // enumeration leak (see ADR-0004).
 export async function checkLicense(licenseKey: string): Promise<CheckLicenseResult> {
   if (!isValidLicenseKey(licenseKey)) {
-    throw BadRequest('كود التفعيل غير صالح.', 'LICENSE_INVALID');
+    throw BadRequest('كود التفعيل غير صالح.', 'BAD_REQUEST');
   }
   const normalized = licenseKey.trim().toUpperCase();
 
@@ -247,7 +247,7 @@ export async function checkLicense(licenseKey: string): Promise<CheckLicenseResu
     throw new AppError('فشل التحقق من كود التفعيل.', 'INTERNAL', 500);
   }
   if (!license) {
-    throw BadRequest('كود التفعيل غير صحيح.', 'LICENSE_INVALID');
+    throw BadRequest('كود التفعيل غير صحيح.', 'BAD_REQUEST');
   }
 
   const isUsable =
@@ -308,7 +308,7 @@ export async function activateWorkspace(
 ): Promise<ActivateWorkspaceResult> {
   const { license_key, email, username, password, confirmPassword } = payload;
 
-  if (!isValidLicenseKey(license_key)) throw BadRequest('كود التفعيل غير صالح.', 'LICENSE_INVALID');
+  if (!isValidLicenseKey(license_key)) throw BadRequest('كود التفعيل غير صالح.', 'BAD_REQUEST');
   if (!isValidEmail(email)) throw BadRequest('البريد الإلكتروني غير صالح.', 'VALIDATION_FAILED');
   if (!isNonEmptyString(username) || username.trim().length < 3) {
     throw BadRequest('اسم المستخدم يجب ألا يقل عن 3 أحرف.', 'VALIDATION_FAILED');
@@ -334,18 +334,18 @@ export async function activateWorkspace(
     logger.error({ err: licError }, 'activateWorkspace: license lookup failed');
     throw new AppError('فشل التفعيل.', 'INTERNAL', 500);
   }
-  if (!license) throw BadRequest('كود التفعيل غير صحيح.', 'LICENSE_INVALID');
-  if (license.is_used) throw BadRequest('تم استخدام كود التفعيل هذا بالفعل.', 'LICENSE_USED');
+  if (!license) throw BadRequest('كود التفعيل غير صحيح.', 'BAD_REQUEST');
+  if (license.is_used) throw BadRequest('تم استخدام كود التفعيل هذا بالفعل.', 'BAD_REQUEST');
   if (!license.is_active || license.is_revoked) {
-    throw BadRequest('كود التفعيل غير صالح.', 'LICENSE_INVALID');
+    throw BadRequest('كود التفعيل غير صالح.', 'BAD_REQUEST');
   }
   if (license.expires_at && new Date(license.expires_at) <= new Date()) {
-    throw BadRequest('انتهت صلاحية كود التفعيل.', 'LICENSE_EXPIRED');
+    throw BadRequest('انتهت صلاحية كود التفعيل.', 'BAD_REQUEST');
   }
   if (!license.issued_to_org_id) {
     throw NotFound(
       'لم يتم تجهيز المنشأة الخاصة بهذا الكود بعد. يرجى التواصل مع الدعم.',
-      'LICENSE_NOT_PROVISIONED',
+      'NOT_FOUND',
     );
   }
 
@@ -403,17 +403,17 @@ export async function activateWorkspace(
     // This is a recoverable state: the user can re-run activation. Log
     // loudly so a human sees it if it happens in production.
     const message = rpcError.message ?? '';
-    if (message.includes('LICENSE_USED')) {
-      throw BadRequest('تم استخدام كود التفعيل هذا بالفعل.', 'LICENSE_USED');
+    if (message.includes('BAD_REQUEST')) {
+      throw BadRequest('تم استخدام كود التفعيل هذا بالفعل.', 'BAD_REQUEST');
     }
     if (message.includes('USERNAME_TAKEN')) {
       throw BadRequest('اسم المستخدم هذا مستخدم بالفعل، يرجى اختيار اسم آخر.', 'VALIDATION_FAILED');
     }
-    if (message.includes('LICENSE_EXPIRED')) {
-      throw BadRequest('انتهت صلاحية كود التفعيل.', 'LICENSE_EXPIRED');
+    if (message.includes('BAD_REQUEST')) {
+      throw BadRequest('انتهت صلاحية كود التفعيل.', 'BAD_REQUEST');
     }
-    if (message.includes('LICENSE_INVALID')) {
-      throw BadRequest('كود التفعيل غير صالح.', 'LICENSE_INVALID');
+    if (message.includes('BAD_REQUEST')) {
+      throw BadRequest('كود التفعيل غير صالح.', 'BAD_REQUEST');
     }
     if (message.includes('OWNER_NOT_FOUND')) {
       throw NotFound('لم يتم العثور على حساب المالك المرتبط بهذا الكود.', 'NOT_FOUND');

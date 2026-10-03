@@ -1,48 +1,73 @@
-import pino from 'pino';
-import { env } from './env';
+import 'dotenv/config';
+import pino, { type DestinationStream, type Logger } from 'pino';
 
 /**
- * Central logger. Redaction is intentionally aggressive — any field likely to
- * carry a credential or session token is censored before it hits stdout.
- * Extend the list when you add a new credential-bearing field, not later.
+ * Keys that may carry a credential, token or national id. Matching is case sensitive, so header
+ * names are listed in lower case (Node lower-cases incoming header names).
  */
-export const logger = pino({
-  level: env.LOG_LEVEL,
-  redact: {
-    paths: [
-      // Passwords and secrets
-      'password',
-      '*.password',
-      'confirmPassword',
-      '*.confirmPassword',
-      'newPassword',
-      '*.newPassword',
-      'currentPassword',
-      '*.currentPassword',
-      'license_key',
-      '*.license_key',
-      'SUPABASE_SERVICE_ROLE_KEY',
-      'SUPABASE_ANON_KEY',
-      'SUPABASE_JWT_SECRET',
-      // Session / auth material
-      'authorization',
-      '*.authorization',
-      'req.headers.authorization',
-      'req.headers.cookie',
-      'refresh_token',
-      '*.refresh_token',
-      'access_token',
-      '*.access_token',
-      'jwt',
-      '*.jwt',
-      'token',
-      '*.token',
-    ],
-    censor: '[REDACTED]',
-  },
-  base: {
-    service: env.SERVICE_NAME,
-    env: env.NODE_ENV,
-  },
-  timestamp: pino.stdTimeFunctions.isoTime,
+const SENSITIVE_KEYS = [
+  'password',
+  'newPassword',
+  'confirmPassword',
+  'currentPassword',
+  'token',
+  'accessToken',
+  'refreshToken',
+  'access_token',
+  'refresh_token',
+  'authorization',
+  'cookie',
+  'national_id',
+  'nationalId',
+  'apikey',
+  'x-api-key',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'SUPABASE_ANON_KEY',
+  'SUPABASE_JWT_SECRET',
+];
+
+/** Each key at the top level, one and two levels down, and in request headers and body. */
+export const REDACT_PATHS = SENSITIVE_KEYS.flatMap((key) => {
+  const k = /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ? `.${key}` : `["${key}"]`;
+  const top = k.startsWith('.') ? key : `["${key}"]`;
+  return [
+    top,
+    `*${k}`,
+    `*.*${k}`,
+    `req.headers${k}`,
+    `req.body${k}`,
+    `req.body.*${k}`,
+    `headers${k}`,
+    `body${k}`,
+    `body.*${k}`,
+  ];
 });
+
+const LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace'];
+
+function levelFromEnv(): string {
+  const level = process.env['LOG_LEVEL'];
+  return level !== undefined && LEVELS.includes(level) ? level : 'info';
+}
+
+export interface LoggerOptions {
+  level?: string;
+  stream?: DestinationStream;
+}
+
+/** Builds a redacting logger. `stream` lets tests capture the output. */
+export function createLogger(options: LoggerOptions = {}): Logger {
+  const config = {
+    level: options.level ?? levelFromEnv(),
+    redact: { paths: REDACT_PATHS },
+    base: {
+      service: process.env['SERVICE_NAME'] ?? 'fintech-pro-api',
+      env: process.env['NODE_ENV'] ?? 'development',
+    },
+    timestamp: pino.stdTimeFunctions.isoTime,
+  };
+  return options.stream ? pino(config, options.stream) : pino(config);
+}
+
+/** Central logger. Configuration comes straight from process.env so importing it never throws. */
+export const logger = createLogger();

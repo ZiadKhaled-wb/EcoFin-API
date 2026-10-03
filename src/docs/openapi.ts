@@ -28,7 +28,7 @@ export const openApiSpec = {
         { url: 'http://localhost:3001', description: 'Local development' },
     ],
     tags: [
-        { name: 'Health', description: 'Liveness probes' },
+        { name: 'Health', description: 'Health check' },
         { name: 'Auth — public', description: 'No authentication required' },
         { name: 'Auth — authenticated', description: 'Requires a bearer JWT' },
     ],
@@ -45,6 +45,16 @@ export const openApiSpec = {
             },
         },
         schemas: {
+            Health: {
+                type: 'object',
+                required: ['status', 'db', 'version', 'time'],
+                properties: {
+                    status: { type: 'string', enum: ['ok', 'degraded'] },
+                    db: { type: 'string', enum: ['ok', 'down'] },
+                    version: { type: 'string' },
+                    time: { type: 'string', format: 'date-time' },
+                },
+            },
             Error: {
                 type: 'object',
                 required: ['error', 'code', 'requestId'],
@@ -317,21 +327,28 @@ export const openApiSpec = {
         '/health': {
             get: {
                 tags: ['Health'],
-                summary: 'Liveness probe',
+                summary: 'Health check (public, checks the database)',
                 security: [],
                 responses: {
                     200: {
-                        description: 'Service is up',
+                        description: 'Service and database are up',
                         content: {
                             'application/json': {
-                                schema: {
-                                    type: 'object',
-                                    properties: {
-                                        ok: { type: 'boolean' },
-                                        service: { type: 'string' },
-                                        env: { type: 'string' },
-                                    },
+                                schema: { $ref: '#/components/schemas/Health' },
+                                example: {
+                                    status: 'ok',
+                                    db: 'ok',
+                                    version: '0.1.0',
+                                    time: '2026-10-03T12:00:00.000Z',
                                 },
+                            },
+                        },
+                    },
+                    503: {
+                        description: 'Database unreachable or too slow (status degraded, db down)',
+                        content: {
+                            'application/json': {
+                                schema: { $ref: '#/components/schemas/Health' },
                             },
                         },
                     },

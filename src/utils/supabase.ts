@@ -34,7 +34,7 @@
 // ============================================================================
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { env } from './env';
+import { getEnv } from './env';
 
 const baseAuthOptions = {
   persistSession: false,
@@ -42,8 +42,24 @@ const baseAuthOptions = {
   detectSessionInUrl: false,
 } as const;
 
-export const supabaseAnon: SupabaseClient = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
-  auth: baseAuthOptions,
+/**
+ * The env is read on first use, not at import, so importing this module never throws and tests
+ * can import it freely. Startup validates the env separately (getEnv() in server.ts / worker.ts).
+ */
+function lazyClient(create: () => SupabaseClient): SupabaseClient {
+  let client: SupabaseClient | undefined;
+  return new Proxy({} as SupabaseClient, {
+    get(_target, prop) {
+      client ??= create();
+      const value: unknown = Reflect.get(client, prop, client);
+      return typeof value === 'function' ? value.bind(client) : value;
+    },
+  });
+}
+
+export const supabaseAnon: SupabaseClient = lazyClient(() => {
+  const env = getEnv();
+  return createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, { auth: baseAuthOptions });
 });
 
 export function supabaseUser(jwt: string): SupabaseClient {
@@ -51,6 +67,7 @@ export function supabaseUser(jwt: string): SupabaseClient {
     // Programming error — never silently fall back to anon.
     throw new Error('supabaseUser() requires a non-empty JWT.');
   }
+  const env = getEnv();
   return createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
     auth: baseAuthOptions,
     global: {
@@ -59,8 +76,7 @@ export function supabaseUser(jwt: string): SupabaseClient {
   });
 }
 
-export const supabaseAdmin: SupabaseClient = createClient(
-  env.SUPABASE_URL,
-  env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: baseAuthOptions },
-);
+export const supabaseAdmin: SupabaseClient = lazyClient(() => {
+  const env = getEnv();
+  return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: baseAuthOptions });
+});
