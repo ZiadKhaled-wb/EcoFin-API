@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.wrangler/
+package-lock.json
+graphify-out/
+supabase/
+migrations/
+docs/
+.claude/
+.github/
+*.md
+wrangler.jsonc

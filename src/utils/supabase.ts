@@ -37,32 +37,30 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { env } from './env';
 
 const baseAuthOptions = {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false,
+  persistSession: false,
+  autoRefreshToken: false,
+  detectSessionInUrl: false,
 } as const;
 
-export const supabaseAnon: SupabaseClient = createClient(
-    env.SUPABASE_URL,
-    env.SUPABASE_ANON_KEY,
-    { auth: baseAuthOptions },
-);
+export const supabaseAnon: SupabaseClient = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+  auth: baseAuthOptions,
+});
 
 export function supabaseUser(jwt: string): SupabaseClient {
-    if (!jwt) {
-        // Programming error — never silently fall back to anon.
-        throw new Error('supabaseUser() requires a non-empty JWT.');
-    }
-    return createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
-        auth: baseAuthOptions,
-        global: {
-            headers: { Authorization: `Bearer ${jwt}` },
-        },
-    });
+  if (!jwt) {
+    // Programming error — never silently fall back to anon.
+    throw new Error('supabaseUser() requires a non-empty JWT.');
+  }
+  return createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+    auth: baseAuthOptions,
+    global: {
+      headers: { Authorization: `Bearer ${jwt}` },
+    },
+  });
 }
 
 export const supabaseAdmin: SupabaseClient = createClient(
-    env.SUPABASE_URL,
-    env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: baseAuthOptions },
+  env.SUPABASE_URL,
+  env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: baseAuthOptions },
 );
