@@ -1,12 +1,16 @@
--- Origin: ecotech-agent-kit/smoke_test.sql (copied for F02, 3 Oct 2026). One change only:
--- the fixture insert names its columns, INSERT INTO auth.users (id, email), so it works on
--- real Supabase auth.users (which starts with instance_id). Run it with: npm run db:smoke
+-- Origin: ecotech-agent-kit/smoke_test.sql (copied for F02, 3 Oct 2026). Two changes:
+-- 1. the fixture insert names its columns, INSERT INTO auth.users (id, email), so it works on
+--    real Supabase auth.users (which starts with instance_id).
+-- 2. SET TIME ZONE line below (see F02 for details).
+-- Run it with: npm run db:smoke
 -- Smoke tests for the V1 baseline (79 checks). LOCAL / DEV ONLY: it inserts test shops.
 -- Run after `supabase db reset`:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -f smoke_test.sql
 -- Expected last line: passed 79, failed 0.
 \set ON_ERROR_STOP 1
 SET client_min_messages = warning;
+SET TIME ZONE 'Africa/Cairo';
+-- business dates follow the shop timezone (fixture shops use the default); keeps current_date aligned
 
 CREATE SCHEMA t;
 CREATE TABLE t.results (name text, ok boolean, detail text);
