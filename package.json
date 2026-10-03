@@ -19,7 +19,12 @@
     "test:coverage": "vitest run --coverage",
     "dev:worker": "wrangler dev",
     "deploy:worker": "wrangler deploy",
-    "build:worker": "npm run build && wrangler deploy --dry-run"
+    "build:worker": "npm run build && wrangler deploy --dry-run",
+    "db:start": "npx -y supabase@2.119.0 start",
+    "db:stop": "npx -y supabase@2.119.0 stop",
+    "db:reset": "npx -y supabase@2.119.0 start && npx -y supabase@2.119.0 db reset",
+    "db:types": "npx -y supabase@2.119.0 gen types typescript --local --schema public | node scripts/db-types.mjs",
+    "db:smoke": "node scripts/db-smoke.mjs"
   },
   "dependencies": {
     "@ecotech/contracts": "file:../EcoFin-Contracts",
