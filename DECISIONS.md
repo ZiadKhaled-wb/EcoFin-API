@@ -91,3 +91,9 @@ Supabase tokens carry no shop. The active shop is chosen per request by the `x-o
 - Local `jwt_expiry` is 900 s (15 min). A logged-out access token is refused by the API at once, but PostgREST accepts it until it expires, so a short expiry narrows that window. **Production:** set the same JWT expiry in the Supabase project settings.
 - `/refresh` has its own generous per-IP limiter (not the login limiter), so silent refreshes from one shop IP can't block logins.
 - The error handler recognises zod errors by name, as well as with `instanceof`, because the contracts package carries its own zod copy.
+
+### D25. Follow-ups from the F04 review
+- **Per-request status gate (F05):** employee active, shop active, subscription not ended and `must_change_password` are re-checked on every request, not just at login, because a token can be obtained straight from GoTrue with the public anon key.
+- D14 is extended: change-password also counts failed current-password checks in `login_attempts` through the service role (D17 lockout).
+- **Known, accepted for now:** an authenticated user can call `auth_record_login` / `auth_record_logout` directly through PostgREST and forge the `x-forwarded-for` / `user-agent` that `app.write_audit` stores. That's a baseline-wide property of `write_audit` reading request headers. **Follow-up:** have PostgREST behind the API only (no public PostgREST access), or sign the client-IP header.
+- **Known, accepted for now:** login lockout is check-then-act, so a parallel burst from many IPs can slightly exceed the limit. An unknown username answers a little faster (timing). Both are low risk; revisit in hardening.
