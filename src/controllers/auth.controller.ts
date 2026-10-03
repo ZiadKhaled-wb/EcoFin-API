@@ -12,18 +12,6 @@ export async function login(req: Request, res: Response) {
   return res.json(result);
 }
 
-export async function checkLicense(req: Request, res: Response) {
-  const { license_key } = (req.body ?? {}) as Record<string, unknown>;
-  const result = await authService.checkLicense(license_key as string);
-  return res.json(result);
-}
-
-export async function activateWorkspace(req: Request, res: Response) {
-  const body = (req.body ?? {}) as authService.ActivateWorkspacePayload;
-  const result = await authService.activateWorkspace(body);
-  return res.json(result);
-}
-
 export async function forgotPassword(req: Request, res: Response) {
   const { tenant_slug, identifier } = (req.body ?? {}) as Record<string, unknown>;
   await authService.forgotPassword(tenant_slug as string, identifier as string);

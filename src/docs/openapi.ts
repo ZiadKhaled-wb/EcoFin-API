@@ -20,9 +20,7 @@ export const openApiSpec = {
         version: '0.1.0',
         description:
             'Multi-tenant retail ERP/POS. Tenant scope is resolved from the ' +
-            'JWT `sub` claim against the `employees` table. The `license_key` ' +
-            'is a one-time activation credential and is never accepted on an ' +
-            'authenticated endpoint.',
+            'JWT `sub` claim against the `employees` table.',
     },
     servers: [
         { url: 'http://localhost:3001', description: 'Local development' },
@@ -97,40 +95,6 @@ export const openApiSpec = {
                         description: 'Username OR email. Usernames are org-scoped.',
                     },
                     password: { type: 'string', format: 'password', example: 'Str0ngPass!2026' },
-                },
-            },
-
-            CheckLicenseRequest: {
-                type: 'object',
-                required: ['license_key'],
-                properties: {
-                    license_key: {
-                        type: 'string',
-                        example: 'TEST-ACTIVATION-KEY-001',
-                        description: 'Case-insensitive. Hyphens required.',
-                    },
-                },
-            },
-
-            ActivateWorkspaceRequest: {
-                type: 'object',
-                required: ['license_key', 'email', 'username', 'password', 'confirmPassword'],
-                properties: {
-                    license_key: { type: 'string', example: 'TEST-ACTIVATION-KEY-001' },
-                    email: {
-                        type: 'string',
-                        format: 'email',
-                        example: 'owner@test.local',
-                        description: 'Must match the pre-provisioned auth user email.',
-                    },
-                    username: {
-                        type: 'string',
-                        minLength: 3,
-                        example: 'owner',
-                        description: 'Uniqueness is enforced within the tenant, not globally.',
-                    },
-                    password: { type: 'string', format: 'password', minLength: 8 },
-                    confirmPassword: { type: 'string', format: 'password' },
                 },
             },
 
@@ -221,30 +185,6 @@ export const openApiSpec = {
                             'When true, every endpoint except /change-password and ' +
                             '/logout returns 403 MUST_CHANGE_PASSWORD.',
                     },
-                },
-            },
-
-            CheckLicenseResponse: {
-                type: 'object',
-                required: ['license_key', 'is_used', 'plan_key', 'org_name'],
-                properties: {
-                    license_key: { type: 'string' },
-                    is_used: { type: 'boolean' },
-                    plan_key: { type: 'string', nullable: true },
-                    org_name: { type: 'string', nullable: true },
-                },
-                description:
-                    'Deliberately omits owner_email. Returning it here would let ' +
-                    'anyone with a license key enumerate a business owner address.',
-            },
-
-            ActivateWorkspaceResponse: {
-                type: 'object',
-                required: ['tenant_slug', 'tenant_name', 'org_id'],
-                properties: {
-                    tenant_slug: { type: 'string', example: 'testshop' },
-                    tenant_name: { type: 'string', example: 'Test Shop' },
-                    org_id: { type: 'string', format: 'uuid' },
                 },
             },
 
@@ -462,96 +402,6 @@ export const openApiSpec = {
                                     requestId: '00000000-0000-0000-0000-000000000000',
                                 },
                             },
-                        },
-                    },
-                    429: { $ref: '#/components/responses/TooManyRequests' },
-                },
-            },
-        },
-
-        '/api/auth/check-license': {
-            post: {
-                tags: ['Auth — public'],
-                summary: 'Look up a license key (side-effect free)',
-                security: [],
-                requestBody: {
-                    required: true,
-                    content: {
-                        'application/json': { schema: { $ref: '#/components/schemas/CheckLicenseRequest' } },
-                    },
-                },
-                responses: {
-                    200: {
-                        description: 'License found',
-                        content: {
-                            'application/json': { schema: { $ref: '#/components/schemas/CheckLicenseResponse' } },
-                        },
-                    },
-                    400: {
-                        description: 'Invalid or unknown license key',
-                        content: {
-                            'application/json': {
-                                schema: { $ref: '#/components/schemas/Error' },
-                                example: {
-                                    error: 'كود التفعيل غير صحيح.',
-                                    code: 'LICENSE_INVALID',
-                                    requestId: '00000000-0000-0000-0000-000000000000',
-                                },
-                            },
-                        },
-                    },
-                    429: { $ref: '#/components/responses/TooManyRequests' },
-                },
-            },
-        },
-
-        '/api/auth/activate-workspace': {
-            post: {
-                tags: ['Auth — public'],
-                summary: 'One-time activation: sets username + real password, flips is_used',
-                security: [],
-                requestBody: {
-                    required: true,
-                    content: {
-                        'application/json': { schema: { $ref: '#/components/schemas/ActivateWorkspaceRequest' } },
-                    },
-                },
-                responses: {
-                    200: {
-                        description: 'Activation succeeded',
-                        content: {
-                            'application/json': { schema: { $ref: '#/components/schemas/ActivateWorkspaceResponse' } },
-                        },
-                    },
-                    400: {
-                        description: 'Domain error (LICENSE_USED, LICENSE_EXPIRED, VALIDATION_FAILED…)',
-                        content: {
-                            'application/json': {
-                                schema: { $ref: '#/components/schemas/Error' },
-                                examples: {
-                                    alreadyUsed: {
-                                        value: {
-                                            error: 'تم استخدام كود التفعيل هذا بالفعل.',
-                                            code: 'LICENSE_USED',
-                                            requestId: '00000000-0000-0000-0000-000000000000',
-                                        },
-                                    },
-                                    usernameTaken: {
-                                        value: {
-                                            error: 'اسم المستخدم هذا مستخدم بالفعل، يرجى اختيار اسم آخر.',
-                                            code: 'VALIDATION_FAILED',
-                                            requestId: '00000000-0000-0000-0000-000000000000',
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    },
-                    401: { $ref: '#/components/responses/InvalidCredentials' },
-                    404: {
-                        description: 'License exists but no owner provisioned yet (LICENSE_NOT_PROVISIONED).',
-                        content: {
-                            'application/json': { schema: { $ref: '#/components/schemas/Error' } },
                         },
                     },
                     429: { $ref: '#/components/responses/TooManyRequests' },

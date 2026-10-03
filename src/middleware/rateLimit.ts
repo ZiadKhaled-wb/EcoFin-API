@@ -142,5 +142,4 @@ function lazyLimiter(name: string, options: LimiterOptions): RequestHandler {
 }
 
 export const loginLimiter = lazyLimiter('login', { windowMs: 15 * 60 * 1000, limit: 10 });
-export const licenseLimiter = lazyLimiter('license', { windowMs: 15 * 60 * 1000, limit: 20 });
 export const forgotPasswordLimiter = lazyLimiter('forgot', { windowMs: 60 * 60 * 1000, limit: 5 });

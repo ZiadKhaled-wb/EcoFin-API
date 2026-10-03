@@ -5,11 +5,10 @@ import { ZodError, z } from 'zod';
 import { ErrorResponse, HealthResponse } from '@ecotech/contracts';
 
 const db = vi.hoisted(() => ({ query: vi.fn() }));
-
+vi.mock('./utils/supabase', () => ({
   supabaseAdmin: {
     from: () => ({ select: () => ({ limit: () => ({ abortSignal: () => db.query() }) }) }),
   },
-  supabaseAdmin: { from: () => ({ select: () => ({ limit: () => db.query() }) }) },
   supabaseAnon: {},
   supabaseUser: () => ({}),
 }));

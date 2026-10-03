@@ -67,13 +67,6 @@ export const isValidPhoneNumber = (value: string): boolean => {
   return /^1[0125]\d{8}$/.test(local);
 };
 
-export const isValidLicenseKey = (value: unknown): value is string => {
-  if (typeof value !== 'string') return false;
-  const normalized = value.trim().toUpperCase();
-  if (normalized.length < 8 || normalized.length > 30) return false;
-  return /^[A-Z0-9\u0600-\u06FF]+(-[A-Z0-9\u0600-\u06FF]+)+$/.test(normalized);
-};
-
 // --------------------------------------------------
 // Tenant + idempotency
 // --------------------------------------------------
