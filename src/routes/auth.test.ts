@@ -227,3 +227,48 @@ describe('POST /api/auth/select-shop', () => {
     );
   });
 });
+
+describe('per-route limiters (D24)', () => {
+  it('/refresh: 60 per minute per IP, then the contract 429; it does not use the login budget', async () => {
+    const ip = '198.18.0.1';
+    for (let i = 0; i < 60; i++) {
+      const res = await request(app).post('/api/auth/refresh').set('X-Forwarded-For', ip).send({});
+      expect(res.status).toBe(400);
+    }
+    const limited = await request(app)
+      .post('/api/auth/refresh')
+      .set('X-Forwarded-For', ip)
+      .send({});
+    expectError(limited, 429, 'TOO_MANY_REQUESTS');
+    // Login from the same IP is not blocked by the refresh bucket.
+    const loginRes = await request(app).post('/api/auth/login').set('X-Forwarded-For', ip).send({});
+    expect(loginRes.status).toBe(400);
+    // Another IP still refreshes.
+    const other = await request(app)
+      .post('/api/auth/refresh')
+      .set('X-Forwarded-For', '198.18.0.2')
+      .send({});
+    expect(other.status).toBe(400);
+  });
+
+  it('/reset-password has its own bucket (10 per hour), separate from forgot-password', async () => {
+    const ip = '198.18.1.1';
+    for (let i = 0; i < 10; i++) {
+      const res = await request(app)
+        .post('/api/auth/reset-password')
+        .set('X-Forwarded-For', ip)
+        .send({});
+      expect(res.status).toBe(400);
+    }
+    const limited = await request(app)
+      .post('/api/auth/reset-password')
+      .set('X-Forwarded-For', ip)
+      .send({});
+    expectError(limited, 429, 'TOO_MANY_REQUESTS');
+    const forgot = await request(app)
+      .post('/api/auth/forgot-password')
+      .set('X-Forwarded-For', ip)
+      .send({ identifier: 'owner.one@ecotech.test' });
+    expect(forgot.status).toBe(202);
+  });
+});

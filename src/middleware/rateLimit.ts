@@ -143,3 +143,7 @@ function lazyLimiter(name: string, options: LimiterOptions): RequestHandler {
 
 export const loginLimiter = lazyLimiter('login', { windowMs: 15 * 60 * 1000, limit: 10 });
 export const forgotPasswordLimiter = lazyLimiter('forgot', { windowMs: 60 * 60 * 1000, limit: 5 });
+// D24: silent refreshes from every device behind one shop IP; generous, and separate from login.
+export const refreshLimiter = lazyLimiter('refresh', { windowMs: 60 * 1000, limit: 60 });
+// Reset tokens come from the emailed link; its own bucket so it never eats the forgot budget.
+export const resetPasswordLimiter = lazyLimiter('reset', { windowMs: 60 * 60 * 1000, limit: 10 });

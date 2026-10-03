@@ -9,19 +9,23 @@
 import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler';
 import { authenticate } from '../middleware/auth';
-import { loginLimiter, forgotPasswordLimiter } from '../middleware/rateLimit';
+import {
+  loginLimiter,
+  forgotPasswordLimiter,
+  refreshLimiter,
+  resetPasswordLimiter,
+} from '../middleware/rateLimit';
 import * as authController from '../controllers/auth.controller';
 
 const router = Router();
 
 // --- Public -----------------------------------------------------------------
 router.post('/login', loginLimiter, asyncHandler(authController.login));
-// Refresh tokens are long random values that Supabase rotates; Supabase Auth rate-limits
-// refreshes itself. Not on loginLimiter, so silent refreshes from several devices behind one
-// shop IP can't lock people out of logging in.
-router.post('/refresh', asyncHandler(authController.refresh));
+// D24: /refresh has its own generous per-IP limiter, so silent refreshes from one shop IP can't
+// use up the login budget.
+router.post('/refresh', refreshLimiter, asyncHandler(authController.refresh));
 router.post('/forgot-password', forgotPasswordLimiter, asyncHandler(authController.forgotPassword));
-router.post('/reset-password', forgotPasswordLimiter, asyncHandler(authController.resetPassword));
+router.post('/reset-password', resetPasswordLimiter, asyncHandler(authController.resetPassword));
 
 // --- Authenticated ------------------------------------------------------------
 router.get('/me', authenticate, asyncHandler(authController.me));
