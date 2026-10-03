@@ -29,7 +29,9 @@ You are the gate before merge. Be strict, short and evidence-based. Don't rewrit
 - [ ] No editing/deleting issued documents
 - [ ] Types come from the shared contracts; no local duplicates
 - [ ] Permission check on every new endpoint; audit entry on every write
-- [ ] New migration file only; old migrations untouched
+- [ ] New migration file only; old migrations (and the baseline) untouched
+- [ ] DB write functions: `SECURITY DEFINER` + `SET search_path = ''`; first line `app.require_permission`; org/employee from the session, not parameters; idempotency key handled; `app.write_audit` called; explicit `GRANT EXECUTE ... TO authenticated`
+- [ ] No direct writes to `stock_levels`, `cash_balances`, `store_credit_balances` or unit status; reservations released before stock moves
 - [ ] No hard-coded UI text; works RTL and LTR
 
 **Quality**

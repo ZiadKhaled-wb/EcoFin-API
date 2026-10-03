@@ -27,6 +27,7 @@ EcoTech Pro: multi-tenant SaaS POS with in-house installments for Egyptian furni
 ## Finding code
 - If `graphify-out/GRAPH_REPORT.md` exists, read it first (plain file, no install needed).
 - Open only the files your task lists, plus what they import. Smart agents with the graphify CLI can use `graphify query/explain/path`.
+- Database schema (server repo): `supabase/migrations/20261002000000_v1_baseline.sql`. Search it for the table you need; never read it whole.
 - Never read whole folders. Never rebuild or commit `graphify-out/`; the maintainers do that.
 
 ## Commands

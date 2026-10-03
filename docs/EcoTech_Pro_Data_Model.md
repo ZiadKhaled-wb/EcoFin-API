@@ -1,6 +1,6 @@
 # EcoTech Pro: Physical Data Model (V1 baseline)
 
-*Draft 1, 2 Oct 2026. This is the spec for the new baseline migration. It replaces `docs/db/initialization-v2.1.sql`. Based on the slices doc, the entity diagram, the repo audit and the team's decisions. Works on either runtime (Node or Workers).*
+*Draft 2, 2 Oct 2026. Implemented by `supabase/migrations/20261002000000_v1_baseline.sql` (server repo); §12 lists what the baseline refined. This is the spec for the new baseline migration. It replaces `docs/db/initialization-v2.1.sql`. Based on the slices doc, the entity diagram, the repo audit and the team's decisions. Works on either runtime (Node or Workers).*
 
 **Decisions applied:**
 - Money is `numeric(18,2)`.
@@ -23,7 +23,7 @@
 | **Quantities** | `integer`. Ledger quantities are signed and `<> 0`. |
 | **Status fields** | Real Postgres `ENUM` types (listed in §9). |
 | **Delete rules** | `ON DELETE RESTRICT` everywhere. No `CASCADE` on any money, stock or document table. |
-| **Ledgers** | `stock_movements`, `cash_movements`, `store_credit_movements`, `audit_log`, `payments`, `payment_allocations` are **append-only**: a trigger raises on UPDATE and DELETE. |
+| **Ledgers** | `stock_movements`, `cash_movements`, `store_credit_movements`, `audit_log`, `payments`, `payment_allocations`, `supplier_payments`, issued documents (`sales`, `sales_returns`, `expenses`, `cash_transfers`, …) are **append-only**: a trigger raises on UPDATE and DELETE. Status documents freeze once final (approved, posted, closed…). |
 | **Documents** | Every issued document has `number` (from `document_counters`) and `idempotency_key` with `UNIQUE (organization_id, idempotency_key)`. Corrections are new linked documents, never edits. |
 | **Reversals** | Ledger rows have `reverses_<x>_id`, with a partial UNIQUE so a row can only be reversed once. |
 | **Indexes** | Every tenant table gets an index starting with `organization_id`, plus an index on every FK column. |
@@ -519,3 +519,27 @@ Each one derives the org and employee from `auth.uid()`, checks a permission, lo
 2. **Furniture on installments:** does the contract start at order time (`contracts.order_id`) or at delivery? Both are supported; pick one for V1.
 3. **Collector wallets:** one per collector (this model) or one per collector per day?
 4. **Runtime** (partner deciding). This model works with either.
+
+
+---
+
+## 12. Baseline refinements (applied in the SQL, 2 Oct 2026)
+
+The baseline follows this document. These are the places where it goes further; agents follow the SQL where the two differ.
+
+| Area | What the baseline does |
+|---|---|
+| Multi-shop login | `employees` is `UNIQUE (auth_user_id, organization_id)`: one login can work for several shops. The active shop comes from the `x-org-id` request header (set by the API) and is only chosen among the caller's own employee rows. One membership = no header needed. |
+| Balances | `stock_levels`, `cash_balances`, `store_credit_balances` are tables kept by triggers, with CHECKs. Write functions never touch them. |
+| Damaged stock | `stock_state` (sellable / damaged) on `stock_movements` and `stock_levels`. Reservations and "available" are sellable only. |
+| Serial units | The stock trigger locks the unit, checks it is in that branch and available, and sets its status/branch. Functions don't update units by hand. |
+| Closed days | Every dated ledger row gets `business_date` (shop timezone). Rows can't go into a closed day or the future. `close_day` calls `app.lock_day_for_close()` first. Org-wide bank movements carry the paying branch. |
+| Payments | Reversed payments are excluded by the views (no negative allocations). Allocations to schedule lines store `principal_amount` / `profit_amount` and `contract_id` (checked by composite FK). |
+| Delivery sales | Settled at order level: `v_order_balances` (deposits + order contract). `v_sale_balances.unpaid` is NULL for delivery sales. |
+| Renamed / added | `eta_credentials` → `eta_settings`; `collector_commissions.paid_by_expense_id` (commissions are paid as expenses); new `expense_categories`, `organization_features` (module flags), `login_attempts`, `jobs`; `document_counters` resets yearly (`BR1-SL-26-000123`). |
+| Idempotency | Every document a function creates has `idempotency_key` + `UNIQUE (organization_id, idempotency_key)`, including shifts, quotations, counts, waivers, contract changes, legal cases, claims. |
+| Privacy | `national_id`, invite token hashes, ETA secrets and `fiscal_submissions.payload` are never granted to `authenticated`. `audit_log` needs `audit.view`; `import_jobs` needs `import.data` / `export.data`. `app.write_audit` strips PII keys. |
+| Permissions | 61 keys and role defaults are seeded (`permissions`, `role_permissions`). OWNER has everything. Change defaults with INSERT/DELETE in a new migration. |
+| Rules for write-function authors | Start with `app.require_permission('key')`; derive org/employee from the session; take numbers from `app.next_document_number()`; release a reservation before posting its stock movement; post lines in `product_id` order; call `app.write_audit()`. |
+
+**Still open (ask before building the slice):** quantities are whole numbers (nothing sold by the metre or kilo?); one tax per line (does any product also carry ETA table tax?); a custom quotation line must become a product before it is ordered.
