@@ -22,6 +22,7 @@
     "build:worker": "npm run build && wrangler deploy --dry-run"
   },
   "dependencies": {
+    "@ecotech/contracts": "file:../EcoFin-Contracts",
     "@supabase/supabase-js": "^2.117.2",
     "cors": "^2.8.6",
     "dotenv": "^18.0.4",
