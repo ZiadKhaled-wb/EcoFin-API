@@ -131,12 +131,18 @@ describe('auth schemas', () => {
     expect(AuthSelectShop.body.safeParse({ orgId: id, organization_id: id2 }).success).toBe(false);
     expect(
       AuthSelectShop.response.safeParse({
-        ...session,
         user,
         shop: { orgId: id, orgName: 'S', tenantSlug: 'shop', role: 'CASHIER' },
       }).success,
     ).toBe(true);
-    expect(AuthSelectShop.response.safeParse({ ...session, user }).success).toBe(false);
+    expect(AuthSelectShop.response.safeParse({ user }).success).toBe(false);
+    expect(
+      AuthSelectShop.response.safeParse({
+        accessToken: 'a',
+        user,
+        shop: { orgId: id, orgName: 'S', tenantSlug: 'shop', role: 'CASHIER' },
+      }).success,
+    ).toBe(false);
   });
   it('refresh and logout', () => {
     expect(AuthRefresh.body.safeParse({ refreshToken: 't' }).success).toBe(true);

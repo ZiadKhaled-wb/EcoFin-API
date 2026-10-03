@@ -72,10 +72,8 @@ export type AuthLoginResponse = z.infer<typeof AuthLoginResponse>;
 
 // F04 · POST /auth/select-shop
 export const AuthSelectShopBody = z.object({ orgId: Uuid }).strict();
-export const AuthSelectShopResponse = AuthSession.extend({
-  user: AuthUser,
-  shop: ShopMembership,
-});
+/** No tokens: Supabase tokens carry no shop. The shop is sent as the x-org-id header (D23). */
+export const AuthSelectShopResponse = z.object({ user: AuthUser, shop: ShopMembership }).strict();
 export const AuthSelectShop = { body: AuthSelectShopBody, response: AuthSelectShopResponse };
 export type AuthSelectShopBody = z.infer<typeof AuthSelectShopBody>;
 export type AuthSelectShopResponse = z.infer<typeof AuthSelectShopResponse>;
