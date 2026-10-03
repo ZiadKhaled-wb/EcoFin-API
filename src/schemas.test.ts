@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   AuditSearch,
+  AuthChangePassword,
   AuthForgotPassword,
   AuthLogin,
   AuthLogout,
@@ -85,25 +86,32 @@ describe('error response', () => {
 });
 
 describe('auth schemas', () => {
-  it('login body: valid, invalid, extra organization_id', () => {
-    expect(AuthLogin.body.safeParse({ email: 'a@b.co', password: 'x' }).success).toBe(true);
-    expect(AuthLogin.body.safeParse({ username: 'ali.1', password: 'x', orgId: id }).success).toBe(
+  it('login body: identifier, tenantSlug, strict', () => {
+    const L = AuthLogin.body;
+    expect(L.safeParse({ identifier: 'a@b.co', password: 'x' }).success).toBe(true);
+    expect(L.safeParse({ identifier: 'ali.1', password: 'x' }).success).toBe(false);
+    expect(L.safeParse({ identifier: 'ali.1', password: 'x', tenantSlug: 'shop-1' }).success).toBe(
       true,
     );
     expect(
-      AuthLogin.body.safeParse({ email: 'a@b.co', username: 'ali', password: 'x' }).success,
+      L.safeParse({ identifier: 'ali.1', password: 'x', tenantSlug: 'Bad Slug' }).success,
     ).toBe(false);
-    expect(AuthLogin.body.safeParse({ password: 'x' }).success).toBe(false);
-    expect(AuthLogin.body.safeParse({ email: 5, password: 'x' }).success).toBe(false);
-    expect(
-      AuthLogin.body.safeParse({ email: 'a@b.co', password: 'x', organization_id: id }).success,
-    ).toBe(false);
+    expect(L.safeParse({ identifier: 'a@b.co', password: 'x', tenantSlug: '-x-' }).success).toBe(
+      false,
+    );
+    expect(L.safeParse({ identifier: 'a@b.co', password: 'x', orgId: id }).success).toBe(false);
+    expect(L.safeParse({ identifier: 'a@b.co' }).success).toBe(false);
+    expect(L.safeParse({ identifier: 5, password: 'x' }).success).toBe(false);
+    expect(L.safeParse({ identifier: 'a@b.co', password: 'x', organization_id: id }).success).toBe(
+      false,
+    );
   });
   it('login response', () => {
     const ok = {
       ...session,
       user,
-      shops: [{ orgId: id, orgName: 'S', role: 'OWNER' }],
+      mustChangePassword: false,
+      shops: [{ orgId: id, orgName: 'S', tenantSlug: 'shop', role: 'OWNER' }],
       requiresShopSelection: false,
     };
     expect(AuthLogin.response.safeParse(ok).success).toBe(true);
@@ -111,8 +119,10 @@ describe('auth schemas', () => {
       false,
     );
     expect(
-      AuthLogin.response.safeParse({ ...ok, shops: [{ orgId: id, orgName: 'S', role: 'BOSS' }] })
-        .success,
+      AuthLogin.response.safeParse({
+        ...ok,
+        shops: [{ orgId: id, orgName: 'S', tenantSlug: 'shop', role: 'BOSS' }],
+      }).success,
     ).toBe(false);
   });
   it('select shop', () => {
@@ -123,7 +133,7 @@ describe('auth schemas', () => {
       AuthSelectShop.response.safeParse({
         ...session,
         user,
-        shop: { orgId: id, orgName: 'S', role: 'CASHIER' },
+        shop: { orgId: id, orgName: 'S', tenantSlug: 'shop', role: 'CASHIER' },
       }).success,
     ).toBe(true);
     expect(AuthSelectShop.response.safeParse({ ...session, user }).success).toBe(false);
@@ -140,10 +150,14 @@ describe('auth schemas', () => {
     expect(AuthLogout.response.safeParse({ ok: false }).success).toBe(false);
   });
   it('forgot and reset password', () => {
-    expect(AuthForgotPassword.body.safeParse({ email: 'a@b.co' }).success).toBe(true);
-    expect(AuthForgotPassword.body.safeParse({ email: 'nope' }).success).toBe(false);
+    expect(AuthForgotPassword.body.safeParse({ identifier: 'a@b.co' }).success).toBe(true);
+    expect(AuthForgotPassword.body.safeParse({ identifier: 'ali' }).success).toBe(false);
     expect(
-      AuthForgotPassword.body.safeParse({ email: 'a@b.co', organization_id: id }).success,
+      AuthForgotPassword.body.safeParse({ identifier: 'ali', tenantSlug: 'shop' }).success,
+    ).toBe(true);
+    expect(AuthForgotPassword.body.safeParse({ identifier: 'a b' }).success).toBe(false);
+    expect(
+      AuthForgotPassword.body.safeParse({ identifier: 'a@b.co', organization_id: id }).success,
     ).toBe(false);
     expect(
       AuthResetPassword.body.safeParse({ token: 't', newPassword: 'longenough1' }).success,
@@ -158,6 +172,19 @@ describe('auth schemas', () => {
         newPassword: 'longenough1',
         organization_id: id,
       }).success,
+    ).toBe(false);
+  });
+  it('change password and 72-char limit', () => {
+    const C = AuthChangePassword.body;
+    expect(C.safeParse({ currentPassword: 'old', newPassword: 'longenough1' }).success).toBe(true);
+    expect(C.safeParse({ currentPassword: 'old', newPassword: 'x'.repeat(72) }).success).toBe(true);
+    expect(C.safeParse({ currentPassword: 'old', newPassword: 'x'.repeat(73) }).success).toBe(
+      false,
+    );
+    expect(C.safeParse({ newPassword: 'longenough1' }).success).toBe(false);
+    expect(
+      C.safeParse({ currentPassword: 'old', newPassword: 'longenough1', organization_id: id })
+        .success,
     ).toBe(false);
   });
   it('me response', () => {
@@ -329,7 +356,7 @@ describe('compile-time contract: renaming or retyping a field breaks the build',
     const bad: MoneyType = 12.5;
     void bad;
     // @ts-expect-error organization_id is not part of the login body type
-    const body: AuthLoginBody = { email: 'a@b.co', password: 'x', organization_id: id };
+    const body: AuthLoginBody = { identifier: 'a@b.co', password: 'x', organization_id: id };
     void body;
   });
 });

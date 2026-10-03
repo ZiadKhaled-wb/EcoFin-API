@@ -2,8 +2,26 @@ import { z } from 'zod';
 import { Ack, BusinessDate, IsoTimestamp, Uuid } from './common.js';
 import { EmployeeRole } from './roles.js';
 
-/** Same rule as the API password check: 8 to 128 characters, no character-class rules. */
-export const Password = z.string().min(8).max(128);
+/** 8 to 72 characters (bcrypt's 72-byte limit in Supabase Auth), no character-class rules. */
+export const Password = z.string().min(8).max(72);
+
+/** `organizations.tenant_slug` CHECK pattern from the baseline. */
+export const TenantSlug = z.string().regex(/^[a-z0-9]([a-z0-9-]{1,38}[a-z0-9])?$/);
+export type TenantSlug = z.infer<typeof TenantSlug>;
+
+/** `employees.username` pattern; unique per shop only. */
+export const Username = z.string().regex(/^[a-z0-9._-]{3,32}$/);
+
+/** An email or a username. */
+export const LoginIdentifier = z.union([z.string().email(), Username]);
+
+/** A username is only unique inside one shop, so it needs `tenantSlug`; an email does not. */
+const needsTenantSlug = (v: { identifier: string; tenantSlug?: string | undefined }) =>
+  v.identifier.includes('@') || v.tenantSlug !== undefined;
+const tenantSlugIssue = {
+  message: 'tenantSlug is required when identifier is a username',
+  path: ['tenantSlug'],
+};
 
 /** Values of `public.org_status`. */
 export const OrgStatus = z.enum(['active', 'suspended', 'expired', 'closed']);
@@ -26,6 +44,7 @@ export type AuthUser = z.infer<typeof AuthUser>;
 export const ShopMembership = z.object({
   orgId: Uuid,
   orgName: z.string(),
+  tenantSlug: TenantSlug,
   role: EmployeeRole,
 });
 export type ShopMembership = z.infer<typeof ShopMembership>;
@@ -33,21 +52,15 @@ export type ShopMembership = z.infer<typeof ShopMembership>;
 // F04 · POST /auth/login
 export const AuthLoginBody = z
   .object({
-    email: z.string().email().optional(),
-    username: z
-      .string()
-      .regex(/^[a-z0-9._-]{3,32}$/)
-      .optional(),
+    identifier: LoginIdentifier,
     password: z.string().min(1).max(128),
-    orgId: Uuid.optional(),
+    tenantSlug: TenantSlug.optional(),
   })
   .strict()
-  .refine((v) => (v.email === undefined) !== (v.username === undefined), {
-    message: 'Provide either email or username, not both',
-    path: ['email'],
-  });
+  .refine(needsTenantSlug, tenantSlugIssue);
 export const AuthLoginResponse = AuthSession.extend({
   user: AuthUser,
+  mustChangePassword: z.boolean(),
   /** Every shop this login belongs to. One entry when there is a single membership. */
   shops: z.array(ShopMembership),
   /** True when the login has several shops and none was chosen: call select-shop next. */
@@ -79,8 +92,11 @@ export const AuthLogoutResponse = Ack;
 export const AuthLogout = { response: AuthLogoutResponse };
 export type AuthLogoutResponse = z.infer<typeof AuthLogoutResponse>;
 
-// F04 · POST /auth/forgot-password (same reply whether or not the email exists)
-export const AuthForgotPasswordBody = z.object({ email: z.string().email() }).strict();
+// F04 · POST /auth/forgot-password (fixed 202 acknowledgement whether or not the account exists)
+export const AuthForgotPasswordBody = z
+  .object({ identifier: LoginIdentifier, tenantSlug: TenantSlug.optional() })
+  .strict()
+  .refine(needsTenantSlug, tenantSlugIssue);
 export const AuthForgotPasswordResponse = Ack;
 export const AuthForgotPassword = {
   body: AuthForgotPasswordBody,
@@ -100,6 +116,18 @@ export const AuthResetPassword = {
 };
 export type AuthResetPasswordBody = z.infer<typeof AuthResetPasswordBody>;
 export type AuthResetPasswordResponse = z.infer<typeof AuthResetPasswordResponse>;
+
+// F04 · POST /auth/change-password (logged in)
+export const AuthChangePasswordBody = z
+  .object({ currentPassword: z.string().min(1).max(128), newPassword: Password })
+  .strict();
+export const AuthChangePasswordResponse = Ack;
+export const AuthChangePassword = {
+  body: AuthChangePasswordBody,
+  response: AuthChangePasswordResponse,
+};
+export type AuthChangePasswordBody = z.infer<typeof AuthChangePasswordBody>;
+export type AuthChangePasswordResponse = z.infer<typeof AuthChangePasswordResponse>;
 
 // F04 · GET /auth/me
 export const AuthMeResponse = z.object({
