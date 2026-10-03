@@ -41,6 +41,13 @@ function failingApp() {
   a.post('/zod', (req) => {
     z.object({ name: z.string(), qty: z.number() }).parse(req.body);
   });
+  a.get('/zod-foreign', () => {
+    // A ZodError from another zod copy (the contracts package): not instanceof, same name/issues.
+    throw Object.assign(new Error('[]'), {
+      name: 'ZodError',
+      issues: [{ path: ['tenantSlug'], code: 'custom', message: 'tenantSlug is required' }],
+    });
+  });
   a.get('/zod-direct', () => {
     throw new ZodError([]);
   });
@@ -86,6 +93,15 @@ describe('error handler', () => {
     const parsed = expectContractError(res.body, 'VALIDATION_FAILED');
     const details = parsed.error.details as { path: string }[];
     expect(details.map((d) => d.path).sort()).toEqual(['name', 'qty']);
+  });
+
+  it('a ZodError from another zod copy (by name) -> 400 VALIDATION_FAILED, not 500', async () => {
+    const res = await request(a).get('/zod-foreign');
+    expect(res.status).toBe(400);
+    const parsed = expectContractError(res.body, 'VALIDATION_FAILED');
+    expect(parsed.error.details).toEqual([
+      { path: 'tenantSlug', code: 'custom', message: 'tenantSlug is required' },
+    ]);
   });
 
   it('AppError OUT_OF_STOCK -> 409 with its code', async () => {

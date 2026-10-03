@@ -1,424 +1,198 @@
-// src/middleware/auth.test.ts
+// authenticate + dbFor. @supabase/supabase-js createClient is mocked, so every client the code
+// creates is recorded with its options, and getUser answers what each test needs.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 
-vi.mock('../utils/supabase', async () => {
-  const { createSupabaseMock } = await import('../test/supabase-mock');
-  const anon = createSupabaseMock();
-  const user = createSupabaseMock();
+const created = vi.hoisted(() => ({
+  clients: [] as { key: string; options: { global?: { headers?: Record<string, string> } } }[],
+  getUser: vi.fn(),
+}));
+
+vi.mock('@supabase/supabase-js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@supabase/supabase-js')>();
   return {
-    supabaseAnon: anon,
-    supabaseUser: () => user,
-    supabaseAdmin: createSupabaseMock(),
+    ...actual,
+    createClient: vi.fn(
+      (_url: string, key: string, options: (typeof created.clients)[number]['options']) => {
+        const client = { key, options, auth: { getUser: created.getUser } };
+        created.clients.push(client);
+        return client;
+      },
+    ),
   };
 });
 
-import { supabaseAnon, supabaseUser } from '../utils/supabase';
-import type { SupabaseMock } from '../test/supabase-mock';
-import {
-  authenticate,
-  attachEmployee,
-  attachSuperAdmin,
-  requireTenant,
-  requirePasswordChanged,
-  isOwner,
-  authorizeModule,
-} from './auth';
+import { AuthApiError, AuthError, AuthSessionMissingError } from '@supabase/supabase-js';
+import { authenticate, dbFor } from './auth';
+import { AppError } from '../utils/errors';
 
-const anon = supabaseAnon as unknown as SupabaseMock;
-const user = supabaseUser('') as unknown as SupabaseMock;
+const USER_1 = '11111111-1111-4111-8111-111111111111';
+const USER_2 = '22222222-2222-4222-8222-222222222222';
+const ORG = '33333333-3333-4333-8333-333333333333';
 
-// -----------------------------------------------------------------------
-// Express mock helpers
-// -----------------------------------------------------------------------
+function jwt(payload: Record<string, unknown>): string {
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  return `${b64({ alg: 'HS256' })}.${b64(payload)}.sig`;
+}
+const future = Math.floor(Date.now() / 1000) + 3600;
+const TOKEN_1 = jwt({ sub: USER_1, exp: future });
+const TOKEN_2 = jwt({ sub: USER_2, exp: future });
 
-function mockReq(overrides: Partial<Request> = {}): Request {
+function mockReq(headers: Record<string, string | string[]> = {}): Request {
   return {
-    headers: {},
-    body: {},
-    requestId: 'test-request-id',
-    ...overrides,
+    headers,
+    requestId: 'req-1',
+    ip: '203.0.113.5',
+    get: (name: string) => (name.toLowerCase() === 'user-agent' ? 'vitest-agent' : undefined),
   } as unknown as Request;
 }
 
-function mockRes(): Response {
-  const res = {
-    status: vi.fn().mockReturnThis(),
-    json: vi.fn().mockReturnThis(),
-    setHeader: vi.fn().mockReturnThis(),
-  };
-  return res as unknown as Response;
+/** Runs the middleware and resolves with the error passed to next (undefined on success). */
+function run(req: Request): Promise<unknown> {
+  return new Promise((resolve) => {
+    const next: NextFunction = (err?: unknown) => resolve(err);
+    authenticate(req, {} as Response, next);
+  });
 }
 
-/**
- * Runs a middleware and awaits either `next()` (success) or `next(err)`
- * (failure, via asyncHandler's .catch). Returns the captured error.
- */
-async function runMiddleware(
-  mw: (req: Request, res: Response, next: NextFunction) => void,
-  req: Request,
-): Promise<{ res: Response; next: ReturnType<typeof vi.fn>; error: unknown }> {
-  const res = mockRes();
-  const next = vi.fn();
-  await new Promise<void>((resolve) => {
-    next.mockImplementation(() => resolve());
-    mw(req, res, next);
-    // Safety net: if next is never called (bug in the middleware), the
-    // promise hangs. setImmediate resolves it and lets the assertion
-    // about next being called fail cleanly.
-    setImmediate(resolve);
-  });
-  return { res, next, error: next.mock.calls[0]?.[0] };
+function userFor(token: string) {
+  const sub = token === TOKEN_1 ? USER_1 : USER_2;
+  return { data: { user: { id: sub, email: `${sub}@x.test` } }, error: null };
 }
 
 beforeEach(() => {
-  anon.reset();
-  user.reset();
-  vi.clearAllMocks();
+  created.clients = [];
+  created.getUser.mockReset();
+  created.getUser.mockImplementation((token: string) => Promise.resolve(userFor(token)));
 });
-
-// ===========================================================================
-// authenticate
-// ===========================================================================
 
 describe('authenticate', () => {
-  it('rejects a request with no Authorization header', async () => {
-    const req = mockReq();
-    const { error } = await runMiddleware(authenticate, req);
-    expect(error).toMatchObject({ code: 'UNAUTHORIZED', statusCode: 401 });
+  it('no Authorization header -> 401 UNAUTHORIZED, Supabase not called', async () => {
+    const err = await run(mockReq());
+    expect(err).toBeInstanceOf(AppError);
+    expect(err).toMatchObject({ statusCode: 401, code: 'UNAUTHORIZED' });
+    expect(created.getUser).not.toHaveBeenCalled();
   });
 
-  it('rejects a header that does not use the Bearer scheme', async () => {
-    const req = mockReq({ headers: { authorization: 'Basic abc' } });
-    const { error } = await runMiddleware(authenticate, req);
-    expect(error).toMatchObject({ code: 'UNAUTHORIZED' });
-  });
-
-  it('rejects an invalid token', async () => {
-    anon.queue({ data: { user: null }, error: { message: 'invalid' } });
-    const req = mockReq({ headers: { authorization: 'Bearer bad-token' } });
-    const { error } = await runMiddleware(authenticate, req);
-    expect(error).toMatchObject({ code: 'UNAUTHORIZED' });
-  });
-
-  it('attaches req.user and req.authToken on a valid token', async () => {
-    anon.queue({
-      data: { user: { id: 'auth-id', email: 'owner@test.local' } },
-      error: null,
+  it('a non-Bearer header -> 401 UNAUTHORIZED', async () => {
+    expect(await run(mockReq({ authorization: 'Basic abc' }))).toMatchObject({
+      code: 'UNAUTHORIZED',
     });
-    const req = mockReq({ headers: { authorization: 'Bearer valid-token' } });
-    const { error, next } = await runMiddleware(authenticate, req);
-
-    expect(error).toBeUndefined();
-    expect(next).toHaveBeenCalledWith();
-    expect(req.user?.id).toBe('auth-id');
-    expect(req.authToken).toBe('valid-token');
   });
 
-  it('never calls supabaseAdmin.auth.getUser — uses anon', async () => {
-    // Regression guard: the previous version used the service-role
-    // client, which bypasses Supabase's own rate limiting.
-    anon.queue({ data: { user: { id: 'auth-id' } }, error: null });
-    const req = mockReq({ headers: { authorization: 'Bearer t' } });
-    await runMiddleware(authenticate, req);
-    expect(anon.auth.getUser).toHaveBeenCalledOnce();
+  it('validates the token server-side with Supabase Auth getUser(jwt) and sets req.auth', async () => {
+    const req = mockReq({ authorization: `Bearer ${TOKEN_1}` });
+    expect(await run(req)).toBeUndefined();
+    expect(created.getUser).toHaveBeenCalledWith(TOKEN_1);
+    expect(req.auth).toEqual({ userId: USER_1, email: `${USER_1}@x.test`, accessToken: TOKEN_1 });
+    expect(req.user).toEqual({ id: USER_1, email: `${USER_1}@x.test` });
+  });
+
+  it('a token getUser rejects (revoked session) -> 401 TOKEN_INVALID', async () => {
+    created.getUser.mockResolvedValue({
+      data: { user: null },
+      error: new AuthApiError(
+        'Session from session_id claim in JWT does not exist',
+        403,
+        'session_not_found',
+      ),
+    });
+    const req = mockReq({ authorization: `Bearer ${TOKEN_1}` });
+    expect(await run(req)).toMatchObject({ statusCode: 401, code: 'TOKEN_INVALID' });
+    expect(req.auth).toBeUndefined();
+  });
+
+  it('a logged-out session (auth-js AuthSessionMissingError from GoTrue session_not_found) -> 401 TOKEN_INVALID', async () => {
+    created.getUser.mockResolvedValue({
+      data: { user: null },
+      error: new AuthSessionMissingError(),
+    });
+    expect(await run(mockReq({ authorization: `Bearer ${TOKEN_1}` }))).toMatchObject({
+      statusCode: 401,
+      code: 'TOKEN_INVALID',
+    });
+  });
+
+  it('an expired token -> 401 TOKEN_EXPIRED', async () => {
+    created.getUser.mockResolvedValue({
+      data: { user: null },
+      error: new AuthApiError('token is expired', 403, 'bad_jwt'),
+    });
+    const expired = jwt({ sub: USER_1, exp: Math.floor(Date.now() / 1000) - 10 });
+    expect(await run(mockReq({ authorization: `Bearer ${expired}` }))).toMatchObject({
+      statusCode: 401,
+      code: 'TOKEN_EXPIRED',
+    });
+  });
+
+  it('Supabase Auth unreachable -> 500 (fails closed, not a 401)', async () => {
+    created.getUser.mockResolvedValue({
+      data: { user: null },
+      error: new AuthError('fetch failed'),
+    });
+    expect(await run(mockReq({ authorization: `Bearer ${TOKEN_1}` }))).toMatchObject({
+      statusCode: 500,
+    });
+  });
+
+  it.each([
+    ['429 (Supabase Auth rate limit)', 429],
+    ['500', 500],
+    ['503', 503],
+  ])('Supabase Auth answering %s -> 500 INTERNAL, never TOKEN_INVALID', async (_name, status) => {
+    created.getUser.mockResolvedValue({
+      data: { user: null },
+      error: new AuthApiError('upstream trouble', status, undefined),
+    });
+    const err = await run(mockReq({ authorization: `Bearer ${TOKEN_1}` }));
+    expect(err).toMatchObject({ statusCode: 500, code: 'INTERNAL' });
+  });
+
+  it('accepts x-org-id only as a UUID', async () => {
+    const ok = mockReq({ authorization: `Bearer ${TOKEN_1}`, 'x-org-id': ORG.toUpperCase() });
+    expect(await run(ok)).toBeUndefined();
+    expect(ok.auth?.orgId).toBe(ORG);
+
+    for (const bad of ['not-a-uuid', "1' OR '1'='1", [ORG, ORG]]) {
+      const req = mockReq({ authorization: `Bearer ${TOKEN_1}`, 'x-org-id': bad });
+      expect(await run(req)).toMatchObject({ statusCode: 400, code: 'VALIDATION_FAILED' });
+      expect(req.auth).toBeUndefined();
+    }
+  });
+
+  it('every token check uses its own fresh anon client', async () => {
+    await run(mockReq({ authorization: `Bearer ${TOKEN_1}` }));
+    await run(mockReq({ authorization: `Bearer ${TOKEN_2}` }));
+    expect(created.clients).toHaveLength(2);
+    expect(created.clients[0]).not.toBe(created.clients[1]);
   });
 });
 
-// ===========================================================================
-// attachEmployee
-// ===========================================================================
+describe('two users, one after the other (no shared session)', () => {
+  it('each request gets its own client carrying its own JWT', async () => {
+    const req1 = mockReq({ authorization: `Bearer ${TOKEN_1}` });
+    const req2 = mockReq({ authorization: `Bearer ${TOKEN_2}`, 'x-org-id': ORG });
+    await run(req1);
+    await run(req2);
 
-describe('attachEmployee', () => {
-  const authReq = (): Request =>
-    mockReq({
-      headers: { authorization: 'Bearer t' },
-      user: { id: 'auth-id' },
-      authToken: 't',
+    const db1 = dbFor(req1) as unknown as (typeof created.clients)[number];
+    const db2 = dbFor(req2) as unknown as (typeof created.clients)[number];
+    expect(db1).not.toBe(db2);
+    expect(db1.options.global?.headers?.['Authorization']).toBe(`Bearer ${TOKEN_1}`);
+    expect(db2.options.global?.headers?.['Authorization']).toBe(`Bearer ${TOKEN_2}`);
+    expect(db1.options.global?.headers?.['x-org-id']).toBeUndefined();
+    expect(db2.options.global?.headers?.['x-org-id']).toBe(ORG);
+    // Request details for the audit row.
+    expect(db1.options.global?.headers).toMatchObject({
+      'x-forwarded-for': '203.0.113.5',
+      'user-agent': 'vitest-agent',
+      'x-request-id': 'req-1',
     });
-
-  it('continues with NO employee attached when no row exists (super admin case)', async () => {
-    user.queue({ data: null, error: null });
-    const req = authReq();
-    const { error } = await runMiddleware(attachEmployee, req);
-
-    expect(error).toBeUndefined();
-    expect(req.employee).toBeUndefined();
+    // Asking again builds yet another client: nothing is cached per process.
+    expect(dbFor(req1)).not.toBe(db1);
   });
 
-  it('rejects a disabled employee with ACCOUNT_DISABLED', async () => {
-    user.queue({
-      data: {
-        id: 'emp-id',
-        organization_id: 'org-id',
-        auth_id: 'auth-id',
-        branch_id: null,
-        role: 'OWNER',
-        permissions: [],
-        is_active: false,
-        username: 'owner',
-        email: 'o@t.local',
-        must_change_password: false,
-      },
-      error: null,
-    });
-    const req = authReq();
-    const { error } = await runMiddleware(attachEmployee, req);
-
-    expect(error).toMatchObject({ code: 'ACCOUNT_DISABLED', statusCode: 403 });
-  });
-
-  it('attaches a fully-shaped req.employee on success', async () => {
-    user.queue({
-      data: {
-        id: 'emp-id',
-        organization_id: 'org-id',
-        auth_id: 'auth-id',
-        branch_id: null,
-        role: 'OWNER',
-        permissions: ['pos', 'sales.create'],
-        is_active: true,
-        username: 'owner',
-        email: 'owner@test.local',
-        must_change_password: false,
-      },
-      error: null,
-    });
-    const req = authReq();
-    const { error } = await runMiddleware(attachEmployee, req);
-
-    expect(error).toBeUndefined();
-    expect(req.employee).toMatchObject({
-      id: 'emp-id',
-      organization_id: 'org-id',
-      role: 'OWNER',
-      permissions: ['pos', 'sales.create'],
-    });
-  });
-});
-
-// ===========================================================================
-// requireTenant
-// ===========================================================================
-
-describe('requireTenant', () => {
-  it('rejects when req.employee is not set', async () => {
-    const req = mockReq();
-    const { error } = await runMiddleware(requireTenant, req);
-    expect(error).toMatchObject({ code: 'TENANT_SCOPE_REQUIRED' });
-  });
-
-  it('passes when req.employee is set', async () => {
-    const req = mockReq({
-      employee: {
-        id: 'e',
-        organization_id: 'o',
-        auth_id: 'a',
-        branch_id: null,
-        role: 'OWNER',
-        permissions: [],
-        is_active: true,
-        username: null,
-        email: null,
-        must_change_password: false,
-      },
-    });
-    const { error } = await runMiddleware(requireTenant, req);
-    expect(error).toBeUndefined();
-  });
-});
-
-// ===========================================================================
-// requirePasswordChanged
-// ===========================================================================
-
-describe('requirePasswordChanged', () => {
-  const employee = (overrides: Partial<NonNullable<Request['employee']>> = {}) => ({
-    id: 'e',
-    organization_id: 'o',
-    auth_id: 'a',
-    branch_id: null,
-    role: 'OWNER' as const,
-    permissions: [],
-    is_active: true,
-    username: null,
-    email: null,
-    must_change_password: false,
-    ...overrides,
-  });
-
-  it('rejects a user still on a temp password', async () => {
-    const req = mockReq({ employee: employee({ must_change_password: true }) });
-    const { error } = await runMiddleware(requirePasswordChanged, req);
-    expect(error).toMatchObject({ code: 'MUST_CHANGE_PASSWORD', statusCode: 403 });
-  });
-
-  it('passes once the flag is cleared', async () => {
-    const req = mockReq({ employee: employee({ must_change_password: false }) });
-    const { error } = await runMiddleware(requirePasswordChanged, req);
-    expect(error).toBeUndefined();
-  });
-
-  it('passes when no employee is attached (super admin path)', async () => {
-    const req = mockReq();
-    const { error } = await runMiddleware(requirePasswordChanged, req);
-    expect(error).toBeUndefined();
-  });
-});
-
-// ===========================================================================
-// isOwner
-// ===========================================================================
-
-describe('isOwner', () => {
-  const employee = (role: string) => ({
-    id: 'e',
-    organization_id: 'o',
-    auth_id: 'a',
-    branch_id: null,
-    role,
-    permissions: [],
-    is_active: true,
-    username: null,
-    email: null,
-    must_change_password: false,
-  });
-
-  it('rejects a non-owner', async () => {
-    const req = mockReq({ employee: employee('CASHIER') as NonNullable<Request['employee']> });
-    const { error } = await runMiddleware(isOwner, req);
-    expect(error).toMatchObject({ code: 'FORBIDDEN' });
-  });
-
-  it('passes for OWNER', async () => {
-    const req = mockReq({ employee: employee('OWNER') as NonNullable<Request['employee']> });
-    const { error } = await runMiddleware(isOwner, req);
-    expect(error).toBeUndefined();
-  });
-
-  it('rejects when no employee is attached', async () => {
-    const req = mockReq();
-    const { error } = await runMiddleware(isOwner, req);
-    expect(error).toMatchObject({ code: 'FORBIDDEN' });
-  });
-});
-
-// ===========================================================================
-// authorizeModule
-// ===========================================================================
-
-describe('authorizeModule', () => {
-  const employee = (role: string, permissions: string[]) => ({
-    id: 'e',
-    organization_id: 'o',
-    auth_id: 'a',
-    branch_id: null,
-    role,
-    permissions,
-    is_active: true,
-    username: null,
-    email: null,
-    must_change_password: false,
-  });
-
-  it('OWNER bypasses the permission array entirely', async () => {
-    const req = mockReq({ employee: employee('OWNER', []) as NonNullable<Request['employee']> });
-    const { error } = await runMiddleware(authorizeModule('inventory'), req);
-    expect(error).toBeUndefined();
-  });
-
-  it('CASHIER passes when their permissions include the module', async () => {
-    const req = mockReq({
-      employee: employee('CASHIER', ['pos', 'sales.create']) as NonNullable<Request['employee']>,
-    });
-    const { error } = await runMiddleware(authorizeModule('pos'), req);
-    expect(error).toBeUndefined();
-  });
-
-  it('module-level key matches any of its actions', async () => {
-    const req = mockReq({
-      employee: employee('CASHIER', ['pos.void']) as NonNullable<Request['employee']>,
-    });
-    const { error } = await runMiddleware(authorizeModule('pos'), req);
-    expect(error).toBeUndefined();
-  });
-
-  it('rejects when the caller lacks the permission', async () => {
-    const req = mockReq({
-      employee: employee('CASHIER', ['pos']) as NonNullable<Request['employee']>,
-    });
-    const { error } = await runMiddleware(authorizeModule('inventory'), req);
-    expect(error).toMatchObject({ code: 'FORBIDDEN' });
-  });
-
-  it('rejects when no employee is attached', async () => {
-    const req = mockReq();
-    const { error } = await runMiddleware(authorizeModule('pos'), req);
-    expect(error).toMatchObject({ code: 'FORBIDDEN' });
-  });
-});
-
-// ===========================================================================
-// attachSuperAdmin
-// ===========================================================================
-
-describe('attachSuperAdmin', () => {
-  const authReq = (): Request =>
-    mockReq({
-      headers: { authorization: 'Bearer t' },
-      user: { id: 'auth-id' },
-      authToken: 't',
-    });
-
-  it('attaches req.superAdmin when a matching active row exists', async () => {
-    user.queue({
-      data: {
-        id: 'sa-id',
-        auth_user_id: 'auth-id',
-        email: 'admin@example.com',
-        full_name: 'Admin',
-        is_active: true,
-      },
-      error: null,
-    });
-
-    const req = authReq();
-    const { error } = await runMiddleware(attachSuperAdmin, req);
-
-    expect(error).toBeUndefined();
-    expect(req.superAdmin).toMatchObject({
-      id: 'sa-id',
-      email: 'admin@example.com',
-      is_active: true,
-    });
-  });
-
-  it('leaves req.superAdmin undefined when no row exists (not a super admin)', async () => {
-    user.queue({ data: null, error: null });
-
-    const req = authReq();
-    const { error } = await runMiddleware(attachSuperAdmin, req);
-
-    expect(error).toBeUndefined();
-    expect(req.superAdmin).toBeUndefined();
-  });
-
-  it('leaves req.superAdmin undefined when the row is inactive', async () => {
-    user.queue({
-      data: {
-        id: 'sa-id',
-        auth_user_id: 'auth-id',
-        email: 'admin@example.com',
-        full_name: 'Admin',
-        is_active: false,
-      },
-      error: null,
-    });
-
-    const req = authReq();
-    const { error } = await runMiddleware(attachSuperAdmin, req);
-
-    expect(error).toBeUndefined();
-    expect(req.superAdmin).toBeUndefined();
+  it('dbFor refuses to run before authenticate', () => {
+    expect(() => dbFor(mockReq())).toThrow(/before authenticate/);
   });
 });

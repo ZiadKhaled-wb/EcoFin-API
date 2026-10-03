@@ -1,63 +1,36 @@
 // server/src/routes/auth.ts
 //
-// Chain reference for the auth routes:
+//   public (rate-limited)   login, refresh, forgot-password, reset-password
+//   authenticated           me, logout, change-password, select-shop
 //
-//   public              login, refresh, forgot-password
-//   authenticated       change-password (bypasses requirePasswordChanged)
-//   owner + password    reset-owner-password
-//   any authenticated   me, logout
+// No route here needs x-org-id: authenticate only checks that it is a UUID when present.
+// select-shop takes the shop from its body (D23), so a multi-shop login token works without it.
 
 import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler';
+import { authenticate } from '../middleware/auth';
 import {
-  authenticate,
-  attachEmployee,
-  attachSuperAdmin,
-  requireTenant,
-  requirePasswordChanged,
-  isOwner,
-} from '../middleware/auth';
-import { loginLimiter, forgotPasswordLimiter } from '../middleware/rateLimit';
+  loginLimiter,
+  forgotPasswordLimiter,
+  refreshLimiter,
+  resetPasswordLimiter,
+} from '../middleware/rateLimit';
 import * as authController from '../controllers/auth.controller';
 
 const router = Router();
 
-// --- Public (rate-limited) --------------------------------------------------
-
+// --- Public -----------------------------------------------------------------
 router.post('/login', loginLimiter, asyncHandler(authController.login));
-router.post('/refresh', loginLimiter, asyncHandler(authController.refresh)); // ← NEW
+// D24: /refresh has its own generous per-IP limiter, so silent refreshes from one shop IP can't
+// use up the login budget.
+router.post('/refresh', refreshLimiter, asyncHandler(authController.refresh));
 router.post('/forgot-password', forgotPasswordLimiter, asyncHandler(authController.forgotPassword));
+router.post('/reset-password', resetPasswordLimiter, asyncHandler(authController.resetPassword));
 
-// --- Authenticated ----------------------------------------------------------
-
-// Deliberately does NOT include requirePasswordChanged: this is the ONLY
-// endpoint (besides logout) that a temp-password user must be able to reach.
-router.post(
-  '/change-password',
-  authenticate,
-  attachEmployee,
-  requireTenant,
-  asyncHandler(authController.changePassword),
-);
-
-router.post(
-  '/reset-owner-password',
-  authenticate,
-  attachEmployee,
-  requirePasswordChanged,
-  isOwner,
-  asyncHandler(authController.resetOwnerPassword),
-);
-
-router.get(
-  '/me',
-  authenticate,
-  attachEmployee,
-  attachSuperAdmin,
-  requirePasswordChanged,
-  asyncHandler(authController.getCurrentUser),
-);
-
-router.post('/logout', authenticate, attachEmployee, asyncHandler(authController.logout));
+// --- Authenticated ------------------------------------------------------------
+router.get('/me', authenticate, asyncHandler(authController.me));
+router.post('/logout', authenticate, asyncHandler(authController.logout));
+router.post('/select-shop', authenticate, asyncHandler(authController.selectShop));
+router.post('/change-password', authenticate, asyncHandler(authController.changePassword));
 
 export default router;

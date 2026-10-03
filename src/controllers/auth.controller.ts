@@ -1,96 +1,80 @@
+// server/src/controllers/auth.controller.ts
+//
+// Thin handlers: parse the body with the contract schema (a ZodError, recognised by name, becomes VALIDATION_FAILED
+// in the error handler), call the service, send the contract response.
+
 import type { Request, Response } from 'express';
+import {
+  AuthChangePasswordBody,
+  AuthForgotPasswordBody,
+  AuthLoginBody,
+  AuthRefreshBody,
+  AuthResetPasswordBody,
+  AuthSelectShopBody,
+  type Ack,
+  type AuthLoginResponse,
+  type AuthMeResponse,
+  type AuthRefreshResponse,
+  type AuthSelectShopResponse,
+} from '@ecotech/contracts';
 import * as authService from '../services/auth.service';
+import { requestMeta } from '../middleware/auth';
+import type { RequestAuth } from '../types/express';
 import { Unauthorized } from '../utils/errors';
 
+const ACK: Ack = { ok: true };
+
+function requireAuth(req: Request): RequestAuth {
+  if (!req.auth) throw Unauthorized('Authentication required.', 'UNAUTHORIZED');
+  return req.auth;
+}
+
 export async function login(req: Request, res: Response) {
-  const { tenant_slug, identifier, password } = (req.body ?? {}) as Record<string, unknown>;
-  const result = await authService.login(
-    tenant_slug as string,
-    identifier as string,
-    password as string,
-  );
-  return res.json(result);
-}
-
-export async function forgotPassword(req: Request, res: Response) {
-  const { tenant_slug, identifier } = (req.body ?? {}) as Record<string, unknown>;
-  await authService.forgotPassword(tenant_slug as string, identifier as string);
-  return res.json({ success: true });
-}
-
-export async function resetOwnerPassword(req: Request, res: Response) {
-  const employee = req.employee;
-  if (!employee) throw Unauthorized('مطلوب تسجيل الدخول', 'UNAUTHORIZED');
-  const { userId, newPassword } = (req.body ?? {}) as Record<string, unknown>;
-  await authService.resetOwnerPassword(
-    userId as string,
-    newPassword as string,
-    employee.organization_id,
-  );
-  return res.json({ success: true });
-}
-
-export async function changePassword(req: Request, res: Response) {
-  const employee = req.employee;
-  const user = req.user;
-  if (!employee || !user) throw Unauthorized('مطلوب تسجيل الدخول', 'UNAUTHORIZED');
-
-  const { currentPassword, newPassword, confirmPassword } = (req.body ?? {}) as Record<
-    string,
-    unknown
-  >;
-
-  await authService.changePassword(
-    employee.id,
-    user.id,
-    employee.organization_id,
-    currentPassword as string,
-    newPassword as string,
-    confirmPassword as string,
-  );
-  return res.json({ success: true });
-}
-
-export async function getCurrentUser(req: Request, res: Response) {
-  if (req.superAdmin) {
-    return res.json({
-      id: req.superAdmin.id,
-      personId: req.superAdmin.id,
-      email: req.superAdmin.email,
-      username: null,
-      role: 'SUPER_ADMIN',
-      branchId: null,
-      orgId: null,
-      permissions: [],
-      isSuperAdmin: true,
-      must_change_password: false,
-    });
-  }
-  if (!req.employee) {
-    throw Unauthorized('مطلوب تسجيل الدخول', 'UNAUTHORIZED');
-  }
-  return res.json({
-    id: req.employee.id,
-    personId: req.employee.id,
-    email: req.employee.email,
-    username: req.employee.username,
-    role: req.employee.role,
-    branchId: req.employee.branch_id,
-    orgId: req.employee.organization_id,
-    permissions: req.employee.permissions,
-    isSuperAdmin: false,
-    must_change_password: req.employee.must_change_password,
-  });
-}
-
-export async function logout(_req: Request, res: Response) {
-  // Stateless JWTs. The client clears its tokens. A server-side deny-list
-  // (session revocation) is deferred to v1.1 — see ADR-0004.
-  return res.json({ success: true });
+  const body = AuthLoginBody.parse(req.body);
+  const result: AuthLoginResponse = await authService.login(body, requestMeta(req));
+  res.json(result);
 }
 
 export async function refresh(req: Request, res: Response) {
-  const { refresh_token } = (req.body ?? {}) as Record<string, unknown>;
-  const result = await authService.refreshSession(refresh_token as string);
-  return res.json(result);
+  const body = AuthRefreshBody.parse(req.body);
+  const result: AuthRefreshResponse = await authService.refresh(body.refreshToken);
+  res.json(result);
+}
+
+export async function selectShop(req: Request, res: Response) {
+  const body = AuthSelectShopBody.parse(req.body);
+  const result: AuthSelectShopResponse = await authService.selectShop(
+    requireAuth(req),
+    body.orgId,
+    requestMeta(req),
+  );
+  res.json(result);
+}
+
+export async function logout(req: Request, res: Response) {
+  await authService.logout(requireAuth(req), requestMeta(req));
+  res.json(ACK);
+}
+
+export async function forgotPassword(req: Request, res: Response) {
+  const body = AuthForgotPasswordBody.parse(req.body);
+  await authService.forgotPassword(body);
+  res.status(202).json(ACK);
+}
+
+export async function resetPassword(req: Request, res: Response) {
+  const body = AuthResetPasswordBody.parse(req.body);
+  await authService.resetPassword(body);
+  res.json(ACK);
+}
+
+export async function changePassword(req: Request, res: Response) {
+  const body = AuthChangePasswordBody.parse(req.body);
+  await authService.changePassword(requireAuth(req), body, requestMeta(req));
+  res.json(ACK);
+}
+
+export async function me(req: Request, res: Response) {
+  const result: AuthMeResponse = await authService.getMe(requireAuth(req), requestMeta(req));
+  res.json(result);
 }

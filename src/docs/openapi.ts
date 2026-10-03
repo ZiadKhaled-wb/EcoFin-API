@@ -78,191 +78,200 @@ export const openApiSpec = {
                 },
             },
 
-            // ---------- Requests ----------
+            // ---------- Auth (shapes from @ecotech/contracts `auth`) ----------
 
-            LoginRequest: {
+            ShopMembership: {
                 type: 'object',
-                required: ['tenant_slug', 'identifier', 'password'],
+                required: ['orgId', 'orgName', 'tenantSlug', 'role'],
                 properties: {
-                    tenant_slug: {
-                        type: 'string',
-                        example: 'testshop',
-                        description: 'Public tenant identifier (organizations.tenant_slug).',
-                    },
-                    identifier: {
-                        type: 'string',
-                        example: 'owner',
-                        description: 'Username OR email. Usernames are org-scoped.',
-                    },
-                    password: { type: 'string', format: 'password', example: 'Str0ngPass!2026' },
-                },
-            },
-
-            ForgotPasswordRequest: {
-                type: 'object',
-                required: ['tenant_slug', 'identifier'],
-                properties: {
-                    tenant_slug: { type: 'string', example: 'testshop' },
-                    identifier: {
-                        type: 'string',
-                        example: 'owner@test.local',
-                        description: 'Username or email. Response is identical either way.',
-                    },
-                },
-            },
-
-            ChangePasswordRequest: {
-                type: 'object',
-                required: ['currentPassword', 'newPassword', 'confirmPassword'],
-                properties: {
-                    currentPassword: { type: 'string', format: 'password' },
-                    newPassword: { type: 'string', format: 'password', minLength: 8 },
-                    confirmPassword: { type: 'string', format: 'password' },
-                },
-            },
-
-            ResetOwnerPasswordRequest: {
-                type: 'object',
-                required: ['userId', 'newPassword'],
-                properties: {
-                    userId: {
-                        type: 'string',
-                        format: 'uuid',
-                        description: "Target employee's Supabase auth_id. Must be in the caller's org.",
-                    },
-                    newPassword: { type: 'string', format: 'password', minLength: 8 },
-                },
-            },
-
-            // ---------- Responses ----------
-
-            LoginUser: {
-                type: 'object',
-                required: [
-                    'id', 'personId', 'email', 'username', 'role',
-                    'branchId', 'orgId', 'permissions', 'isSuperAdmin',
-                ],
-                properties: {
-                    id: { type: 'string', format: 'uuid', description: 'Supabase auth user id.' },
-                    personId: {
-                        type: 'string',
-                        format: 'uuid',
-                        description: 'employees.id, or super_admins.id for platform users.',
-                    },
-                    email: { type: 'string', nullable: true },
-                    username: { type: 'string', nullable: true },
+                    orgId: { type: 'string', format: 'uuid' },
+                    orgName: { type: 'string' },
+                    tenantSlug: { type: 'string', example: 'dev-shop-one' },
                     role: {
                         type: 'string',
-                        enum: [
-                            'OWNER', 'OPS_MANAGER', 'ACCOUNTANT', 'CASHIER',
-                            'COLLECTOR', 'WAREHOUSE_MANAGER', 'HR_MANAGER',
-                            'LAWYER', 'EMPLOYEE', 'SUPER_ADMIN',
-                        ],
+                        enum: ['OWNER', 'BRANCH_MANAGER', 'CASHIER', 'WAREHOUSE', 'COLLECTOR', 'ACCOUNTANT', 'LAWYER'],
                     },
-                    branchId: { type: 'string', format: 'uuid', nullable: true },
-                    orgId: { type: 'string', format: 'uuid', nullable: true },
-                    permissions: { type: 'array', items: { type: 'string' }, example: ['pos', 'sales.create'] },
-                    isSuperAdmin: { type: 'boolean' },
                 },
             },
-
-            LoginResponse: {
+            AuthSession: {
                 type: 'object',
-                required: ['user', 'session', 'must_change_password'],
+                required: ['accessToken', 'refreshToken', 'expiresAt'],
                 properties: {
-                    user: { $ref: '#/components/schemas/LoginUser' },
-                    session: {
+                    accessToken: { type: 'string' },
+                    refreshToken: { type: 'string' },
+                    expiresAt: { type: 'string', format: 'date-time' },
+                },
+            },
+            LoginRequest: {
+                type: 'object',
+                required: ['identifier', 'password'],
+                additionalProperties: false,
+                properties: {
+                    identifier: {
+                        type: 'string',
+                        example: 'owner.one@ecotech.test',
+                        description: 'Email, or a username (then tenantSlug is required).',
+                    },
+                    password: { type: 'string', format: 'password' },
+                    tenantSlug: {
+                        type: 'string',
+                        example: 'dev-shop-one',
+                        description: 'Required with a username. With a two-shop login it picks that shop.',
+                    },
+                },
+            },
+            LoginResponse: {
+                allOf: [
+                    { $ref: '#/components/schemas/AuthSession' },
+                    {
                         type: 'object',
-                        required: ['access_token', 'refresh_token'],
+                        required: ['user', 'mustChangePassword', 'shops', 'requiresShopSelection'],
                         properties: {
-                            access_token: { type: 'string' },
-                            refresh_token: { type: 'string' },
+                            user: {
+                                type: 'object',
+                                required: ['id', 'email'],
+                                properties: {
+                                    id: { type: 'string', format: 'uuid' },
+                                    email: { type: 'string', nullable: true },
+                                },
+                            },
+                            mustChangePassword: { type: 'boolean' },
+                            shops: { type: 'array', items: { $ref: '#/components/schemas/ShopMembership' } },
+                            requiresShopSelection: {
+                                type: 'boolean',
+                                description: 'True when the login has several shops and none was chosen: send x-org-id.',
+                            },
                         },
                     },
-                    must_change_password: {
-                        type: 'boolean',
+                ],
+            },
+            RefreshRequest: {
+                type: 'object',
+                required: ['refreshToken'],
+                additionalProperties: false,
+                properties: { refreshToken: { type: 'string' } },
+            },
+            ForgotPasswordRequest: {
+                type: 'object',
+                required: ['identifier'],
+                additionalProperties: false,
+                properties: {
+                    identifier: { type: 'string', example: 'owner.one@ecotech.test' },
+                    tenantSlug: { type: 'string', description: 'Required with a username.' },
+                },
+            },
+            ResetPasswordRequest: {
+                type: 'object',
+                required: ['token', 'newPassword'],
+                additionalProperties: false,
+                properties: {
+                    token: {
+                        type: 'string',
                         description:
-                            'When true, every endpoint except /change-password and ' +
-                            '/logout returns 403 MUST_CHANGE_PASSWORD.',
+                            'Access token of the recovery session from the emailed link (or the link token_hash).',
+                    },
+                    newPassword: { type: 'string', format: 'password', minLength: 8, maxLength: 72 },
+                },
+            },
+            ChangePasswordRequest: {
+                type: 'object',
+                required: ['currentPassword', 'newPassword'],
+                additionalProperties: false,
+                properties: {
+                    currentPassword: { type: 'string', format: 'password' },
+                    newPassword: { type: 'string', format: 'password', minLength: 8, maxLength: 72 },
+                },
+            },
+            MeResponse: {
+                type: 'object',
+                required: ['employee', 'org', 'branches'],
+                properties: {
+                    employee: {
+                        type: 'object',
+                        required: ['id', 'fullName', 'email', 'username', 'role', 'defaultBranchId', 'mustChangePassword'],
+                        properties: {
+                            id: { type: 'string', format: 'uuid' },
+                            fullName: { type: 'string' },
+                            email: { type: 'string', nullable: true },
+                            username: { type: 'string', nullable: true },
+                            role: { type: 'string' },
+                            defaultBranchId: { type: 'string', format: 'uuid', nullable: true },
+                            mustChangePassword: { type: 'boolean' },
+                        },
+                    },
+                    org: {
+                        type: 'object',
+                        required: ['id', 'tenantSlug', 'name', 'timezone', 'defaultLanguage', 'status', 'planKey', 'subscriptionEnd'],
+                        properties: {
+                            id: { type: 'string', format: 'uuid' },
+                            tenantSlug: { type: 'string' },
+                            name: { type: 'string' },
+                            timezone: { type: 'string' },
+                            defaultLanguage: { type: 'string', enum: ['ar', 'en'] },
+                            status: { type: 'string', enum: ['active', 'suspended', 'expired', 'closed'] },
+                            planKey: { type: 'string' },
+                            subscriptionEnd: { type: 'string', format: 'date', nullable: true },
+                        },
+                    },
+                    branches: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['id', 'code', 'name', 'isMain'],
+                            properties: {
+                                id: { type: 'string', format: 'uuid' },
+                                code: { type: 'string' },
+                                name: { type: 'string' },
+                                isMain: { type: 'boolean' },
+                            },
+                        },
                     },
                 },
             },
-
-            MeResponse: {
+            SelectShopRequest: {
                 type: 'object',
-                required: ['id', 'personId', 'role', 'isSuperAdmin', 'must_change_password'],
+                required: ['orgId'],
+                additionalProperties: false,
+                properties: { orgId: { type: 'string', format: 'uuid' } },
+            },
+            SelectShopResponse: {
+                type: 'object',
+                required: ['user', 'shop'],
+                additionalProperties: false,
                 properties: {
-                    id: { type: 'string', format: 'uuid' },
-                    personId: { type: 'string', format: 'uuid' },
-                    email: { type: 'string', nullable: true },
-                    username: { type: 'string', nullable: true },
-                    role: { type: 'string' },
-                    branchId: { type: 'string', format: 'uuid', nullable: true },
-                    orgId: { type: 'string', format: 'uuid', nullable: true },
-                    permissions: { type: 'array', items: { type: 'string' } },
-                    isSuperAdmin: { type: 'boolean' },
-                    must_change_password: { type: 'boolean' },
+                    user: {
+                        type: 'object',
+                        required: ['id', 'email'],
+                        properties: {
+                            id: { type: 'string', format: 'uuid' },
+                            email: { type: 'string', nullable: true },
+                        },
+                    },
+                    shop: { $ref: '#/components/schemas/ShopMembership' },
                 },
             },
-
-            SuccessResponse: {
+            Ack: {
                 type: 'object',
-                required: ['success'],
-                properties: { success: { type: 'boolean', example: true } },
+                required: ['ok'],
+                properties: { ok: { type: 'boolean', enum: [true] } },
+            },
+        },
+
+        parameters: {
+            OrgId: {
+                name: 'x-org-id',
+                in: 'header',
+                required: false,
+                schema: { type: 'string', format: 'uuid' },
+                description:
+                    'Active shop for a login with several shops. Must be a UUID; the database checks membership.',
             },
         },
 
         responses: {
-            InvalidCredentials: {
-                description:
-                    'Returned identically for: unknown tenant slug, unknown user, wrong password.',
-                content: {
-                    'application/json': {
-                        schema: { $ref: '#/components/schemas/Error' },
-                        example: {
-                            error: 'بيانات الدخول غير صحيحة.',
-                            code: 'INVALID_CREDENTIALS',
-                            requestId: '00000000-0000-0000-0000-000000000000',
-                        },
-                    },
-                },
-            },
-            Unauthorized: {
-                description: 'Missing or invalid bearer token.',
-                content: {
-                    'application/json': {
-                        schema: { $ref: '#/components/schemas/Error' },
-                        example: {
-                            error: 'مطلوب تسجيل الدخول',
-                            code: 'UNAUTHORIZED',
-                            requestId: '00000000-0000-0000-0000-000000000000',
-                        },
-                    },
-                },
-            },
-            Forbidden: {
-                description: 'Authenticated but not permitted, or account disabled.',
-                content: {
-                    'application/json': {
-                        schema: { $ref: '#/components/schemas/Error' },
-                    },
-                },
-            },
-            TooManyRequests: {
-                description: 'Rate limit exceeded. Retry-After header is set.',
-                content: {
-                    'application/json': {
-                        schema: { $ref: '#/components/schemas/Error' },
-                    },
-                },
-            },
-            BadRequest: {
-                description: 'Validation failure or domain error.',
-                content: {
-                    'application/json': {
-                        schema: { $ref: '#/components/schemas/Error' },
-                    },
-                },
+            Error: {
+                description: 'Contract error (see error.code).',
+                content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
             },
         },
     },
@@ -302,120 +311,61 @@ export const openApiSpec = {
                 },
             },
         },
-
         // =========================================================
-        // Public auth
+        // Auth (F04)
         // =========================================================
         '/api/auth/login': {
             post: {
                 tags: ['Auth — public'],
-                summary: 'Log in with username or email',
+                summary: 'Log in with email, or shop slug + username',
+                description:
+                    'Unknown user, wrong password and unknown slug all return the same 401 INVALID_CREDENTIALS. ' +
+                    'Refused after a correct password (session revoked): 403 ACCOUNT_DISABLED, SHOP_INACTIVE, ' +
+                    'SUBSCRIPTION_EXPIRED. Lockout (D17): 429 TOO_MANY_LOGIN_ATTEMPTS.',
                 security: [],
                 requestBody: {
                     required: true,
-                    content: {
-                        'application/json': { schema: { $ref: '#/components/schemas/LoginRequest' } },
-                    },
+                    content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginRequest' } } },
                 },
                 responses: {
                     200: {
-                        description: 'Login succeeded',
-                        content: {
-                            'application/json': { schema: { $ref: '#/components/schemas/LoginResponse' } },
-                        },
+                        description: 'Tokens and shops',
+                        content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginResponse' } } },
                     },
-                    401: { $ref: '#/components/responses/InvalidCredentials' },
-                    403: {
-                        description: 'Account is disabled (ACCOUNT_DISABLED) — only after correct password.',
-                        content: {
-                            'application/json': {
-                                schema: { $ref: '#/components/schemas/Error' },
-                                example: {
-                                    error: 'هذا الحساب معطل. يرجى التواصل مع الإدارة.',
-                                    code: 'ACCOUNT_DISABLED',
-                                    requestId: '00000000-0000-0000-0000-000000000000',
-                                },
-                            },
-                        },
-                    },
-                    429: { $ref: '#/components/responses/TooManyRequests' },
+                    400: { $ref: '#/components/responses/Error' },
+                    401: { $ref: '#/components/responses/Error' },
+                    403: { $ref: '#/components/responses/Error' },
+                    429: { $ref: '#/components/responses/Error' },
                 },
             },
         },
-
         '/api/auth/refresh': {
             post: {
                 tags: ['Auth — public'],
-                summary: 'Exchange a refresh token for a new session',
+                summary: 'New token pair from a refresh token',
                 description:
-                    'Called by the frontend interceptor when an access token has expired. ' +
-                    'Supabase rotates the refresh token on every call; the response always ' +
-                    'contains a new refresh_token alongside the new access_token.',
+                    'Invalid or used refresh token: 401 TOKEN_INVALID. Supabase Auth busy or failing: 500 ' +
+                    '(keep the session and retry). Own per-IP limit: 60 per minute (429).',
                 security: [],
                 requestBody: {
                     required: true,
-                    content: {
-                        'application/json': {
-                            schema: {
-                                type: 'object',
-                                required: ['refresh_token'],
-                                properties: {
-                                    refresh_token: {
-                                        type: 'string',
-                                        description: 'The refresh token from a prior login or refresh response.',
-                                    },
-                                },
-                            },
-                        },
-                    },
+                    content: { 'application/json': { schema: { $ref: '#/components/schemas/RefreshRequest' } } },
                 },
                 responses: {
                     200: {
-                        description: 'New session issued',
-                        content: {
-                            'application/json': {
-                                schema: {
-                                    type: 'object',
-                                    required: ['session'],
-                                    properties: {
-                                        session: {
-                                            type: 'object',
-                                            required: ['access_token', 'refresh_token'],
-                                            properties: {
-                                                access_token: { type: 'string' },
-                                                refresh_token: { type: 'string' },
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
+                        description: 'New tokens',
+                        content: { 'application/json': { schema: { $ref: '#/components/schemas/AuthSession' } } },
                     },
-                    401: {
-                        description: 'Refresh token is missing, invalid, or expired',
-                        content: {
-                            'application/json': {
-                                schema: { $ref: '#/components/schemas/Error' },
-                                example: {
-                                    error: 'انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.',
-                                    code: 'UNAUTHORIZED',
-                                    requestId: '00000000-0000-0000-0000-000000000000',
-                                },
-                            },
-                        },
-                    },
-                    429: { $ref: '#/components/responses/TooManyRequests' },
+                    401: { $ref: '#/components/responses/Error' },
+                    429: { $ref: '#/components/responses/Error' },
+                    500: { $ref: '#/components/responses/Error' },
                 },
             },
         },
-
         '/api/auth/forgot-password': {
             post: {
                 tags: ['Auth — public'],
-                summary: 'Trigger a password reset email (Supabase native magic link)',
-                description:
-                    'Always returns 200 regardless of whether the identifier exists. ' +
-                    'This is intentional — it prevents email enumeration.',
+                summary: 'Send the password reset email (always 202)',
                 security: [],
                 requestBody: {
                     required: true,
@@ -424,28 +374,108 @@ export const openApiSpec = {
                     },
                 },
                 responses: {
-                    200: {
-                        description: 'Request accepted (identity-independent)',
-                        content: {
-                            'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } },
-                        },
+                    202: {
+                        description: 'Same answer whether or not the account exists',
+                        content: { 'application/json': { schema: { $ref: '#/components/schemas/Ack' } } },
                     },
-                    429: { $ref: '#/components/responses/TooManyRequests' },
+                    400: { $ref: '#/components/responses/Error' },
+                    429: { $ref: '#/components/responses/Error' },
                 },
             },
         },
-
-        // =========================================================
-        // Authenticated auth
-        // =========================================================
+        '/api/auth/reset-password': {
+            post: {
+                tags: ['Auth — public'],
+                summary: 'Set a new password with the token from the reset email',
+                description: 'Ends every session of the user. A normal login token is refused (401 TOKEN_INVALID).',
+                security: [],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': { schema: { $ref: '#/components/schemas/ResetPasswordRequest' } },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: 'Password changed',
+                        content: { 'application/json': { schema: { $ref: '#/components/schemas/Ack' } } },
+                    },
+                    400: { $ref: '#/components/responses/Error' },
+                    401: { $ref: '#/components/responses/Error' },
+                },
+            },
+        },
+        '/api/auth/me': {
+            get: {
+                tags: ['Auth — authenticated'],
+                summary: 'The caller in the active shop',
+                description:
+                    'Two shops and no x-org-id: 400 SHOP_SELECTION_REQUIRED. A shop the caller is not in: 403 SHOP_NOT_ALLOWED.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: {
+                    200: {
+                        description: 'Employee, shop and branches',
+                        content: { 'application/json': { schema: { $ref: '#/components/schemas/MeResponse' } } },
+                    },
+                    400: { $ref: '#/components/responses/Error' },
+                    401: { $ref: '#/components/responses/Error' },
+                    403: { $ref: '#/components/responses/Error' },
+                },
+            },
+        },
+        '/api/auth/select-shop': {
+            post: {
+                tags: ['Auth — authenticated'],
+                summary: 'Choose the active shop for a login with several shops (D23)',
+                description:
+                    'Works with the multi-shop login token and no x-org-id. The shop must be one of the ' +
+                    "caller's usable shops (else 403 SHOP_NOT_ALLOWED). Writes auth.login in that shop. " +
+                    'The client keeps its tokens and sends x-org-id from then on.',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': { schema: { $ref: '#/components/schemas/SelectShopRequest' } },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: 'The chosen shop',
+                        content: {
+                            'application/json': { schema: { $ref: '#/components/schemas/SelectShopResponse' } },
+                        },
+                    },
+                    400: { $ref: '#/components/responses/Error' },
+                    401: { $ref: '#/components/responses/Error' },
+                    403: { $ref: '#/components/responses/Error' },
+                },
+            },
+        },
+        '/api/auth/logout': {
+            post: {
+                tags: ['Auth — authenticated'],
+                summary: 'Revoke this session on the server',
+                description: 'Afterwards the access token gets 401 on this API and the refresh token is dead.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: {
+                    200: {
+                        description: 'Logged out',
+                        content: { 'application/json': { schema: { $ref: '#/components/schemas/Ack' } } },
+                    },
+                    401: { $ref: '#/components/responses/Error' },
+                },
+            },
+        },
         '/api/auth/change-password': {
             post: {
                 tags: ['Auth — authenticated'],
-                summary: 'Change own password (the temp-password exit)',
+                summary: 'Change your own password',
                 description:
-                    'This is one of only two endpoints reachable when ' +
-                    'must_change_password is true (the other is /logout).',
+                    'Wrong current password: 401 INVALID_CREDENTIALS. Clears must_change_password and ends the other sessions.',
                 security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
                 requestBody: {
                     required: true,
                     content: {
@@ -454,116 +484,13 @@ export const openApiSpec = {
                 },
                 responses: {
                     200: {
-                        description: 'Password updated',
-                        content: {
-                            'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } },
-                        },
+                        description: 'Password changed',
+                        content: { 'application/json': { schema: { $ref: '#/components/schemas/Ack' } } },
                     },
-                    400: { $ref: '#/components/responses/BadRequest' },
-                    401: {
-                        description: 'currentPassword is wrong (INVALID_CREDENTIALS)',
-                        content: {
-                            'application/json': { schema: { $ref: '#/components/schemas/Error' } },
-                        },
-                    },
-                    403: { $ref: '#/components/responses/Forbidden' },
-                },
-            },
-        },
-
-        '/api/auth/reset-owner-password': {
-            post: {
-                tags: ['Auth — authenticated'],
-                summary: 'Owner-initiated reset of another employee in the same org',
-                description:
-                    'Requires role OWNER and must_change_password = false. The service ' +
-                    'layer re-verifies the target employee is in the caller org ' +
-                    '(defence in depth against a middleware mistake).',
-                security: [{ bearerAuth: [] }],
-                requestBody: {
-                    required: true,
-                    content: {
-                        'application/json': { schema: { $ref: '#/components/schemas/ResetOwnerPasswordRequest' } },
-                    },
-                },
-                responses: {
-                    200: {
-                        description: 'Password updated',
-                        content: {
-                            'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } },
-                        },
-                    },
-                    401: { $ref: '#/components/responses/Unauthorized' },
-                    403: { $ref: '#/components/responses/Forbidden' },
-                    404: {
-                        description: 'Target employee not found',
-                        content: {
-                            'application/json': { schema: { $ref: '#/components/schemas/Error' } },
-                        },
-                    },
-                },
-            },
-        },
-
-        '/api/auth/me': {
-            get: {
-                tags: ['Auth — authenticated'],
-                summary: 'Return the current principal',
-                security: [{ bearerAuth: [] }],
-                responses: {
-                    200: {
-                        description: 'Current user',
-                        content: {
-                            'application/json': { schema: { $ref: '#/components/schemas/MeResponse' } },
-                        },
-                    },
-                    401: { $ref: '#/components/responses/Unauthorized' },
-                    403: {
-                        description:
-                            'MUST_CHANGE_PASSWORD if the temp-password flag is still set; ' +
-                            'ACCOUNT_DISABLED if the account is inactive.',
-                        content: {
-                            'application/json': {
-                                schema: { $ref: '#/components/schemas/Error' },
-                                examples: {
-                                    mustChange: {
-                                        value: {
-                                            error: 'يجب تغيير كلمة المرور قبل المتابعة.',
-                                            code: 'MUST_CHANGE_PASSWORD',
-                                            requestId: '00000000-0000-0000-0000-000000000000',
-                                        },
-                                    },
-                                    disabled: {
-                                        value: {
-                                            error: 'هذا الحساب معطل. يرجى التواصل مع الإدارة.',
-                                            code: 'ACCOUNT_DISABLED',
-                                            requestId: '00000000-0000-0000-0000-000000000000',
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-        },
-
-        '/api/auth/logout': {
-            post: {
-                tags: ['Auth — authenticated'],
-                summary: 'Client-side logout (no server-side revocation in v1)',
-                description:
-                    'Stateless JWT. The client clears its tokens. Server-side ' +
-                    'session revocation is deferred to v1.1 (see ADR-0004).',
-                security: [{ bearerAuth: [] }],
-                responses: {
-                    200: {
-                        description: 'Always succeeds',
-                        content: {
-                            'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } },
-                        },
-                    },
-                    401: { $ref: '#/components/responses/Unauthorized' },
+                    400: { $ref: '#/components/responses/Error' },
+                    401: { $ref: '#/components/responses/Error' },
+                    403: { $ref: '#/components/responses/Error' },
+                    429: { $ref: '#/components/responses/Error' },
                 },
             },
         },

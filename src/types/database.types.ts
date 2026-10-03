@@ -7812,7 +7812,19 @@ export type Database = {
       };
     };
     Functions: {
-      [_ in never]: never;
+      auth_clear_must_change_password: { Args: { p_auth_user_id: string }; Returns: number };
+      auth_record_login: { Args: Record<PropertyKey, never>; Returns: undefined };
+      auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
+      auth_record_password_change: { Args: Record<PropertyKey, never>; Returns: undefined };
+      my_shops: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          org_id: string;
+          org_name: string;
+          role: Database['public']['Enums']['employee_role'];
+          tenant_slug: string;
+        }[];
+      };
     };
     Enums: {
       adjustment_reason: 'damage' | 'loss' | 'found' | 'correction' | 'count' | 'other';

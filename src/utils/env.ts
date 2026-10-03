@@ -60,6 +60,16 @@ const envSchema = z.object({
 
   // Optional. If set, the rate limiters use Redis so limits are shared across API instances.
   RATE_LIMIT_REDIS_URL: z.string().url().optional(),
+
+  // D17 failed-login lockout: this many failures for one identifier (per shop) inside the window
+  // returns TOO_MANY_LOGIN_ATTEMPTS before Supabase Auth is called.
+  LOGIN_MAX_FAILURES: z.coerce.number().int().min(1).max(1000).default(5),
+  LOGIN_WINDOW_MINUTES: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60)
+    .default(15),
 });
 
 type ParsedEnv = z.infer<typeof envSchema>;
