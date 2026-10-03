@@ -1,6 +1,6 @@
 # Sprint 1: rules for every builder and reviewer
 
-Read this, then your own `docs/tasks/<ID>.md`. It applies to every Sprint 1 task in every repo (API, Web, Contracts).
+Read this, then your own `docs/tasks/<ID>.md`. It applies to every Sprint 1 task in every repo (API, Web; the contracts package lives in `EcoFin-API/packages/contracts`).
 
 ## Setup (already done by the master)
 - The master ran `AGENT_SETUP.md` for this session. Don't repeat it. Read only: `AGENTS.md`, your skill (`.claude/skills/ecotech-build/SKILL.md` or `ecotech-review`), your task file and what it points to.
@@ -12,7 +12,7 @@ Read this, then your own `docs/tasks/<ID>.md`. It applies to every Sprint 1 task
 - **Network fix:** every `npm`/`npx`/`node` command that touches the network needs
   `NODE_OPTIONS=--no-network-family-autoselection` (Node's IPv6 race times out here). In Bash: `export NODE_OPTIONS=--no-network-family-autoselection` at the start of each command.
 - Your worktree starts without `node_modules`: run `npm ci` first.
-- **Never** run `rm -rf node_modules` or delete anything under `node_modules/@ecotech` by hand: it's a junction to the shared `EcoFin-Contracts` folder, and deleting through it once wiped that repo (DECISIONS D21). Use `npm ci` only.
+- **Never** run `rm -rf node_modules` or delete anything under `node_modules/@ecotech` by hand: it is the workspace link to `packages/contracts` (a junction on Windows), and deleting through such a link once wiped a whole repo (DECISIONS D21, D26). Before removing a worktree, unlink it first (`cmd /c rmdir`, see D21). Use `npm ci` only.
 - API tests need test env vars (until F01/F08 make `npm test` self-contained):
   `NODE_ENV=test SUPABASE_URL=https://ci-test.supabase.co SUPABASE_ANON_KEY=x SUPABASE_SERVICE_ROLE_KEY=y FRONTEND_URL=https://ci-test.example.com`
 - The API server **can't be started** right now (known env problem). Don't try to fix it, don't run `npm run dev`.
