@@ -1,0 +1,131 @@
+import { z } from 'zod';
+import { Ack, BusinessDate, IsoTimestamp, Uuid } from './common.js';
+import { EmployeeRole } from './roles.js';
+
+/** Same rule as the API password check: 8 to 128 characters, no character-class rules. */
+export const Password = z.string().min(8).max(128);
+
+/** Values of `public.org_status`. */
+export const OrgStatus = z.enum(['active', 'suspended', 'expired', 'closed']);
+export type OrgStatus = z.infer<typeof OrgStatus>;
+
+export const AuthSession = z.object({
+  accessToken: z.string().min(1),
+  refreshToken: z.string().min(1),
+  expiresAt: IsoTimestamp,
+});
+export type AuthSession = z.infer<typeof AuthSession>;
+
+/** The login (auth.users row). Name, role and shop come from the shop membership, see `me`. */
+export const AuthUser = z.object({
+  id: Uuid,
+  email: z.string().email().nullable(),
+});
+export type AuthUser = z.infer<typeof AuthUser>;
+
+export const ShopMembership = z.object({
+  orgId: Uuid,
+  orgName: z.string(),
+  role: EmployeeRole,
+});
+export type ShopMembership = z.infer<typeof ShopMembership>;
+
+// F04 · POST /auth/login
+export const AuthLoginBody = z
+  .object({
+    email: z.string().email().optional(),
+    username: z
+      .string()
+      .regex(/^[a-z0-9._-]{3,32}$/)
+      .optional(),
+    password: z.string().min(1).max(128),
+    orgId: Uuid.optional(),
+  })
+  .strict()
+  .refine((v) => (v.email === undefined) !== (v.username === undefined), {
+    message: 'Provide either email or username, not both',
+    path: ['email'],
+  });
+export const AuthLoginResponse = AuthSession.extend({
+  user: AuthUser,
+  /** Every shop this login belongs to. One entry when there is a single membership. */
+  shops: z.array(ShopMembership),
+  /** True when the login has several shops and none was chosen: call select-shop next. */
+  requiresShopSelection: z.boolean(),
+});
+export const AuthLogin = { body: AuthLoginBody, response: AuthLoginResponse };
+export type AuthLoginBody = z.infer<typeof AuthLoginBody>;
+export type AuthLoginResponse = z.infer<typeof AuthLoginResponse>;
+
+// F04 · POST /auth/select-shop
+export const AuthSelectShopBody = z.object({ orgId: Uuid }).strict();
+export const AuthSelectShopResponse = AuthSession.extend({
+  user: AuthUser,
+  shop: ShopMembership,
+});
+export const AuthSelectShop = { body: AuthSelectShopBody, response: AuthSelectShopResponse };
+export type AuthSelectShopBody = z.infer<typeof AuthSelectShopBody>;
+export type AuthSelectShopResponse = z.infer<typeof AuthSelectShopResponse>;
+
+// F04 · POST /auth/refresh
+export const AuthRefreshBody = z.object({ refreshToken: z.string().min(1) }).strict();
+export const AuthRefreshResponse = AuthSession;
+export const AuthRefresh = { body: AuthRefreshBody, response: AuthRefreshResponse };
+export type AuthRefreshBody = z.infer<typeof AuthRefreshBody>;
+export type AuthRefreshResponse = z.infer<typeof AuthRefreshResponse>;
+
+// F04 · POST /auth/logout (no body; the access token identifies the session)
+export const AuthLogoutResponse = Ack;
+export const AuthLogout = { response: AuthLogoutResponse };
+export type AuthLogoutResponse = z.infer<typeof AuthLogoutResponse>;
+
+// F04 · POST /auth/forgot-password (same reply whether or not the email exists)
+export const AuthForgotPasswordBody = z.object({ email: z.string().email() }).strict();
+export const AuthForgotPasswordResponse = Ack;
+export const AuthForgotPassword = {
+  body: AuthForgotPasswordBody,
+  response: AuthForgotPasswordResponse,
+};
+export type AuthForgotPasswordBody = z.infer<typeof AuthForgotPasswordBody>;
+export type AuthForgotPasswordResponse = z.infer<typeof AuthForgotPasswordResponse>;
+
+// F04 · POST /auth/reset-password
+export const AuthResetPasswordBody = z
+  .object({ token: z.string().min(1), newPassword: Password })
+  .strict();
+export const AuthResetPasswordResponse = Ack;
+export const AuthResetPassword = {
+  body: AuthResetPasswordBody,
+  response: AuthResetPasswordResponse,
+};
+export type AuthResetPasswordBody = z.infer<typeof AuthResetPasswordBody>;
+export type AuthResetPasswordResponse = z.infer<typeof AuthResetPasswordResponse>;
+
+// F04 · GET /auth/me
+export const AuthMeResponse = z.object({
+  employee: z.object({
+    id: Uuid,
+    fullName: z.string(),
+    email: z.string().nullable(),
+    username: z.string().nullable(),
+    role: EmployeeRole,
+    defaultBranchId: Uuid.nullable(),
+    mustChangePassword: z.boolean(),
+  }),
+  org: z.object({
+    id: Uuid,
+    tenantSlug: z.string(),
+    name: z.string(),
+    timezone: z.string(),
+    defaultLanguage: z.enum(['ar', 'en']),
+    status: OrgStatus,
+    planKey: z.string(),
+    subscriptionEnd: BusinessDate.nullable(),
+  }),
+  /** Branches this employee may work in (all active branches for the owner). */
+  branches: z.array(
+    z.object({ id: Uuid, code: z.string(), name: z.string(), isMain: z.boolean() }),
+  ),
+});
+export const AuthMe = { response: AuthMeResponse };
+export type AuthMeResponse = z.infer<typeof AuthMeResponse>;
