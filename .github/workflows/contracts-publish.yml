@@ -1,0 +1,49 @@
+name: Publish contracts
+
+# Pushing a tag such as contracts-v0.1.0 publishes @ecotech/contracts to GitHub Packages (private).
+on:
+  push:
+    tags: ['contracts-v*']
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://npm.pkg.github.com
+          scope: '@ecotech'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Build contracts
+        run: npm run build -w @ecotech/contracts
+
+      - name: Test contracts
+        run: npm run test -w @ecotech/contracts
+
+      - name: Tag version must equal the package version
+        run: |
+          pkg_version=$(node -p "require('./packages/contracts/package.json').version")
+          tag_version="${GITHUB_REF_NAME#contracts-v}"
+          if [ "$pkg_version" != "$tag_version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $pkg_version" >&2
+            exit 1
+          fi
+
+      - name: Publish
+        run: npm publish -w @ecotech/contracts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
