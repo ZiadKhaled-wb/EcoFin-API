@@ -80,7 +80,7 @@ Repository → Settings → Environments → **development**:
 | Kind | Name | Value |
 |---|---|---|
 | Secret | `VM_SSH_KEY` | contents of `ecofin_ci_deploy` (private key) |
-| Secret | `VM_SSH_KNOWN_HOSTS` | output of `ssh-keyscan -t ed25519 <vm-ip>` |
+| Secret | `VM_SSH_KNOWN_HOSTS` | output of `ssh-keyscan -t ed25519 <vm-ip>` (use Git Bash's `ssh-keyscan` on Windows; the built-in one cannot talk to Ubuntu 24.04) |
 | Secret | `SUPABASE_DB_URL` | EcoFin-Development **Session pooler** connection string (Supabase → Connect), password percent-encoded. GitHub runners have no IPv6, so the direct `db.<ref>.supabase.co` host does not work. |
 | Variable | `VM_HOST` | `<vm-ip>` |
 | Variable | `API_DOMAIN` | `<vm-ip>.sslip.io` |
@@ -122,7 +122,7 @@ already-tested image tag. Production deploy = run that workflow with the tag.
 | Symptom | Check |
 |---|---|
 | `ssh: connect ... timed out` | NSG rule for port 22 / VM running / IP changed |
-| Caddy has no certificate | Ports 80 and 443 open in the NSG; `API_DOMAIN` resolves to the VM |
+| Caddy has no certificate | Port 443 open in the NSG and `API_DOMAIN` resolves to the VM. Port 80 is optional: with it closed, Caddy still gets the certificate over 443 (TLS-ALPN challenge); only the http→https redirect is lost. |
 | API container restarts | `ecofin-deploy logs`: usually a missing or invalid value in `api.env` |
 | Browser CORS error | `FRONTEND_URL` in `api.env` must equal the web origin exactly |
 | Migrate job fails to connect | Use the Session pooler URL, percent-encode the password |

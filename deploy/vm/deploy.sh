@@ -36,6 +36,10 @@ wait_healthy() {
     return 1
 }
 
+if [ "$action" = status ] || [ "$action" = logs ]; then
+    [ -n "$(current_image)" ] || { echo "no release deployed yet"; exit 0; }
+fi
+
 case "$action" in
     status)
         docker compose ps
