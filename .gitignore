@@ -35,3 +35,8 @@ coverage/
 Thumbs.db
 
 .claude/settings.local.json
+
+# Supabase CLI local state (only config.toml, migrations, seeds and tests are committed)
+supabase/.temp/
+supabase/.branches/
+supabase/.env
