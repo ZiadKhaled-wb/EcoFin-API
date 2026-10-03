@@ -79,3 +79,6 @@ find <worktree> -path '<worktree>/.git' -prune -o -type l -print | while read -r
 git worktree remove --force <worktree>
 ```
 Publishing `EcoFin-Contracts` to GitHub (D1) removes the single point of failure.
+
+### D22. A story starts once its real dependencies are merged, not the whole previous wave (user OK, 3 Oct)
+To finish sooner, F09 (B9, client only) starts as soon as F03 and the F04 client half (B7) are merged, without waiting for the F04 server half (B6). F05 still waits for B6, and wave 4 still waits for F05 and F09.
