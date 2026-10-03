@@ -1,0 +1,77 @@
+import { z } from 'zod';
+
+/**
+ * Every error code the API can return, with its HTTP status.
+ * Dropped from the old API list: LICENSE_INVALID, LICENSE_USED, LICENSE_EXPIRED,
+ * LICENSE_NOT_PROVISIONED (the licence-key flow is replaced by shop subscriptions; F04 needs none).
+ * Kept: TENANT_NOT_FOUND, TENANT_SCOPE_REQUIRED, MUST_CHANGE_PASSWORD (employees.must_change_password).
+ */
+export const errorCodeHttpStatus = {
+  // generic
+  BAD_REQUEST: 400,
+  VALIDATION_FAILED: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  CONFLICT: 409,
+  UNPROCESSABLE_ENTITY: 422,
+  TOO_MANY_REQUESTS: 429,
+  INTERNAL: 500,
+  IDEMPOTENCY_CONFLICT: 409,
+  // existing API auth codes
+  TENANT_NOT_FOUND: 404,
+  TENANT_SCOPE_REQUIRED: 400,
+  MUST_CHANGE_PASSWORD: 403,
+  // auth and session
+  INVALID_CREDENTIALS: 401,
+  ACCOUNT_DISABLED: 403,
+  SHOP_INACTIVE: 403,
+  SUBSCRIPTION_EXPIRED: 403,
+  SHOP_SELECTION_REQUIRED: 400,
+  SHOP_NOT_ALLOWED: 403,
+  TOKEN_EXPIRED: 401,
+  TOKEN_INVALID: 401,
+  TOO_MANY_LOGIN_ATTEMPTS: 429,
+  // raised by the baseline SQL (RAISE EXCEPTION '<CODE>...')
+  APPEND_ONLY: 409,
+  AUDIT_NO_ORG: 500,
+  BRANCH_DENIED: 403,
+  BRANCH_NOT_IN_ORG: 422,
+  BRANCH_REQUIRED: 422,
+  CASH_ACCOUNT_INACTIVE: 409,
+  DAY_CLOSED: 409,
+  DOCUMENT_FINAL: 409,
+  FROZEN_ROW: 409,
+  FUTURE_BUSINESS_DATE: 422,
+  INSUFFICIENT_FUNDS: 409,
+  INSUFFICIENT_STORE_CREDIT: 409,
+  NOT_AN_EMPLOYEE: 403,
+  NOT_ENOUGH_STOCK_TO_RESERVE: 409,
+  NO_DELETE: 409,
+  ORG_NOT_ACTIVE: 403,
+  OUT_OF_STOCK: 409,
+  PERMISSION_DENIED: 403,
+  RESERVATION_CLOSED: 409,
+  UNIT_ALREADY_IN_STOCK: 409,
+  UNIT_NOT_ALLOWED: 422,
+  UNIT_NOT_AVAILABLE: 409,
+  UNIT_NOT_AVAILABLE_TO_RESERVE: 409,
+  UNIT_PRODUCT_MISMATCH: 422,
+  UNIT_REQUIRED: 422,
+  UNKNOWN_PERMISSION: 500,
+} as const;
+
+export type ErrorCode = keyof typeof errorCodeHttpStatus;
+
+export const ERROR_CODES = Object.keys(errorCodeHttpStatus) as [ErrorCode, ...ErrorCode[]];
+export const ErrorCode = z.enum(ERROR_CODES);
+
+export const ErrorResponse = z.object({
+  error: z.object({
+    code: ErrorCode,
+    message: z.string(),
+    details: z.unknown().optional(),
+    requestId: z.string().optional(),
+  }),
+});
+export type ErrorResponse = z.infer<typeof ErrorResponse>;
