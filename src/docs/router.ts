@@ -7,10 +7,9 @@
 import { Router } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import { openApiSpec } from './openapi';
-import { env } from '../utils/env';
 import { logger } from '../utils/logger';
 
-const docsEnabled = env.NODE_ENV !== 'production' || process.env.ENABLE_API_DOCS === 'true';
+const docsEnabled = process.env.NODE_ENV !== 'production' || process.env.ENABLE_API_DOCS === 'true';
 
 export const docsRouter = Router();
 

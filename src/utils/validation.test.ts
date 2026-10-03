@@ -6,7 +6,6 @@ import {
   isValidTenantSlug,
   isValidPermission,
   isValidRole,
-  isValidLicenseKey,
   isValidIdempotencyKey,
   VALID_ROLES,
 } from './validation';
@@ -144,23 +143,6 @@ describe('isValidEmail', () => {
 
   it('is case-insensitive for the check itself', () => {
     expect(isValidEmail('OWNER@TEST.LOCAL')).toBe(true);
-  });
-});
-
-describe('isValidLicenseKey', () => {
-  it('accepts hyphenated keys', () => {
-    expect(isValidLicenseKey('TEST-ACTIVATION-KEY-001')).toBe(true);
-    expect(isValidLicenseKey('ABCD-1234-EFGH')).toBe(true);
-  });
-
-  it('rejects keys without hyphens or with bad lengths', () => {
-    expect(isValidLicenseKey('SINGLESEGMENT')).toBe(false);
-    expect(isValidLicenseKey('AB-CD')).toBe(false); // under 8 chars
-    expect(isValidLicenseKey('A'.repeat(40) + '-B')).toBe(false);
-  });
-
-  it('is case-insensitive (normalized internally)', () => {
-    expect(isValidLicenseKey('test-activation-key-001')).toBe(true);
   });
 });
 

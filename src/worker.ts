@@ -6,9 +6,12 @@
 //
 import { httpServerHandler } from 'cloudflare:node';
 import { createApp } from './app.js';
-import { env } from './utils/env.js';
+import { getEnv } from './utils/env.js';
 
-const app = createApp();
+// Throws one clear error naming every bad or missing variable.
+const env = getEnv();
+
+const app = createApp({ env });
 
 app.listen(env.PORT);
 

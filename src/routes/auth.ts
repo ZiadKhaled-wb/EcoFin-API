@@ -2,7 +2,7 @@
 //
 // Chain reference for the auth routes:
 //
-//   public              login, check-license, activate-workspace, forgot-password
+//   public              login, refresh, forgot-password
 //   authenticated       change-password (bypasses requirePasswordChanged)
 //   owner + password    reset-owner-password
 //   any authenticated   me, logout
@@ -17,7 +17,7 @@ import {
   requirePasswordChanged,
   isOwner,
 } from '../middleware/auth';
-import { loginLimiter, licenseLimiter, forgotPasswordLimiter } from '../middleware/rateLimit';
+import { loginLimiter, forgotPasswordLimiter } from '../middleware/rateLimit';
 import * as authController from '../controllers/auth.controller';
 
 const router = Router();
@@ -26,8 +26,6 @@ const router = Router();
 
 router.post('/login', loginLimiter, asyncHandler(authController.login));
 router.post('/refresh', loginLimiter, asyncHandler(authController.refresh)); // ← NEW
-router.post('/check-license', licenseLimiter, asyncHandler(authController.checkLicense));
-router.post('/activate-workspace', licenseLimiter, asyncHandler(authController.activateWorkspace));
 router.post('/forgot-password', forgotPasswordLimiter, asyncHandler(authController.forgotPassword));
 
 // --- Authenticated ----------------------------------------------------------

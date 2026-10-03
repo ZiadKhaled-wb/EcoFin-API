@@ -1,10 +1,42 @@
 // server/src/utils/env.ts
 //
-// Single source of truth for environment configuration. Importing this file
-// throws if the environment is invalid — fail fast, not at 3 AM.
+// Environment configuration. Nothing here runs at import time: `loadEnv()` parses a source and
+// either returns the typed env or throws ONE error naming every bad or missing variable (never
+// their values). `server.ts` / `worker.ts` call `getEnv()` on startup so a bad deployment stops
+// with a clear message; tests can import any module freely.
 import 'dotenv/config';
 
 import { z } from 'zod';
+
+const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace'] as const;
+
+/** Comma-separated origins -> normalised origin strings (`https://host[:port]`). */
+function parseOrigins(raw: string, ctx: z.RefinementCtx): string[] {
+  const origins: string[] = [];
+  for (const part of raw.split(',')) {
+    const value = part.trim();
+    if (value === '') continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocol');
+      origins.push(url.origin);
+    } catch {
+      // `*` and anything that is not an http(s) origin is rejected: the allow-list is strict.
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'not a valid http(s) origin' });
+      return z.NEVER;
+    }
+  }
+  return origins;
+}
+
+/** `false` or a number of proxy hops. */
+function parseTrustProxy(raw: string, ctx: z.RefinementCtx): number | false {
+  const value = raw.trim().toLowerCase();
+  if (value === 'false') return false;
+  if (/^\d+$/.test(value)) return Number(value);
+  ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'must be a number of hops or false' });
+  return z.NEVER;
+}
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -18,34 +50,73 @@ const envSchema = z.object({
   SUPABASE_JWT_SECRET: z.string().min(1).optional(),
 
   FRONTEND_URL: z.string().url(),
+  // Comma-separated CORS allow-list. Required in production; elsewhere it defaults to FRONTEND_URL.
+  CORS_ALLOWED_ORIGINS: z.string().transform(parseOrigins).optional(),
+  // Number of reverse-proxy hops to trust for the client IP, or `false`.
+  TRUST_PROXY: z.string().default('1').transform(parseTrustProxy),
 
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
   LOG_DRAIN_URL: z.string().url().optional(),
 
-  // Optional. If set, the auth rate limiter uses Redis so limits are
-  // shared across API instances.
+  // Optional. If set, the rate limiters use Redis so limits are shared across API instances.
   RATE_LIMIT_REDIS_URL: z.string().url().optional(),
 });
 
-const parsed = envSchema.safeParse(process.env);
+type ParsedEnv = z.infer<typeof envSchema>;
+export type Env = Omit<ParsedEnv, 'CORS_ALLOWED_ORIGINS'> & {
+  /** Final allow-list (normalised origins). Never contains `*`. */
+  CORS_ALLOWED_ORIGINS: string[];
+};
 
-if (!parsed.success) {
-  // Only field names — never values.
-  const fields = [...new Set(parsed.error.issues.map((i) => i.path.join('.') || '(root)'))];
-  throw new Error(`Invalid environment configuration. Fix these fields: ${fields.join(', ')}`);
+function isLocalHost(host: string): boolean {
+  return host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
 }
 
-const data = parsed.data;
+export function loadEnv(source: Record<string, string | undefined> = process.env): Env {
+  const parsed = envSchema.safeParse(source);
 
-// Guardrail: a production deployment pointing at a developer laptop is a
-// silent security hole (service-role key leaking to a local Supabase).
-if (data.NODE_ENV === 'production') {
-  const host = new URL(data.SUPABASE_URL).hostname;
-  if (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local')) {
-    throw new Error(
-      'Invalid environment configuration: SUPABASE_URL must not point to a local host in production.',
-    );
+  // variable name -> reason. Names and reasons only, never values.
+  const problems = new Map<string, string>();
+
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) {
+      const name = issue.path.join('.') || '(root)';
+      if (problems.has(name)) continue;
+      const missing = issue.code === 'invalid_type' && issue.received === 'undefined';
+      problems.set(name, missing ? 'missing' : 'invalid');
+    }
+  } else {
+    const data = parsed.data;
+    if (data.NODE_ENV === 'production') {
+      if (!data.CORS_ALLOWED_ORIGINS || data.CORS_ALLOWED_ORIGINS.length === 0) {
+        problems.set('CORS_ALLOWED_ORIGINS', 'missing (required in production)');
+      }
+      // A production deployment pointing at a developer laptop is a silent security hole
+      // (service-role key leaking to a local Supabase).
+      if (isLocalHost(new URL(data.SUPABASE_URL).hostname)) {
+        problems.set('SUPABASE_URL', 'must not point to a local host in production');
+      }
+    }
   }
+
+  if (problems.size > 0 || !parsed.success) {
+    const list = [...problems].map(([name, reason]) => `${name} (${reason})`).join(', ');
+    throw new Error(`Invalid environment configuration. Fix these variables: ${list}`);
+  }
+
+  const data = parsed.data;
+  const origins =
+    data.CORS_ALLOWED_ORIGINS && data.CORS_ALLOWED_ORIGINS.length > 0
+      ? data.CORS_ALLOWED_ORIGINS
+      : [new URL(data.FRONTEND_URL).origin];
+
+  return { ...data, CORS_ALLOWED_ORIGINS: origins };
 }
 
-export const env = data;
+let cached: Env | undefined;
+
+/** Loads `process.env` once and caches it. Call it on startup so failures happen there. */
+export function getEnv(): Env {
+  cached ??= loadEnv(process.env);
+  return cached;
+}
