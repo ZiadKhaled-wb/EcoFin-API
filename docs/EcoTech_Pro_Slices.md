@@ -519,11 +519,11 @@ Built first. Everything else depends on it. Mostly smart agents.
 **Done when:** the open balance equals contract totals − payments − returns.
 
 ### R03 · Credit profile and limit
-**Plan:** V1 · **Agent:** Smart · **Reuse:** Rewrite · **Depends on:** R01, N01
+**Plan:** V1 · **Agent:** Smart · **Reuse:** Rewrite · **Depends on:** R01
 **What it does:** decides how much more credit a customer can get.
 **Includes:**
 - Credit limit per customer (set by a user with `credit.approve`, with a default from settings, e.g. a multiple of income)
-- Current exposure = unpaid principal of all active contracts
+- Current exposure = unpaid principal of all active contracts (the contracts table exists from the baseline migration, so this can be built before installment sales; exposure is zero until then)
 - Payment behaviour summary: on-time %, days late, current overdue
 - Used on the server by the installment sale (N02): a sale above the available limit is blocked unless someone with permission approves the exception
 
@@ -669,7 +669,7 @@ Built first. Everything else depends on it. Mostly smart agents.
 The shop lends its own money. Rules are built new on the server; nothing is reused from the old X-Core engine.
 
 ### N01 · Installment rules engine
-**Plan:** V1 · **Agent:** Smart · **Reuse:** New · **Depends on:** P03, P04, F12, R03
+**Plan:** V1 · **Agent:** Smart · **Reuse:** New · **Depends on:** P03, P04, F12, R03, R04, R05
 **What it does:** calculates and enforces the terms of every installment sale on the server.
 **Includes:**
 - Reads the shop's policy (P03): min down payment %, max months, markup % (flat or by duration tiers), allowed frequencies (monthly, weekly), minimum installment amount, rounding
