@@ -66,3 +66,6 @@ F09 (wave 3) builds `usePermissions()` (reads `GET /api/me/permissions` through 
 
 ### D19. Route markers make a forgotten check fail CI
 Every API route carries a permission marker (`requirePermission(key)`, `authenticatedOnly()` or `publicRoute()`), a cross-shop case (F05) and an audit-registry entry for writes (F07). Scripts and unit tests fail when a route is missing any of them.
+
+### D20. `/health` may use the server (service-role) client for one read-only query
+`anon` has no grants, so a public health check can't touch the DB any other way. Allowed: one cheap read-only query with a short timeout, returning only the contract fields. That's the only service-role use outside D14's auth module.
