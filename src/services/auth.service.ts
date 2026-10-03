@@ -10,7 +10,7 @@
 //     every write is a SECURITY DEFINER function (migration 20261003060000_f04_auth.sql).
 //   * Client-facing messages are generic; the client localises from the error code.
 
-import { isAuthApiError, type Session } from '@supabase/supabase-js';
+import type { Session } from '@supabase/supabase-js';
 import type {
   AuthChangePasswordBody,
   AuthForgotPasswordBody,
@@ -34,6 +34,7 @@ import { AppError, BadRequest, ServerError, Unauthorized, mapDbError } from '../
 import { getEnv } from '../utils/env';
 import { logger } from '../utils/logger';
 import { decodeJwtPayload, looksLikeJwt } from '../utils/jwt';
+import { authErrorStatus, isAuthClientError } from '../utils/authErrors';
 import {
   countRecentFailures,
   findLoginEmailByUsername,
@@ -138,11 +139,11 @@ interface LoginAttemptBase {
 async function signIn(email: string, password: string): Promise<Session | null> {
   const { data, error } = await createAuthClient().auth.signInWithPassword({ email, password });
   if (error) {
-    if (!isAuthApiError(error)) {
+    if (!isAuthClientError(error)) {
       logger.error({ err: error }, 'auth: Supabase Auth sign-in call failed');
       throw ServerError('Login failed.');
     }
-    if (error.status === 429) {
+    if (authErrorStatus(error) === 429) {
       throw new AppError('Too many requests. Try again later.', 'TOO_MANY_REQUESTS');
     }
     return null;
@@ -306,7 +307,7 @@ export async function refresh(refreshToken: string): Promise<AuthRefreshResponse
   const { data, error } = await createAuthClient().auth.refreshSession({
     refresh_token: refreshToken,
   });
-  if (error && !isAuthApiError(error)) {
+  if (error && !isAuthClientError(error)) {
     logger.error({ err: error }, 'refresh: Supabase Auth call failed');
     throw ServerError('Refresh failed.');
   }
@@ -378,13 +379,13 @@ export async function resetPassword(body: AuthResetPasswordBody): Promise<void> 
       token_hash: body.token,
       type: 'recovery',
     });
-    if (error && !isAuthApiError(error)) throw ServerError('Reset failed.');
+    if (error && !isAuthClientError(error)) throw ServerError('Reset failed.');
     if (error || !data.session) throw tokenInvalid();
     accessToken = data.session.access_token;
   }
 
   const { data, error } = await createAuthClient().auth.getUser(accessToken);
-  if (error && !isAuthApiError(error)) throw ServerError('Reset failed.');
+  if (error && !isAuthClientError(error)) throw ServerError('Reset failed.');
   if (error || !data.user) throw tokenInvalid();
   const claims = decodeJwtPayload(accessToken);
   const fromRecoveryLink = (claims?.amr ?? []).some(

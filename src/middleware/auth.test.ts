@@ -22,7 +22,7 @@ vi.mock('@supabase/supabase-js', async (importOriginal) => {
   };
 });
 
-import { AuthApiError, AuthError } from '@supabase/supabase-js';
+import { AuthApiError, AuthError, AuthSessionMissingError } from '@supabase/supabase-js';
 import { authenticate, dbFor } from './auth';
 import { AppError } from '../utils/errors';
 
@@ -100,6 +100,17 @@ describe('authenticate', () => {
     const req = mockReq({ authorization: `Bearer ${TOKEN_1}` });
     expect(await run(req)).toMatchObject({ statusCode: 401, code: 'TOKEN_INVALID' });
     expect(req.auth).toBeUndefined();
+  });
+
+  it('a logged-out session (auth-js AuthSessionMissingError from GoTrue session_not_found) -> 401 TOKEN_INVALID', async () => {
+    created.getUser.mockResolvedValue({
+      data: { user: null },
+      error: new AuthSessionMissingError(),
+    });
+    expect(await run(mockReq({ authorization: `Bearer ${TOKEN_1}` }))).toMatchObject({
+      statusCode: 401,
+      code: 'TOKEN_INVALID',
+    });
   });
 
   it('an expired token -> 401 TOKEN_EXPIRED', async () => {

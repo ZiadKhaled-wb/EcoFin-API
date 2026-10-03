@@ -9,7 +9,6 @@
 // Loading the employee per request and enforcing org scope is F05; permissions are F06.
 
 import type { Request, Response, NextFunction } from 'express';
-import { isAuthApiError } from '@supabase/supabase-js';
 import { Uuid } from '@ecotech/contracts';
 import {
   createAuthClient,
@@ -21,6 +20,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { AppError, BadRequest, ServerError, Unauthorized } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { decodeJwtPayload } from '../utils/jwt';
+import { isAuthClientError } from '../utils/authErrors';
 
 function bearerToken(req: Request): string | undefined {
   const header = req.headers.authorization;
@@ -55,7 +55,7 @@ export const authenticate = asyncHandler(
     // token's session_id still exists, so a logged-out session is refused here.
     const { data, error } = await createAuthClient().auth.getUser(token);
     if (error || !data.user) {
-      if (error && !isAuthApiError(error)) {
+      if (error && !isAuthClientError(error)) {
         // Supabase Auth unreachable: fail closed, but don't tell the client to log in again.
         logger.error({ err: error }, 'authenticate: Supabase Auth call failed');
         throw ServerError('Authentication service unavailable.');
