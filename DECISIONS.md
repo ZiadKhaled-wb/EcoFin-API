@@ -97,3 +97,11 @@ Supabase tokens carry no shop. The active shop is chosen per request by the `x-o
 - D14 is extended: change-password also counts failed current-password checks in `login_attempts` through the service role (D17 lockout).
 - **Known, accepted for now:** an authenticated user can call `auth_record_login` / `auth_record_logout` directly through PostgREST and forge the `x-forwarded-for` / `user-agent` that `app.write_audit` stores. That's a baseline-wide property of `write_audit` reading request headers. **Follow-up:** have PostgREST behind the API only (no public PostgREST access), or sign the client-IP header.
 - **Known, accepted for now:** login lockout is check-then-act, so a parallel burst from many IPs can slightly exceed the limit. An unknown username answers a little faster (timing). Both are low risk; revisit in hardening.
+
+### D26. No third repo: contracts live in `EcoFin-API/packages/contracts` (supersedes D1 and §4; user decision, 4 Oct)
+- `EcoFin-API` is an npm workspace (`packages/*`). `@ecotech/contracts` (same name, version `0.1.0`) lives in `packages/contracts`, and the API uses it through the workspace, so nothing outside the repo is needed to build, test or deploy the API.
+- It is published privately to **GitHub Packages** by a CI workflow on tags `contracts-v*` (`publishConfig.registry = https://npm.pkg.github.com`, auth through `NPM_TOKEN`).
+- `EcoFin-Web` depends on `"@ecotech/contracts": "0.1.0"` from GitHub Packages (`.npmrc` with `${NPM_TOKEN}`). **Until the first publish**, `integration/sprint-1` only uses a local copy. That is a **blocker before `main`**.
+- No file may reference a `../` path outside its repo. No Dockerfile changes.
+- GitHub Packages requires the npm scope to equal the owning GitHub user/org: publishing `@ecotech/*` needs a GitHub org `ecotech` (or a scope rename). See the run report.
+- The old `EcoFin-Contracts` folder is deleted after the move; its history is kept inside `EcoFin-API`.
