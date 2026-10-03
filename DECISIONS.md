@@ -69,3 +69,13 @@ Every API route carries a permission marker (`requirePermission(key)`, `authenti
 
 ### D20. `/health` may use the server (service-role) client for one read-only query
 `anon` has no grants, so a public health check can't touch the DB any other way. Allowed: one cheap read-only query with a short timeout, returning only the contract fields. That's the only service-role use outside D14's auth module.
+
+### D21. Incident: `EcoFin-Contracts` wiped by a worktree removal, rebuilt and verified (3 Oct, 12:06)
+**What happened:** the master ran `git worktree remove --force` on an API worktree. On Windows, git followed the npm `file:` link `node_modules/@ecotech/contracts` (a junction) and deleted its **target**: the whole `EcoFin-Contracts` folder, `.git` included. The repo had never been pushed.
+**Recovery:** the repo was re-initialised, and the F03 builder's recorded steps were replayed in order (its writes and commands, including its own commits). The rebuilt package passes all 27 tests, and its built `dist/`, `package.json`, README and CHANGELOG are **byte-identical** to the reviewer's `npm pack` of the approved version. Commit hashes in `EcoFin-Contracts` differ from the original; content doesn't.
+**Rule from now on (anyone, not just agents):** before deleting a worktree or clone that has run `npm ci`/`npm install`, unlink every link inside it first, then remove it. A junction is removed safely with `cmd /c rmdir <link>` (it never touches the target). In Git Bash:
+```bash
+find <worktree> -path '<worktree>/.git' -prune -o -type l -print | while read -r l; do cmd //c rmdir "$(cygpath -w "$l")"; done
+git worktree remove --force <worktree>
+```
+Publishing `EcoFin-Contracts` to GitHub (D1) removes the single point of failure.

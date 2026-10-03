@@ -58,6 +58,9 @@ Local URLs: DB `postgresql://postgres:postgres@127.0.0.1:54322/postgres`, API `h
 ### Port note
 The Supabase stack uses ports 54321–54329. Only one local Supabase project can run at a time with default ports, so run `supabase stop` before starting another one.
 
+## ⚠️ Deleting worktrees on Windows
+`git worktree remove --force` (and some recursive deletes) follow the npm `file:` junction `node_modules/@ecotech/contracts` and delete `EcoFin-Contracts` itself. That happened once (DECISIONS D21). Unlink the links first: see D21 for the exact commands.
+
 ## Not possible yet
 - Starting the API server, and so every HTTP-level integration and e2e test. Those are written and skipped unless `RUN_INTEGRATION=1` / `RUN_E2E=1`. See `docs/testing/TEST_PLAN.md`.
 - Live browser walkthroughs (no Playwright MCP this session).
