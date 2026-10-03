@@ -42,3 +42,21 @@ It isn't installed globally. Scripts use `npx supabase ...` (or a pinned `supaba
 
 ### D10. Node network workaround on the dev machine
 `NODE_OPTIONS=--no-network-family-autoselection` is needed for npm and Node network calls on this machine. It's machine-specific, so it goes in `docs/testing/ENVIRONMENT.md` and not in the scripts.
+
+### D12. One-time Prettier reformat when F01 lands (both repos)
+Prettier settings are the same in both repos: `{ singleQuote, semi, trailingComma: "all", printWidth: 100, endOfLine: "lf" }` with the default 2-space indent. The server code was 4-space, so F01 reformats every server source file once, with no logic change. `.gitattributes` (`* text=auto eol=lf`) stops Windows `core.autocrlf` from breaking `format:check`. Branches cut before F01 must rebase and run `npm run format`.
+
+### D13. typescript-eslint `no-unsafe-*` rules stay off for now
+They give about 55 errors that come from the untyped Supabase client in the old auth code. F01 turns on the safe type-aware rules (no-floating-promises, no-misused-promises, await-thenable, only-throw-error, …). **Follow-up:** turn on `recommended-type-checked` once the typed DB client (`src/types/database.types.ts`, F02) and the contracts (F03) are in use.
+
+### D14. The service-role client is used only for pre-session auth steps
+Before a user has a session, the API can't use their JWT. The service-role client is allowed **only** in one module (`src/services/auth.admin.ts` or equivalent) for: resolving `tenantSlug + username` to the login email, checking whether the employee, shop and subscription are active before issuing tokens, and inserting `login_attempts` (the baseline grants that table to the service role only). Everything after login uses a per-request client built from the user's JWT (plus `x-org-id`). Reads a logged-in user needs across shops (their list of shops) go through a `SECURITY DEFINER` function in a new migration, not the service role.
+
+### D15. License and activate-workspace endpoints are removed from Sprint 1
+The old `check-license` / `activate-workspace` code targets tables that aren't in the V1 baseline (`saaslicenses`). The data model says owners join through an emailed invite (P01/P02). F04 removes those routes and their client pages. Git history keeps the old code for P01/P02 to port.
+
+### D16. Token transport and storage
+The API returns the access and refresh tokens in the JSON body (contracts `auth`). The client keeps the partner's approach: tokens persisted in `localStorage` through the zustand store, with the trade-off documented in `authStore.ts`. Silent refresh happens before expiry, and logout revokes the session on the server. **Follow-up (hardening):** move the refresh token to an httpOnly cookie and add a strict CSP.
+
+### D17. Failed-login limits
+Lockout after **5 failed attempts per identifier (per shop) in 15 minutes**, counted from `login_attempts`, which returns `TOO_MANY_LOGIN_ATTEMPTS` (429). Both numbers are env-configurable (`LOGIN_MAX_FAILURES`, `LOGIN_WINDOW_MINUTES`). This sits on top of the per-IP `loginLimiter`. It's a technical default, not a business rule; change it if the business sets one.
