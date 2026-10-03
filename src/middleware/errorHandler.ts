@@ -48,6 +48,31 @@ function send(
   res.status(status).json(body);
 }
 
+interface ZodIssueLike {
+  path: (string | number)[];
+  code: string;
+  message: string;
+}
+
+/**
+ * Issues of a zod error, or undefined. Recognised by instanceof AND by name: the contracts
+ * package carries its own zod copy, so its ZodError is a different class (D24).
+ */
+function zodErrorIssues(err: unknown): ZodIssueLike[] | undefined {
+  if (err instanceof ZodError) return err.issues;
+  if (typeof err !== 'object' || err === null) return undefined;
+  const { name, issues } = err as { name?: unknown; issues?: unknown };
+  if (name !== 'ZodError' || !Array.isArray(issues)) return undefined;
+  return issues.map((raw: unknown) => {
+    const issue = (typeof raw === 'object' && raw !== null ? raw : {}) as Partial<ZodIssueLike>;
+    return {
+      path: Array.isArray(issue.path) ? issue.path : [],
+      code: typeof issue.code === 'string' ? issue.code : 'invalid',
+      message: typeof issue.message === 'string' ? issue.message : 'Invalid value.',
+    };
+  });
+}
+
 /** Errors raised by express.json() (invalid JSON, body too large). */
 function bodyParserMessage(err: unknown): string | undefined {
   if (typeof err !== 'object' || err === null) return undefined;
@@ -91,8 +116,9 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
     return;
   }
 
-  if (err instanceof ZodError) {
-    const details = err.issues.map((issue) => ({
+  const zodIssues = zodErrorIssues(err);
+  if (zodIssues) {
+    const details = zodIssues.map((issue) => ({
       path: issue.path.join('.'),
       code: issue.code,
       message: issue.message,

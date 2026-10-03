@@ -36,3 +36,48 @@ describe('rate limiter behind a proxy', () => {
     expect(b.status).toBe(429);
   });
 });
+
+describe('login limiter key', () => {
+  function loginApp() {
+    const app = express();
+    app.set('trust proxy', 1);
+    app.use(requestId());
+    app.use(express.json());
+    app.use(createLimiter({ windowMs: 60_000, limit: 1 }));
+    app.post('/login', (_req, res) => {
+      res.json({ ok: true });
+    });
+    return app;
+  }
+
+  it('keys on IP + tenantSlug (the contract field): two shops behind one IP get separate buckets', async () => {
+    const app = loginApp();
+    const ip = '203.0.113.9';
+    const shopA = await request(app)
+      .post('/login')
+      .set('X-Forwarded-For', ip)
+      .send({ tenantSlug: 'shop-a' });
+    const shopB = await request(app)
+      .post('/login')
+      .set('X-Forwarded-For', ip)
+      .send({ tenantSlug: 'shop-b' });
+    const shopAgain = await request(app)
+      .post('/login')
+      .set('X-Forwarded-For', ip)
+      .send({ tenantSlug: 'shop-a' });
+    expect(shopA.status).toBe(200);
+    expect(shopB.status).toBe(200);
+    expect(shopAgain.status).toBe(429);
+  });
+
+  it('the old tenant_slug field no longer splits the bucket', async () => {
+    const app = loginApp();
+    const ip = '203.0.113.10';
+    await request(app).post('/login').set('X-Forwarded-For', ip).send({ tenant_slug: 'shop-a' });
+    const other = await request(app)
+      .post('/login')
+      .set('X-Forwarded-For', ip)
+      .send({ tenant_slug: 'shop-b' });
+    expect(other.status).toBe(429);
+  });
+});

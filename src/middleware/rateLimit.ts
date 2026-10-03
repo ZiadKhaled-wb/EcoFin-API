@@ -90,13 +90,13 @@ async function buildStore(name: string, windowMs: number): Promise<StoreOption> 
   return new RedisStore({ sendCommand, prefix: `rl:${name}:` });
 }
 
-// Key on IP + tenant_slug when the body has one. A shared NAT (a customer's
+// Key on IP + tenantSlug (the contract field) when the body has one. A shared NAT (a customer's
 // office) should not be able to lock out an unrelated tenant, and a single
 // bad tenant should not consume the whole IP budget.
 function keyGenerator(req: Request): string {
   const ip = req.ip ?? 'unknown';
   const body = req.body as Record<string, unknown> | undefined;
-  const slug = typeof body?.['tenant_slug'] === 'string' ? body['tenant_slug'] : '';
+  const slug = typeof body?.['tenantSlug'] === 'string' ? body['tenantSlug'] : '';
   return slug ? `${ip}|${slug}` : ip;
 }
 
