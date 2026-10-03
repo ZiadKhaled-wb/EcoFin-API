@@ -19,6 +19,7 @@ import type {
   AuthMeResponse,
   AuthRefreshResponse,
   AuthResetPasswordBody,
+  AuthSelectShopResponse,
   AuthSession,
   AuthUser,
   ShopMembership,
@@ -283,15 +284,15 @@ export async function login(body: AuthLoginBody, meta: RequestMeta): Promise<Aut
 }
 
 // ============================================================================
-// Select shop (multi-shop logins). See the summary: the contract response needs a refresh
-// token the server does not have, so the route is not wired yet. The checks are ready.
+// Select shop (D23). Works with a multi-shop login token and no x-org-id: the body's orgId is
+// the choice, checked against my_shops(). The client keeps its tokens and sends x-org-id.
 // ============================================================================
 
 export async function selectShop(
   auth: RequestAuth,
   orgId: string,
   meta: RequestMeta,
-): Promise<{ user: AuthUser; shop: ShopMembership }> {
+): Promise<AuthSelectShopResponse> {
   const shops = await myShops(supabaseForRequest(auth.accessToken, undefined, meta));
   const shop = shops.find((s) => s.orgId === orgId.toLowerCase());
   if (!shop) throw new AppError('Shop not allowed.', 'SHOP_NOT_ALLOWED');

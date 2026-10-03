@@ -10,10 +10,12 @@ import {
   AuthLoginBody,
   AuthRefreshBody,
   AuthResetPasswordBody,
+  AuthSelectShopBody,
   type Ack,
   type AuthLoginResponse,
   type AuthMeResponse,
   type AuthRefreshResponse,
+  type AuthSelectShopResponse,
 } from '@ecotech/contracts';
 import * as authService from '../services/auth.service';
 import { requestMeta } from '../middleware/auth';
@@ -64,6 +66,16 @@ export async function login(req: Request, res: Response) {
 export async function refresh(req: Request, res: Response) {
   const body = parseBody(AuthRefreshBody, req.body);
   const result: AuthRefreshResponse = await authService.refresh(body.refreshToken);
+  res.json(result);
+}
+
+export async function selectShop(req: Request, res: Response) {
+  const body = parseBody(AuthSelectShopBody, req.body);
+  const result: AuthSelectShopResponse = await authService.selectShop(
+    requireAuth(req),
+    body.orgId,
+    requestMeta(req),
+  );
   res.json(result);
 }
 

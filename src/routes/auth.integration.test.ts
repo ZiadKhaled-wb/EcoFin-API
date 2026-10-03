@@ -8,7 +8,13 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { AuthLoginResponse, AuthMeResponse, AuthSession, ErrorResponse } from '@ecotech/contracts';
+import {
+  AuthLoginResponse,
+  AuthMeResponse,
+  AuthSelectShopResponse,
+  AuthSession,
+  ErrorResponse,
+} from '@ecotech/contracts';
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
 
@@ -115,6 +121,37 @@ describe.skipIf(!RUN)('F04 auth against local Supabase', () => {
     const crossShop = await me(one.accessToken, SHOP_TWO);
     expect(crossShop.status).toBe(403);
     expect(code(crossShop)).toBe('SHOP_NOT_ALLOWED');
+  });
+
+  it('select-shop: a two-shop login picks shop B without x-org-id; the login is audited there', async () => {
+    const empB = 'd3000000-0000-0000-0000-000000000029'; // multi.shop in dev-shop-two
+    const multi = await login('multi.shop@ecotech.test');
+    expect(multi.requiresShopSelection).toBe(true);
+    const before = await auditCount(empB, 'auth.login');
+
+    const res = await post('/api/auth/select-shop', { orgId: SHOP_TWO }, multi.accessToken);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    const body = AuthSelectShopResponse.parse(res.body);
+    expect(body.user.email).toBe('multi.shop@ecotech.test');
+    expect(body.shop).toMatchObject({
+      orgId: SHOP_TWO,
+      tenantSlug: 'dev-shop-two',
+      role: 'ACCOUNTANT',
+    });
+    expect(await auditCount(empB, 'auth.login')).toBe(before + 1);
+
+    // The same tokens then work in that shop with x-org-id.
+    expect(AuthMeResponse.parse((await me(multi.accessToken, SHOP_TWO)).body).org.id).toBe(
+      SHOP_TWO,
+    );
+
+    const elsewhere = await post(
+      '/api/auth/select-shop',
+      { orgId: 'ffffffff-ffff-4fff-8fff-ffffffffffff' },
+      multi.accessToken,
+    );
+    expect(elsewhere.status).toBe(403);
+    expect(code(elsewhere)).toBe('SHOP_NOT_ALLOWED');
   });
 
   it('username login with the shop slug picks that shop for a two-shop login', async () => {

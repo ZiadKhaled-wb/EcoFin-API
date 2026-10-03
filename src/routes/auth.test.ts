@@ -3,7 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import { AuthApiError } from '@supabase/supabase-js';
-import { Ack, ErrorResponse } from '@ecotech/contracts';
+import { Ack, AuthSelectShopResponse, ErrorResponse } from '@ecotech/contracts';
 
 const admin = vi.hoisted(() => ({
   findLoginEmailByUsername: vi.fn(),
@@ -19,9 +19,20 @@ const authApi = vi.hoisted(() => ({
   resetPasswordForEmail: vi.fn(),
   admin: { signOut: vi.fn() },
 }));
+/** rpc results by function name; every per-request client is recorded with its headers. */
+interface FakeRpc {
+  results: Record<string, { data: unknown; error: unknown }>;
+  calls: { name: string; token: string; orgId: string | undefined }[];
+}
+const rpc: FakeRpc = vi.hoisted(() => ({ results: {}, calls: [] }));
 vi.mock('../utils/supabase', () => ({
   createAuthClient: () => ({ auth: authApi }),
-  supabaseForRequest: () => ({ rpc: () => Promise.resolve({ data: [], error: null }) }),
+  supabaseForRequest: (token: string, orgId?: string) => ({
+    rpc: (name: string) => {
+      rpc.calls.push({ name, token, orgId });
+      return Promise.resolve(rpc.results[name] ?? { data: [], error: null });
+    },
+  }),
   updatePasswordWithToken: vi.fn(),
   supabaseAdmin: {},
 }));
@@ -42,6 +53,8 @@ function expectError(res: request.Response, status: number, code: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  rpc.results = {};
+  rpc.calls = [];
   admin.countRecentFailures.mockResolvedValue(0);
   admin.recordLoginAttempt.mockResolvedValue(undefined);
   authApi.resetPasswordForEmail.mockResolvedValue({ data: {}, error: null });
@@ -151,5 +164,66 @@ describe('authenticated routes need a valid token', () => {
       .set('Authorization', 'Bearer a.b.c')
       .set('x-org-id', 'not-a-uuid');
     expectError(res, 400, 'VALIDATION_FAILED');
+  });
+});
+
+describe('POST /api/auth/select-shop', () => {
+  const USER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const ORG_A = '11111111-1111-4111-8111-111111111111';
+  const ORG_B = '22222222-2222-4222-8222-222222222222';
+
+  beforeEach(() => {
+    authApi.getUser.mockResolvedValue({
+      data: { user: { id: USER, email: 'multi@x.test' } },
+      error: null,
+    });
+    rpc.results['my_shops'] = {
+      data: [
+        { org_id: ORG_A, org_name: 'Shop A', tenant_slug: 'shop-a', role: 'CASHIER' },
+        { org_id: ORG_B, org_name: 'Shop B', tenant_slug: 'shop-b', role: 'ACCOUNTANT' },
+      ],
+      error: null,
+    };
+  });
+
+  it('a multi-shop token with no x-org-id picks a shop: 200 { user, shop }, login audited in that shop', async () => {
+    const res = await request(app)
+      .post('/api/auth/select-shop')
+      .set('Authorization', 'Bearer a.b.c')
+      .send({ orgId: ORG_B });
+    expect(res.status).toBe(200);
+    expect(AuthSelectShopResponse.parse(res.body)).toEqual({
+      user: { id: USER, email: 'multi@x.test' },
+      shop: { orgId: ORG_B, orgName: 'Shop B', tenantSlug: 'shop-b', role: 'ACCOUNTANT' },
+    });
+    expect(rpc.calls).toContainEqual({ name: 'my_shops', token: 'a.b.c', orgId: undefined });
+    expect(rpc.calls).toContainEqual({ name: 'auth_record_login', token: 'a.b.c', orgId: ORG_B });
+  });
+
+  it('a shop the login is not in -> 403 SHOP_NOT_ALLOWED, nothing audited', async () => {
+    const res = await request(app)
+      .post('/api/auth/select-shop')
+      .set('Authorization', 'Bearer a.b.c')
+      .send({ orgId: 'ffffffff-ffff-4fff-8fff-ffffffffffff' });
+    expectError(res, 403, 'SHOP_NOT_ALLOWED');
+    expect(rpc.calls.some((c) => c.name === 'auth_record_login')).toBe(false);
+  });
+
+  it('a body that is not { orgId: uuid } -> 400 VALIDATION_FAILED', async () => {
+    for (const body of [{}, { orgId: 'x' }, { orgId: ORG_A, extra: 1 }]) {
+      const res = await request(app)
+        .post('/api/auth/select-shop')
+        .set('Authorization', 'Bearer a.b.c')
+        .send(body);
+      expectError(res, 400, 'VALIDATION_FAILED');
+    }
+  });
+
+  it('no token -> 401 UNAUTHORIZED', async () => {
+    expectError(
+      await request(app).post('/api/auth/select-shop').send({ orgId: ORG_A }),
+      401,
+      'UNAUTHORIZED',
+    );
   });
 });

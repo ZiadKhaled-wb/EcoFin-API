@@ -1,12 +1,10 @@
 // server/src/routes/auth.ts
 //
 //   public (rate-limited)   login, refresh, forgot-password, reset-password
-//   authenticated           me, logout, change-password
-//
-// POST /select-shop is not wired yet: its contract response needs a refresh token the server
-// doesn't receive (see the F04 summary). authService.selectShop holds the checks.
+//   authenticated           me, logout, change-password, select-shop
 //
 // No route here needs x-org-id: authenticate only checks that it is a UUID when present.
+// select-shop takes the shop from its body (D23), so a multi-shop login token works without it.
 
 import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -28,6 +26,7 @@ router.post('/reset-password', forgotPasswordLimiter, asyncHandler(authControlle
 // --- Authenticated ------------------------------------------------------------
 router.get('/me', authenticate, asyncHandler(authController.me));
 router.post('/logout', authenticate, asyncHandler(authController.logout));
+router.post('/select-shop', authenticate, asyncHandler(authController.selectShop));
 router.post('/change-password', authenticate, asyncHandler(authController.changePassword));
 
 export default router;
