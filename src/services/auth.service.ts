@@ -141,12 +141,13 @@ interface LoginAttemptBase {
 async function signIn(email: string, password: string): Promise<Session | null> {
   const { data, error } = await createAuthClient().auth.signInWithPassword({ email, password });
   if (error) {
+    if (authErrorStatus(error) === 429) {
+      logger.warn({ err: error }, 'auth: Supabase Auth rate-limited a sign-in');
+      throw new AppError('Too many requests. Try again later.', 'TOO_MANY_REQUESTS');
+    }
     if (!isAuthClientError(error)) {
       logger.error({ err: error }, 'auth: Supabase Auth sign-in call failed');
       throw ServerError('Login failed.');
-    }
-    if (authErrorStatus(error) === 429) {
-      throw new AppError('Too many requests. Try again later.', 'TOO_MANY_REQUESTS');
     }
     return null;
   }
@@ -381,13 +382,19 @@ export async function resetPassword(body: AuthResetPasswordBody): Promise<void> 
       token_hash: body.token,
       type: 'recovery',
     });
-    if (error && !isAuthClientError(error)) throw ServerError('Reset failed.');
+    if (error && !isAuthClientError(error)) {
+      logger.error({ err: error }, 'resetPassword: Supabase Auth verifyOtp failed');
+      throw ServerError('Reset failed.');
+    }
     if (error || !data.session) throw tokenInvalid();
     accessToken = data.session.access_token;
   }
 
   const { data, error } = await createAuthClient().auth.getUser(accessToken);
-  if (error && !isAuthClientError(error)) throw ServerError('Reset failed.');
+  if (error && !isAuthClientError(error)) {
+    logger.error({ err: error }, 'resetPassword: Supabase Auth getUser failed');
+    throw ServerError('Reset failed.');
+  }
   if (error || !data.user) throw tokenInvalid();
   const claims = decodeJwtPayload(accessToken);
   const fromRecoveryLink = (claims?.amr ?? []).some(

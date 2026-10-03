@@ -135,6 +135,19 @@ describe('authenticate', () => {
     });
   });
 
+  it.each([
+    ['429 (Supabase Auth rate limit)', 429],
+    ['500', 500],
+    ['503', 503],
+  ])('Supabase Auth answering %s -> 500 INTERNAL, never TOKEN_INVALID', async (_name, status) => {
+    created.getUser.mockResolvedValue({
+      data: { user: null },
+      error: new AuthApiError('upstream trouble', status, undefined),
+    });
+    const err = await run(mockReq({ authorization: `Bearer ${TOKEN_1}` }));
+    expect(err).toMatchObject({ statusCode: 500, code: 'INTERNAL' });
+  });
+
   it('accepts x-org-id only as a UUID', async () => {
     const ok = mockReq({ authorization: `Bearer ${TOKEN_1}`, 'x-org-id': ORG.toUpperCase() });
     expect(await run(ok)).toBeUndefined();

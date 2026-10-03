@@ -402,6 +402,19 @@ describe('login', () => {
     });
   });
 
+  it('Supabase Auth rate-limiting the sign-in -> 429 TOO_MANY_REQUESTS, not a wrong password', async () => {
+    authApi.signInWithPassword.mockResolvedValue({
+      data: { session: null, user: null },
+      error: new AuthApiError('rate limited', 429, 'over_request_rate_limit'),
+    });
+    const err = await caught(
+      auth.login({ identifier: 'owner.one@ecotech.test', password: 'pw' }, META),
+    );
+    expect(err.statusCode).toBe(429);
+    expect(err.code).toBe('TOO_MANY_REQUESTS');
+    expect(admin.recordLoginAttempt).not.toHaveBeenCalled();
+  });
+
   it('Supabase Auth unreachable -> 500 INTERNAL, nothing counted as a wrong password', async () => {
     authApi.signInWithPassword.mockResolvedValue({
       data: { session: null, user: null },
@@ -479,6 +492,19 @@ describe('refresh', () => {
     expect(AuthSession.parse(res)).toEqual(res);
     expect(authApi.refreshSession).toHaveBeenCalledWith({ refresh_token: 'refresh-0' });
   });
+
+  it.each([429, 500, 503])(
+    'Supabase Auth answering %s on refresh -> 500 INTERNAL (the client keeps its session)',
+    async (status) => {
+      authApi.refreshSession.mockResolvedValue({
+        data: { session: null, user: null },
+        error: new AuthApiError('upstream trouble', status, undefined),
+      });
+      const err = await caught(auth.refresh('refresh-0'));
+      expect(err.statusCode).toBe(500);
+      expect(err.code).toBe('INTERNAL');
+    },
+  );
 
   it('an invalid or already-used refresh token -> 401 TOKEN_INVALID', async () => {
     authApi.refreshSession.mockResolvedValue({
@@ -606,6 +632,16 @@ describe('resetPassword', () => {
     });
     const err = await caught(auth.resetPassword({ token: RECOVERY, newPassword: 'NewPass-2026!' }));
     expect(err.code).toBe('TOKEN_INVALID');
+    expect(supa.updatePasswordWithToken).not.toHaveBeenCalled();
+  });
+
+  it('Supabase Auth failing (503) while checking the recovery token -> 500, not TOKEN_INVALID', async () => {
+    authApi.getUser.mockResolvedValue({
+      data: { user: null },
+      error: new AuthApiError('unavailable', 503, undefined),
+    });
+    const err = await caught(auth.resetPassword({ token: RECOVERY, newPassword: 'NewPass-2026!' }));
+    expect(err.statusCode).toBe(500);
     expect(supa.updatePasswordWithToken).not.toHaveBeenCalled();
   });
 

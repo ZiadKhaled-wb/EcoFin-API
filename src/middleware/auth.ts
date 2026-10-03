@@ -56,7 +56,8 @@ export const authenticate = asyncHandler(
     const { data, error } = await createAuthClient().auth.getUser(token);
     if (error || !data.user) {
       if (error && !isAuthClientError(error)) {
-        // Supabase Auth unreachable: fail closed, but don't tell the client to log in again.
+        // Supabase Auth unreachable, failing (5xx) or rate-limiting us (429): fail closed, but
+        // never answer TOKEN_INVALID, which would make the client log the user out.
         logger.error({ err: error }, 'authenticate: Supabase Auth call failed');
         throw ServerError('Authentication service unavailable.');
       }
