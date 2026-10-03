@@ -10,26 +10,12 @@ import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { errorCodeHttpStatus, type ErrorCode, type ErrorResponse } from '@ecotech/contracts';
 import { AppError, mapDbError, safeMessage } from '../utils/errors';
-import { logger } from '../utils/logger';
+import { SENSITIVE_KEYS, logger } from '../utils/logger';
 
 // Fields we never want to echo back to a client, no matter what a service
 // attached to err.details.
-const SENSITIVE_KEYS = new Set([
-  'password',
-  'confirmPassword',
-  'newPassword',
-  'currentPassword',
-  'license_key',
-  'token',
-  'access_token',
-  'refresh_token',
-  'accessToken',
-  'refreshToken',
-  'jwt',
-  'authorization',
-  'national_id',
-  'nationalId',
-]);
+// Same list as the logger redaction, compared case-insensitively.
+const SENSITIVE_DETAIL_KEYS = new Set(SENSITIVE_KEYS.map((key) => key.toLowerCase()));
 
 function sanitizeDetails(details: unknown): unknown {
   if (details == null) return undefined;
@@ -37,7 +23,7 @@ function sanitizeDetails(details: unknown): unknown {
   if (Array.isArray(details)) return details.map(sanitizeDetails);
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(details as Record<string, unknown>)) {
-    out[k] = SENSITIVE_KEYS.has(k) ? '[Redacted]' : sanitizeDetails(v);
+    out[k] = SENSITIVE_DETAIL_KEYS.has(k.toLowerCase()) ? '[Redacted]' : sanitizeDetails(v);
   }
   return out;
 }

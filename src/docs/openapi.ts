@@ -57,18 +57,25 @@ export const openApiSpec = {
             },
             Error: {
                 type: 'object',
-                required: ['error', 'code', 'requestId'],
+                required: ['error'],
                 properties: {
-                    error: { type: 'string', description: 'User-facing message (Arabic)' },
-                    code: {
-                        type: 'string',
-                        description: 'Machine-readable error code',
-                        example: 'INVALID_CREDENTIALS',
-                    },
-                    requestId: { type: 'string', format: 'uuid' },
-                    details: {
-                        description: 'Optional structured detail. Sensitive keys are redacted.',
-                        nullable: true,
+                    error: {
+                        type: 'object',
+                        required: ['code', 'message'],
+                        properties: {
+                            code: {
+                                type: 'string',
+                                description: 'Machine-readable error code (contracts ErrorCode)',
+                                example: 'INVALID_CREDENTIALS',
+                            },
+                            message: { type: 'string', description: 'Generic, safe message' },
+                            details: {
+                                description:
+                                    'Optional structured detail (e.g. field issues for VALIDATION_FAILED). Sensitive keys are redacted.',
+                                nullable: true,
+                            },
+                            requestId: { type: 'string' },
+                        },
                     },
                 },
             },

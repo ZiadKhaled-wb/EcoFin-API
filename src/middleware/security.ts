@@ -29,7 +29,14 @@ export function corsAllowList(allowedOrigins: readonly string[]): RequestHandler
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-request-id',
+      'x-org-id',
+      'Idempotency-Key',
+      'x-device-id',
+    ],
     exposedHeaders: ['x-request-id'],
   });
 }

@@ -5,7 +5,8 @@ import pino, { type DestinationStream, type Logger } from 'pino';
  * Keys that may carry a credential, token or national id. Matching is case sensitive, so header
  * names are listed in lower case (Node lower-cases incoming header names).
  */
-const SENSITIVE_KEYS = [
+/** Shared with the error handler so both redact the same keys. */
+export const SENSITIVE_KEYS = [
   'password',
   'newPassword',
   'confirmPassword',
@@ -21,6 +22,8 @@ const SENSITIVE_KEYS = [
   'nationalId',
   'apikey',
   'x-api-key',
+  'license_key',
+  'jwt',
   'SUPABASE_SERVICE_ROLE_KEY',
   'SUPABASE_ANON_KEY',
   'SUPABASE_JWT_SECRET',

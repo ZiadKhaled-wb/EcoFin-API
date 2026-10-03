@@ -403,16 +403,16 @@ export async function activateWorkspace(
     // This is a recoverable state: the user can re-run activation. Log
     // loudly so a human sees it if it happens in production.
     const message = rpcError.message ?? '';
-    if (message.includes('BAD_REQUEST')) {
+    if (message.includes('LICENSE_USED')) {
       throw BadRequest('تم استخدام كود التفعيل هذا بالفعل.', 'BAD_REQUEST');
     }
     if (message.includes('USERNAME_TAKEN')) {
       throw BadRequest('اسم المستخدم هذا مستخدم بالفعل، يرجى اختيار اسم آخر.', 'VALIDATION_FAILED');
     }
-    if (message.includes('BAD_REQUEST')) {
+    if (message.includes('LICENSE_EXPIRED')) {
       throw BadRequest('انتهت صلاحية كود التفعيل.', 'BAD_REQUEST');
     }
-    if (message.includes('BAD_REQUEST')) {
+    if (message.includes('LICENSE_INVALID')) {
       throw BadRequest('كود التفعيل غير صالح.', 'BAD_REQUEST');
     }
     if (message.includes('OWNER_NOT_FOUND')) {

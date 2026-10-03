@@ -6,7 +6,9 @@ import { ErrorResponse, HealthResponse } from '@ecotech/contracts';
 
 const db = vi.hoisted(() => ({ query: vi.fn() }));
 
-vi.mock('./utils/supabase', () => ({
+  supabaseAdmin: {
+    from: () => ({ select: () => ({ limit: () => ({ abortSignal: () => db.query() }) }) }),
+  },
   supabaseAdmin: { from: () => ({ select: () => ({ limit: () => db.query() }) }) },
   supabaseAnon: {},
   supabaseUser: () => ({}),
@@ -194,6 +196,28 @@ describe('security headers and CORS', () => {
       .set('Origin', ALLOWED)
       .set('Access-Control-Request-Method', 'POST');
     expect(pre.headers['access-control-allow-origin']).toBe(ALLOWED);
+  });
+
+  it('preflight allows the headers the API needs', async () => {
+    const pre = await request(app)
+      .options('/api/auth/login')
+      .set('Origin', ALLOWED)
+      .set('Access-Control-Request-Method', 'POST');
+    const allowed = String(pre.headers['access-control-allow-headers']).toLowerCase();
+    for (const header of [
+      'content-type',
+      'authorization',
+      'x-request-id',
+      'x-org-id',
+      'idempotency-key',
+      'x-device-id',
+    ]) {
+      expect(allowed).toContain(header);
+    }
+    const actual = await request(app).get('/nope').set('Origin', ALLOWED);
+    expect(String(actual.headers['access-control-expose-headers']).toLowerCase()).toContain(
+      'x-request-id',
+    );
   });
 
   it('gives no CORS headers to an origin that is not in the list, and never uses *', async () => {

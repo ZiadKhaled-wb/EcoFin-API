@@ -15,13 +15,13 @@ export const DB_CHECK_TIMEOUT_MS = 2000;
  * Any error, exception or timeout counts as "down". Details are logged, never returned.
  */
 export async function checkDb(timeoutMs = DB_CHECK_TIMEOUT_MS): Promise<boolean> {
-  let timer: NodeJS.Timeout | undefined;
   try {
-    const query = supabaseAdmin.from('organizations').select('id').limit(1);
-    const timeout = new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => reject(new Error('database check timed out')), timeoutMs);
-    });
-    const { error } = await Promise.race([Promise.resolve(query), timeout]);
+    // The signal aborts the HTTP request itself; an aborted query resolves with an error object.
+    const { error } = await supabaseAdmin
+      .from('organizations')
+      .select('id')
+      .limit(1)
+      .abortSignal(AbortSignal.timeout(timeoutMs));
     if (error) {
       logger.warn({ err: error }, 'health: database check failed');
       return false;
@@ -30,8 +30,6 @@ export async function checkDb(timeoutMs = DB_CHECK_TIMEOUT_MS): Promise<boolean>
   } catch (err) {
     logger.warn({ err }, 'health: database check failed');
     return false;
-  } finally {
-    if (timer) clearTimeout(timer);
   }
 }
 
