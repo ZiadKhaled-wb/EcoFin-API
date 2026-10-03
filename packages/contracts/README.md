@@ -5,12 +5,10 @@ Version 0.1.0 covers every Sprint 1 endpoint (F04 auth, F06 permissions, F07 aud
 
 ## Use
 
-```json
-"@ecotech/contracts": "file:../EcoFin-Contracts"
-```
-
-(Later: `github:<owner>/EcoFin-Contracts#v0.1.0`.) Installing runs `prepare`, which builds `dist/`.
-After editing this package, run `npm run build` here, then `npm install` in the consumer if it copied the package.
+In this repo the API uses it through the npm workspace (`packages/*`), so there is nothing to install separately.
+Build `dist/` from the repo root with `npm run build:contracts` (the API's typecheck, test and build do it for you).
+`EcoFin-Web` installs it from GitHub Packages (`"@ecotech/contracts": "0.1.0"`, see D26); releases are published by
+pushing a tag `contracts-vX.Y.Z` (see `.github/workflows/contracts-publish.yml`).
 
 ```ts
 import { AuthLogin, PERMISSION_KEYS, Money, type AuthLoginBody } from '@ecotech/contracts';
@@ -24,7 +22,7 @@ Each endpoint exports `{ body?, query?, response }` zod schemas plus inferred ty
 `npm run build | typecheck | lint | format:check | test`
 
 Tests read the API baseline SQL for the permission and error-code parity checks. Default path is
-`../EcoFin-API/supabase/migrations/20261002000000_v1_baseline.sql`; override with `ECOFIN_BASELINE_SQL`.
+`../../supabase/migrations/20261002000000_v1_baseline.sql` (relative to this package); override with `ECOFIN_BASELINE_SQL`.
 
 ## Rules
 

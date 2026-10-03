@@ -9,15 +9,14 @@ import { PERMISSIONS, PERMISSION_KEYS, ROLE_DEFAULT_PERMISSIONS } from './permis
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const baselinePath = resolve(
   packageRoot,
-  process.env['ECOFIN_BASELINE_SQL'] ??
-    '../EcoFin-API/supabase/migrations/20261002000000_v1_baseline.sql',
+  process.env['ECOFIN_BASELINE_SQL'] ?? '../../supabase/migrations/20261002000000_v1_baseline.sql',
 );
 
 function loadBaseline(): string {
   if (!existsSync(baselinePath)) {
     throw new Error(
-      `Baseline SQL not found at ${baselinePath}. Set ECOFIN_BASELINE_SQL to its path, or place ` +
-        'EcoFin-API next to this package (default: ../EcoFin-API/supabase/migrations/20261002000000_v1_baseline.sql).',
+      `Baseline SQL not found at ${baselinePath}. Set ECOFIN_BASELINE_SQL to its path ` +
+        '(default: ../../supabase/migrations/20261002000000_v1_baseline.sql, relative to packages/contracts).',
     );
   }
   return readFileSync(baselinePath, 'utf8');
