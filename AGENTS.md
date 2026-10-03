@@ -42,7 +42,7 @@ EcoTech Pro: multi-tenant SaaS POS with in-house installments for Egyptian furni
 - `src/routes/` — Express routers, wired through `asyncHandler` to controllers
 - `src/controllers/` — thin request handlers that call services
 - `src/services/` — business logic and Supabase calls; unit tests sit next to them (`*.test.ts`)
-- `src/middleware/` — auth (requireAuth, attachEmployee, guards), errorHandler, rateLimit
+- `src/middleware/` — auth (`authenticate`: Supabase-validated token on `req.auth`; `dbFor(req)`: per-request client), errorHandler, rateLimit, requestId, security
 - `src/utils/` — env (zod), Supabase clients, logger, errors, validation, password, asyncHandler
 - `src/types/` — Express request augmentation and Cloudflare/Node type shims
 - `src/docs/` — hand-written OpenAPI spec and Swagger router

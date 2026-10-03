@@ -228,6 +228,28 @@ export const openApiSpec = {
                     },
                 },
             },
+            SelectShopRequest: {
+                type: 'object',
+                required: ['orgId'],
+                additionalProperties: false,
+                properties: { orgId: { type: 'string', format: 'uuid' } },
+            },
+            SelectShopResponse: {
+                type: 'object',
+                required: ['user', 'shop'],
+                additionalProperties: false,
+                properties: {
+                    user: {
+                        type: 'object',
+                        required: ['id', 'email'],
+                        properties: {
+                            id: { type: 'string', format: 'uuid' },
+                            email: { type: 'string', nullable: true },
+                        },
+                    },
+                    shop: { $ref: '#/components/schemas/ShopMembership' },
+                },
+            },
             Ack: {
                 type: 'object',
                 required: ['ok'],
@@ -321,6 +343,9 @@ export const openApiSpec = {
             post: {
                 tags: ['Auth — public'],
                 summary: 'New token pair from a refresh token',
+                description:
+                    'Invalid or used refresh token: 401 TOKEN_INVALID. Supabase Auth busy or failing: 500 ' +
+                    '(keep the session and retry). Own per-IP limit: 60 per minute (429).',
                 security: [],
                 requestBody: {
                     required: true,
@@ -332,6 +357,8 @@ export const openApiSpec = {
                         content: { 'application/json': { schema: { $ref: '#/components/schemas/AuthSession' } } },
                     },
                     401: { $ref: '#/components/responses/Error' },
+                    429: { $ref: '#/components/responses/Error' },
+                    500: { $ref: '#/components/responses/Error' },
                 },
             },
         },
@@ -390,6 +417,34 @@ export const openApiSpec = {
                     200: {
                         description: 'Employee, shop and branches',
                         content: { 'application/json': { schema: { $ref: '#/components/schemas/MeResponse' } } },
+                    },
+                    400: { $ref: '#/components/responses/Error' },
+                    401: { $ref: '#/components/responses/Error' },
+                    403: { $ref: '#/components/responses/Error' },
+                },
+            },
+        },
+        '/api/auth/select-shop': {
+            post: {
+                tags: ['Auth — authenticated'],
+                summary: 'Choose the active shop for a login with several shops (D23)',
+                description:
+                    'Works with the multi-shop login token and no x-org-id. The shop must be one of the ' +
+                    "caller's usable shops (else 403 SHOP_NOT_ALLOWED). Writes auth.login in that shop. " +
+                    'The client keeps its tokens and sends x-org-id from then on.',
+                security: [{ bearerAuth: [] }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': { schema: { $ref: '#/components/schemas/SelectShopRequest' } },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: 'The chosen shop',
+                        content: {
+                            'application/json': { schema: { $ref: '#/components/schemas/SelectShopResponse' } },
+                        },
                     },
                     400: { $ref: '#/components/responses/Error' },
                     401: { $ref: '#/components/responses/Error' },
