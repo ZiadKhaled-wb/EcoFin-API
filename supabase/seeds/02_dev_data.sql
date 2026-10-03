@@ -10,13 +10,15 @@
 --                                                         cashier.one / cashier.one@ecotech.test    CASHIER (BR1)
 --   dev-shop-two        retail      BR1 (main)            owner.two   / owner.two@ecotech.test      OWNER
 --                                                         cashier.two / cashier.two@ecotech.test    CASHIER (BR1)
+--   both shops (F04)    one login   multi.shop  / multi.shop@ecotech.test     CASHIER (BR1) in dev-shop-one
+--                                                                                         ACCOUNTANT in dev-shop-two
 --
 -- Fixed ids (prefix d...) so tests can refer to them. They don't overlap the ids or
 -- slugs used by supabase/tests/smoke_test.sql.
 --   orgs      d1000000-0000-0000-0000-00000000000{1,2}
 --   branches  d2000000-0000-0000-0000-0000000000{11,12,21}   (shop, branch)
---   auth      d0000000-0000-0000-0000-0000000000{11,12,21,22} (shop, person)
---   employees d3000000-0000-0000-0000-0000000000{11,12,21,22} (shop, person)
+--   auth      d0000000-0000-0000-0000-0000000000{11,12,21,22} (shop, person), ...000099 (both shops)
+--   employees d3000000-0000-0000-0000-0000000000{11,12,21,22} (shop, person), ...0000{19,29} (both shops)
 -- =============================================================================
 
 -- ------------------------------------------------------------- logins (GoTrue)
@@ -24,7 +26,8 @@ WITH u (id, email) AS (VALUES
     ('d0000000-0000-0000-0000-000000000011'::uuid, 'owner.one@ecotech.test'),
     ('d0000000-0000-0000-0000-000000000012'::uuid, 'cashier.one@ecotech.test'),
     ('d0000000-0000-0000-0000-000000000021'::uuid, 'owner.two@ecotech.test'),
-    ('d0000000-0000-0000-0000-000000000022'::uuid, 'cashier.two@ecotech.test')
+    ('d0000000-0000-0000-0000-000000000022'::uuid, 'cashier.two@ecotech.test'),
+    ('d0000000-0000-0000-0000-000000000099'::uuid, 'multi.shop@ecotech.test')
 )
 INSERT INTO auth.users (
     instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -44,7 +47,8 @@ SELECT u.id::text, u.id,
        'email', now(), now(), now()
 FROM auth.users u
 WHERE u.id IN ('d0000000-0000-0000-0000-000000000011', 'd0000000-0000-0000-0000-000000000012',
-               'd0000000-0000-0000-0000-000000000021', 'd0000000-0000-0000-0000-000000000022');
+               'd0000000-0000-0000-0000-000000000021', 'd0000000-0000-0000-0000-000000000022',
+               'd0000000-0000-0000-0000-000000000099');
 
 -- ------------------------------------------------------------- shops
 INSERT INTO public.organizations (id, tenant_slug, name, plan_key, subscription_start, subscription_end) VALUES
@@ -69,9 +73,16 @@ INSERT INTO public.employees (id, organization_id, auth_user_id, full_name, emai
     ('d3000000-0000-0000-0000-000000000021', 'd1000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000021',
      'Owner Two', 'owner.two@ecotech.test', 'owner.two', 'OWNER', 'd2000000-0000-0000-0000-000000000021'),
     ('d3000000-0000-0000-0000-000000000022', 'd1000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000022',
-     'Cashier Two', 'cashier.two@ecotech.test', 'cashier.two', 'CASHIER', 'd2000000-0000-0000-0000-000000000021');
+     'Cashier Two', 'cashier.two@ecotech.test', 'cashier.two', 'CASHIER', 'd2000000-0000-0000-0000-000000000021'),
+    -- F04: one login in both shops (same username in each shop is allowed: unique per shop).
+    ('d3000000-0000-0000-0000-000000000019', 'd1000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000099',
+     'Multi Shop', 'multi.shop@ecotech.test', 'multi.shop', 'CASHIER', 'd2000000-0000-0000-0000-000000000011'),
+    ('d3000000-0000-0000-0000-000000000029', 'd1000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000099',
+     'Multi Shop', 'multi.shop@ecotech.test', 'multi.shop', 'ACCOUNTANT', 'd2000000-0000-0000-0000-000000000021');
 
 -- Branch scope. OWNER sees every branch without rows here; cashiers get their branch.
 INSERT INTO public.employee_branches (organization_id, employee_id, branch_id) VALUES
     ('d1000000-0000-0000-0000-000000000001', 'd3000000-0000-0000-0000-000000000012', 'd2000000-0000-0000-0000-000000000011'),
-    ('d1000000-0000-0000-0000-000000000002', 'd3000000-0000-0000-0000-000000000022', 'd2000000-0000-0000-0000-000000000021');
+    ('d1000000-0000-0000-0000-000000000002', 'd3000000-0000-0000-0000-000000000022', 'd2000000-0000-0000-0000-000000000021'),
+    ('d1000000-0000-0000-0000-000000000001', 'd3000000-0000-0000-0000-000000000019', 'd2000000-0000-0000-0000-000000000011'),
+    ('d1000000-0000-0000-0000-000000000002', 'd3000000-0000-0000-0000-000000000029', 'd2000000-0000-0000-0000-000000000021');
