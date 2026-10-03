@@ -22,8 +22,7 @@ async function buildStore(): Promise<StoreOption | undefined> {
 
     try {
         // Dynamic import for ESM compatibility — require() is not available
-        // in ESM modules. ioredis uses raw TCP which is not supported in
-        // Cloudflare Workers, so this will fail gracefully there.
+        // in ESM modules.
         const { RedisStore } = await import('rate-limit-redis');
         const { default: Redis } = await import('ioredis');
         const client = new Redis(env.RATE_LIMIT_REDIS_URL);

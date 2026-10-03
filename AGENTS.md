@@ -38,13 +38,13 @@ EcoTech Pro: multi-tenant SaaS POS with in-house installments for Egyptian furni
 - Test: `npm test`
 
 ## Structure
-- `src/` — entry points: `app.ts` (createApp), `server.ts` (Node), `worker.ts` (Cloudflare Workers)
+- `src/` — entry points: `app.ts` (createApp), `server.ts` (Node)
 - `src/routes/` — Express routers, wired through `asyncHandler` to controllers
 - `src/controllers/` — thin request handlers that call services
 - `src/services/` — business logic and Supabase calls; unit tests sit next to them (`*.test.ts`)
 - `src/middleware/` — auth (requireAuth, attachEmployee, guards), errorHandler, rateLimit
 - `src/utils/` — env (zod), Supabase clients, logger, errors, validation, password, asyncHandler
-- `src/types/` — Express request augmentation and Cloudflare/Node type shims
+- `src/types/` — Express request augmentation
 - `src/docs/` — hand-written OpenAPI spec and Swagger router
 - `src/test/` — shared test helpers (Supabase mock)
 - `migrations/` — SQL migration files, applied by hand (see `migrations/README.md`); `docs/db/` holds the bootstrap SQL
