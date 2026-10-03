@@ -12,6 +12,7 @@ Read this, then your own `docs/tasks/<ID>.md`. It applies to every Sprint 1 task
 - **Network fix:** every `npm`/`npx`/`node` command that touches the network needs
   `NODE_OPTIONS=--no-network-family-autoselection` (Node's IPv6 race times out here). In Bash: `export NODE_OPTIONS=--no-network-family-autoselection` at the start of each command.
 - Your worktree starts without `node_modules`: run `npm ci` first.
+- **Never** run `rm -rf node_modules` or delete anything under `node_modules/@ecotech` by hand: it's a junction to the shared `EcoFin-Contracts` folder, and deleting through it once wiped that repo (DECISIONS D21). Use `npm ci` only.
 - API tests need test env vars (until F01/F08 make `npm test` self-contained):
   `NODE_ENV=test SUPABASE_URL=https://ci-test.supabase.co SUPABASE_ANON_KEY=x SUPABASE_SERVICE_ROLE_KEY=y FRONTEND_URL=https://ci-test.example.com`
 - The API server **can't be started** right now (known env problem). Don't try to fix it, don't run `npm run dev`.
