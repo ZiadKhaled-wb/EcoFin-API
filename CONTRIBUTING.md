@@ -13,7 +13,8 @@
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint (type-aware, `no-explicit-any` is an error) |
 | `npm run format` / `npm run format:check` | Prettier write / check |
-| `npm test` | Vitest. Works without a `.env`: `src/test/setup-env.ts` sets safe test values |
+| `npm test` | Vitest for the API and for `packages/contracts`. Works without a `.env`: `src/test/setup-env.ts` sets safe test values |
+| `npm run build:contracts` | Build `packages/contracts/dist` (typecheck, test and build do it for you) |
 
 ## Rules
 - CI runs on every pull request: typecheck, lint, format:check, test, build. A failure blocks the merge.

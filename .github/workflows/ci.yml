@@ -20,6 +20,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The API imports the built package (packages/contracts/dist), so build it first.
+      # typecheck, test and build also do this through their pre* hooks.
+      - name: Build contracts
+        run: npm run build:contracts
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -29,7 +34,7 @@ jobs:
       - name: Format check
         run: npm run format:check
 
-      - name: Test
+      - name: Test (API and contracts)
         run: npm test
 
       - name: Build

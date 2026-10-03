@@ -2,7 +2,7 @@
 
 **Date:** 3 Oct 2026  
 **Coverage:** Features F01 (tooling), F02 (database), F03 (contracts), F04 (auth), F08 (server basics), F09 (UI shell)  
-**Source plans:** EcoFin-API `docs/testing/plans/B1.md`, `B3.md`, `B5.md`, `B6.md`; EcoFin-Web `docs/testing/plans/B2.md`, `B7.md`, `B9.md`; EcoFin-Contracts `docs/testing/plans/B4.md`
+**Source plans:** EcoFin-API `docs/testing/plans/B1.md`, `B3.md`, `B5.md`, `B6.md`; EcoFin-Web `docs/testing/plans/B2.md`, `B7.md`, `B9.md`; contracts `packages/contracts/docs/testing/plans/B4.md`
 
 ## How to run when the environment is fixed
 
@@ -12,7 +12,7 @@ All commands run from the repo root with the Windows network fix: prefix npm/npx
 - Node 24 (from `.nvmrc`)
 - Docker Desktop running
 - Windows fix: `NODE_OPTIONS=--no-network-family-autoselection`
-- Fresh `npm ci` in EcoFin-Contracts, EcoFin-API, and EcoFin-Web
+- Fresh `npm ci` in EcoFin-API (it also installs and builds `packages/contracts`) and in EcoFin-Web
 
 ### Database setup
 ```bash
@@ -31,8 +31,8 @@ npm run db:smoke -- supabase/tests/f04_auth_test.sql
 
 ### Contracts
 ```bash
-cd ../EcoFin-Contracts
-npm test
+npm run build:contracts
+npm run test:contracts   # also part of `npm test` at the API root
 # Expected: all pass (baseline test, role defaults, error codes, schemas, version, contract types, consumer smoke test)
 ```
 
