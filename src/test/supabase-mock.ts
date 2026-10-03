@@ -29,6 +29,7 @@ export interface SupabaseMock {
   from: Mock;
   select: Mock;
   eq: Mock;
+  gte: Mock;
   neq: Mock;
   in: Mock;
   is: Mock;
@@ -61,6 +62,7 @@ const CHAINABLE = [
   'from',
   'select',
   'eq',
+  'gte',
   'neq',
   'in',
   'is',
