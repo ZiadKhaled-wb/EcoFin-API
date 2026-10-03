@@ -241,6 +241,41 @@ describe.skipIf(!RUN)('F04 auth against local Supabase', () => {
     await login(email, PASSWORD);
   }, 30_000);
 
+  it('change-password: other sessions end (old refresh token fails), this one stays, one audit row', async () => {
+    const email = 'owner.two@ecotech.test';
+    const emp = 'd3000000-0000-0000-0000-000000000021';
+    const newPassword = `Changed-${Date.now()}!`;
+    const otherDevice = await login(email);
+    const thisDevice = await login(email);
+    const auditsBefore = await auditCount(emp, 'auth.password_change');
+
+    const res = await post(
+      '/api/auth/change-password',
+      { currentPassword: PASSWORD, newPassword },
+      thisDevice.accessToken,
+    );
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+
+    const staleRefresh = await post('/api/auth/refresh', {
+      refreshToken: otherDevice.refreshToken,
+    });
+    expect(staleRefresh.status).toBe(401);
+    expect(code(staleRefresh)).toBe('TOKEN_INVALID');
+    expect((await me(otherDevice.accessToken)).status).toBe(401);
+    expect((await me(thisDevice.accessToken)).status).toBe(200);
+    expect(await auditCount(emp, 'auth.password_change')).toBe(auditsBefore + 1);
+
+    // The client logs in again with the new password; then the seed password is put back.
+    const again = await login(email, newPassword);
+    const restore = await post(
+      '/api/auth/change-password',
+      { currentPassword: newPassword, newPassword: PASSWORD },
+      again.accessToken,
+    );
+    expect(restore.status, JSON.stringify(restore.body)).toBe(200);
+  });
+
   it('reset-password refuses a normal login token (not from the emailed link)', async () => {
     const s = await login('owner.two@ecotech.test');
     const res = await post('/api/auth/reset-password', {
