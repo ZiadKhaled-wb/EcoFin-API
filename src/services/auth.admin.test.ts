@@ -13,6 +13,7 @@ import {
   findLoginEmailByUsername,
   loadMemberships,
   recordLoginAttempt,
+  clearMustChangePassword,
 } from './auth.admin';
 
 const mock = supabaseAdmin as unknown as SupabaseMock;
@@ -153,6 +154,24 @@ describe('recordLoginAttempt', () => {
       recordLoginAttempt({ identifier: 'a', tenantSlug: null, success: true }),
     ).rejects.toMatchObject({
       statusCode: 500,
+    });
+  });
+});
+
+describe('clearMustChangePassword (D24)', () => {
+  it('calls the service-role-only DB function with the verified auth user id', async () => {
+    mock.queue({ data: 1, error: null });
+    await clearMustChangePassword('u1');
+    expect(mock.rpc).toHaveBeenCalledWith('auth_clear_must_change_password', {
+      p_auth_user_id: 'u1',
+    });
+  });
+
+  it('a database error becomes a generic 500', async () => {
+    mock.queue({ data: null, error: { message: 'permission denied for function' } });
+    await expect(clearMustChangePassword('u1')).rejects.toMatchObject({
+      statusCode: 500,
+      code: 'INTERNAL',
     });
   });
 });

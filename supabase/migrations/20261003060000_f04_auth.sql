@@ -5,9 +5,11 @@
 --   public.my_shops()               the caller's usable shop memberships (login, shop picker)
 --   public.auth_record_login()      sets last_login_at and writes audit 'auth.login'
 --   public.auth_record_logout()     writes audit 'auth.logout'
---   public.auth_password_changed()  clears must_change_password and writes audit 'auth.password_change'
+--   public.auth_record_password_change()             writes audit 'auth.password_change'
+--   public.auth_clear_must_change_password(user id)  clears must_change_password (service role only)
 --
--- Called by the API with the user's JWT (and the `x-org-id` header for the active shop).
+-- Called by the API with the user's JWT (and the `x-org-id` header for the active shop), except
+-- auth_clear_must_change_password, which only the API's service role may run (D24).
 -- Org and employee always come from the session (app.current_employee_id()), never from a
 -- parameter, and app.write_audit is never given p_organization_id.
 --
@@ -103,29 +105,49 @@ BEGIN
 END;
 $$;
 
--- Called by the API right after Supabase Auth accepted the new password. The password belongs to
--- the login, not to one shop, so the flag is cleared on every employee row of the caller.
--- The audit row goes to the active shop.
-CREATE FUNCTION public.auth_password_changed()
+-- Password change in the active shop: the audit row only. The API calls it with the user's JWT
+-- right after Supabase Auth accepted the new password, before the flag is cleared.
+CREATE FUNCTION public.auth_record_password_change()
 RETURNS void LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
 AS $$
 DECLARE
     v_emp uuid := app.require_session_employee();
 BEGIN
-    UPDATE public.employees
-    SET must_change_password = false
-    WHERE auth_user_id = auth.uid() AND must_change_password;
-
     PERFORM app.write_audit('auth.password_change', 'employee', v_emp,
                             p_after => jsonb_build_object('must_change_password', false));
 END;
 $$;
 
+-- D24: clears must_change_password. NOT granted to authenticated: otherwise a user could clear
+-- the flag through PostgREST without changing the password. Only the API's service role runs
+-- it, with the auth user id Supabase Auth verified, after the password update succeeded
+-- (auth.uid() is NULL for the service role, so the id is a parameter). The password belongs to
+-- the login, not to one shop, so every employee row of that login is cleared.
+-- Returns the number of rows changed.
+CREATE FUNCTION public.auth_clear_must_change_password(p_auth_user_id uuid)
+RETURNS integer LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+    v_count integer;
+BEGIN
+    IF p_auth_user_id IS NULL THEN
+        RAISE EXCEPTION 'BAD_REQUEST: auth user id required' USING ERRCODE = '22004';
+    END IF;
+    UPDATE public.employees
+    SET must_change_password = false
+    WHERE auth_user_id = p_auth_user_id AND must_change_password;
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    RETURN v_count;
+END;
+$$;
+
 -- Grants: nothing by default (baseline default privileges); grant exactly what the API calls.
 REVOKE ALL ON FUNCTION app.require_session_employee() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.auth_clear_must_change_password(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.my_shops(), public.auth_record_login(), public.auth_record_logout(),
-                       public.auth_password_changed() FROM PUBLIC, anon;
+                       public.auth_record_password_change() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.my_shops(), public.auth_record_login(), public.auth_record_logout(),
-                          public.auth_password_changed() TO authenticated;
+                          public.auth_record_password_change() TO authenticated;
 GRANT EXECUTE ON FUNCTION app.require_session_employee(), public.my_shops(), public.auth_record_login(),
-                          public.auth_record_logout(), public.auth_password_changed() TO service_role;
+                          public.auth_record_logout(), public.auth_record_password_change(),
+                          public.auth_clear_must_change_password(uuid) TO service_role;

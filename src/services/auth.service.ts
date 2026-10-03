@@ -41,6 +41,7 @@ import {
   findLoginEmailByUsername,
   loadMemberships,
   recordLoginAttempt,
+  clearMustChangePassword,
   type MembershipRow,
 } from './auth.admin';
 import type { RequestAuth } from '../types/express';
@@ -459,13 +460,22 @@ export async function changePassword(
 
   await setPassword(auth.accessToken, body.newPassword);
 
-  const { error } = await db.rpc('auth_password_changed');
-  if (error) {
-    logger.error({ err: error, userId: auth.userId }, 'P1: password changed but flag/audit failed');
-    throw dbError(error, 'auth_password_changed');
+  // Supabase Auth confirmed the new password. Other devices must log in again with it; this
+  // session stays. Done first because it matters most.
+  if (!(await revokeSession(auth.accessToken, 'others'))) {
+    logger.error({ userId: auth.userId }, 'P1: password changed but other sessions not revoked');
   }
-  // Other devices must log in again with the new password; this session stays.
-  await revokeSession(auth.accessToken, 'others');
+
+  // Audit row in the active shop (user JWT, org from the session).
+  const { error } = await db.rpc('auth_record_password_change');
+  if (error) {
+    logger.error({ err: error, userId: auth.userId }, 'P1: password changed but audit failed');
+    throw dbError(error, 'auth_record_password_change');
+  }
+
+  // D24: the flag is cleared only here, through the service role, with the verified user id.
+  // If this fails the user is asked to change the password again: the safe direction.
+  await clearMustChangePassword(auth.userId);
 }
 
 // ============================================================================

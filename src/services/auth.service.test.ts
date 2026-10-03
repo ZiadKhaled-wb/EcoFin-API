@@ -10,6 +10,7 @@ const admin = vi.hoisted(() => ({
   loadMemberships: vi.fn(),
   countRecentFailures: vi.fn(),
   recordLoginAttempt: vi.fn(),
+  clearMustChangePassword: vi.fn(),
 }));
 vi.mock('./auth.admin', () => admin);
 
@@ -642,7 +643,7 @@ describe('changePassword', () => {
     supa.updatePasswordWithToken.mockResolvedValue({ ok: true, status: 200 });
   });
 
-  it('verifies the current password, updates it with the caller token, clears the flag, ends the other sessions', async () => {
+  it('verifies the current password, updates it with the caller token, ends the other sessions, audits, clears the flag', async () => {
     await auth.changePassword(AUTH, BODY, META);
     expect(authApi.signInWithPassword).toHaveBeenCalledWith({
       email: 'owner.one@ecotech.test',
@@ -650,9 +651,33 @@ describe('changePassword', () => {
     });
     expect(authApi.admin.signOut).toHaveBeenCalledWith(CHECK, 'local');
     expect(supa.updatePasswordWithToken).toHaveBeenCalledWith(ACCESS, 'New-Pass-2026!');
-    expect(db.clients.find((c) => c.rpcCalls.includes('auth_password_changed'))).toMatchObject({
-      orgId: ORG_A,
+    expect(authApi.admin.signOut).toHaveBeenCalledWith(ACCESS, 'others');
+    expect(
+      db.clients.find((c) => c.rpcCalls.includes('auth_record_password_change')),
+    ).toMatchObject({ accessToken: ACCESS, orgId: ORG_A });
+    // D24: the flag is cleared through the service-role module, with the verified user id.
+    expect(admin.clearMustChangePassword).toHaveBeenCalledWith(USER);
+  });
+
+  it('the flag is cleared only after Supabase Auth accepted the new password', async () => {
+    supa.updatePasswordWithToken.mockResolvedValue({
+      ok: false,
+      status: 422,
+      code: 'weak_password',
     });
+    const err = await caught(auth.changePassword(AUTH, BODY, META));
+    expect(err.code).toBe('VALIDATION_FAILED');
+    expect(admin.clearMustChangePassword).not.toHaveBeenCalled();
+    expect(authApi.admin.signOut).not.toHaveBeenCalledWith(ACCESS, 'others');
+    expect(db.clients.some((c) => c.rpcCalls.includes('auth_record_password_change'))).toBe(false);
+  });
+
+  it('a failed audit write leaves the flag set (safe direction) and reports an error', async () => {
+    db.rpc['auth_record_password_change'] = { data: null, error: { message: 'boom' } };
+    const err = await caught(auth.changePassword(AUTH, BODY, META));
+    expect(err.statusCode).toBe(500);
+    expect(admin.clearMustChangePassword).not.toHaveBeenCalled();
+    // The other sessions are still ended: the password did change.
     expect(authApi.admin.signOut).toHaveBeenCalledWith(ACCESS, 'others');
   });
 
@@ -665,6 +690,7 @@ describe('changePassword', () => {
       expect.objectContaining({ success: false }),
     );
     expect(supa.updatePasswordWithToken).not.toHaveBeenCalled();
+    expect(admin.clearMustChangePassword).not.toHaveBeenCalled();
   });
 
   it('locked out -> 429 without checking the password', async () => {

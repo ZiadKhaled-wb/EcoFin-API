@@ -22,9 +22,9 @@ CREATE FUNCTION t.expect(p_name text, p_ok boolean, p_detail text DEFAULT NULL) 
     INSERT INTO t.results VALUES (p_name, p_ok, p_detail);
 $$;
 
-GRANT USAGE ON SCHEMA t TO authenticated, anon;
-GRANT INSERT ON t.results TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION t.expect(text, boolean, text), t.expect_error(text, text, text) TO authenticated, anon;
+GRANT USAGE ON SCHEMA t TO authenticated, anon, service_role;
+GRANT INSERT ON t.results TO authenticated, anon, service_role;
+GRANT EXECUTE ON FUNCTION t.expect(text, boolean, text), t.expect_error(text, text, text) TO authenticated, anon, service_role;
 
 -- ---------------------------------------------------------------- fixtures
 --   shop A (active), shop B (active), shop C (suspended), shop D (subscription ended)
@@ -59,19 +59,26 @@ INSERT INTO employees (id, organization_id, auth_user_id, full_name, role, is_ac
 SELECT t.expect('grant: anon cannot execute my_shops', NOT has_function_privilege('anon', 'public.my_shops()', 'EXECUTE'));
 SELECT t.expect('grant: anon cannot execute auth_record_login', NOT has_function_privilege('anon', 'public.auth_record_login()', 'EXECUTE'));
 SELECT t.expect('grant: anon cannot execute auth_record_logout', NOT has_function_privilege('anon', 'public.auth_record_logout()', 'EXECUTE'));
-SELECT t.expect('grant: anon cannot execute auth_password_changed', NOT has_function_privilege('anon', 'public.auth_password_changed()', 'EXECUTE'));
-SELECT t.expect('grant: authenticated can execute the four functions',
+SELECT t.expect('grant: anon cannot execute auth_record_password_change', NOT has_function_privilege('anon', 'public.auth_record_password_change()', 'EXECUTE'));
+SELECT t.expect('grant: authenticated can execute the four session functions',
     has_function_privilege('authenticated', 'public.my_shops()', 'EXECUTE')
     AND has_function_privilege('authenticated', 'public.auth_record_login()', 'EXECUTE')
     AND has_function_privilege('authenticated', 'public.auth_record_logout()', 'EXECUTE')
-    AND has_function_privilege('authenticated', 'public.auth_password_changed()', 'EXECUTE'));
+    AND has_function_privilege('authenticated', 'public.auth_record_password_change()', 'EXECUTE'));
+SELECT t.expect('grant (D24): only service_role can execute auth_clear_must_change_password',
+    NOT has_function_privilege('authenticated', 'public.auth_clear_must_change_password(uuid)', 'EXECUTE')
+    AND NOT has_function_privilege('anon', 'public.auth_clear_must_change_password(uuid)', 'EXECUTE')
+    AND has_function_privilege('service_role', 'public.auth_clear_must_change_password(uuid)', 'EXECUTE'));
+SELECT t.expect('grant: the old auth_password_changed() no longer exists',
+    NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'auth_password_changed'));
 SELECT t.expect('grant: authenticated cannot call app.require_session_employee directly',
     NOT has_function_privilege('authenticated', 'app.require_session_employee()', 'EXECUTE'));
 SELECT t.expect('definer: every F04 function is SECURITY DEFINER with search_path pinned',
     (SELECT bool_and(p.prosecdef AND p.proconfig @> ARRAY['search_path=""'])
      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
      WHERE (n.nspname, p.proname) IN (('app', 'require_session_employee'), ('public', 'my_shops'),
-           ('public', 'auth_record_login'), ('public', 'auth_record_logout'), ('public', 'auth_password_changed'))),
+           ('public', 'auth_record_login'), ('public', 'auth_record_logout'),
+           ('public', 'auth_record_password_change'), ('public', 'auth_clear_must_change_password'))),
     (SELECT string_agg(p.proname || ':' || coalesce(array_to_string(p.proconfig, ','), 'null'), ' ')
      FROM pg_proc p WHERE p.proname IN ('require_session_employee', 'my_shops', 'auth_record_login')));
 
@@ -190,24 +197,41 @@ SELECT t.expect('logout: works in a suspended shop',
     (SELECT count(*) = 1 FROM audit_log WHERE action = 'auth.logout'
        AND employee_id = 'f4300000-0000-0000-0000-0000000000e1'));
 
--- ---------------------------------------------------------------- auth_password_changed
+-- ---------------------------------------------------------------- password change
+-- auth_record_password_change: the audit row, from the session
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', 'f4000000-0000-0000-0000-0000000000c1', false);
 SELECT set_config('request.headers', '{"x-org-id": "f4100000-0000-0000-0000-00000000000a"}', false);
-SELECT public.auth_password_changed();
+SELECT public.auth_record_password_change();
+-- D24: a logged-in user cannot clear the flag through PostgREST
+SELECT t.expect_error('password: authenticated calling auth_clear_must_change_password is refused',
+    'SELECT public.auth_clear_must_change_password(''f4000000-0000-0000-0000-0000000000c1'')', 'permission denied');
 SELECT set_config('request.headers', '{}', false);
 RESET ROLE;
-SELECT t.expect('password: clears must_change_password on every row of the login',
-    (SELECT bool_and(NOT must_change_password) FROM employees WHERE auth_user_id = 'f4000000-0000-0000-0000-0000000000c1'));
+SELECT t.expect('password: the audit function does not touch the flag',
+    (SELECT bool_and(must_change_password) FROM employees WHERE auth_user_id = 'f4000000-0000-0000-0000-0000000000c1'));
 SELECT t.expect('password: writes one auth.password_change row in the active shop only',
     (SELECT count(*) = 1 FROM audit_log WHERE action = 'auth.password_change'
        AND organization_id = 'f4100000-0000-0000-0000-00000000000a'
        AND employee_id = 'f4300000-0000-0000-0000-0000000000ca')
     AND (SELECT count(*) = 0 FROM audit_log WHERE action = 'auth.password_change'
        AND organization_id = 'f4100000-0000-0000-0000-00000000000b'));
+
+-- auth_clear_must_change_password: service role, by verified auth user id
+SET ROLE service_role;
+SELECT t.expect('password: service role clears the flag on both rows of the login (returns 2)',
+    public.auth_clear_must_change_password('f4000000-0000-0000-0000-0000000000c1') = 2);
+SELECT t.expect('password: a second call changes nothing (returns 0)',
+    public.auth_clear_must_change_password('f4000000-0000-0000-0000-0000000000c1') = 0);
+SELECT t.expect_error('password: a NULL user id is refused',
+    'SELECT public.auth_clear_must_change_password(NULL)', '^BAD_REQUEST');
+RESET ROLE;
+SELECT t.expect('password: flag cleared on every row of that login',
+    (SELECT bool_and(NOT must_change_password) FROM employees WHERE auth_user_id = 'f4000000-0000-0000-0000-0000000000c1'));
+
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', 'f4000000-0000-0000-0000-000000000001', false);
-SELECT t.expect_error('password: a login without employee rows is refused', 'SELECT public.auth_password_changed()', '^NOT_AN_EMPLOYEE');
+SELECT t.expect_error('password: a login without employee rows cannot write the audit row', 'SELECT public.auth_record_password_change()', '^NOT_AN_EMPLOYEE');
 SELECT set_config('request.jwt.claim.sub', '', false);
 RESET ROLE;
 

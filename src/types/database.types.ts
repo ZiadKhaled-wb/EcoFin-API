@@ -7812,9 +7812,10 @@ export type Database = {
       };
     };
     Functions: {
-      auth_password_changed: { Args: Record<PropertyKey, never>; Returns: undefined };
+      auth_clear_must_change_password: { Args: { p_auth_user_id: string }; Returns: number };
       auth_record_login: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
+      auth_record_password_change: { Args: Record<PropertyKey, never>; Returns: undefined };
       my_shops: {
         Args: Record<PropertyKey, never>;
         Returns: {

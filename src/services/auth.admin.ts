@@ -4,7 +4,10 @@
 //   - resolve tenantSlug + username to the login email,
 //   - read the login's memberships to refuse inactive employees, inactive shops and expired
 //     subscriptions before tokens are handed out,
-//   - count and insert login_attempts (the baseline grants that table to the service role only).
+//   - count and insert login_attempts (the baseline grants that table to the service role only),
+//     including failed current-password checks on change-password (D17, D25),
+//   - clear must_change_password after Supabase Auth confirmed a password change (D24: the DB
+//     function is not executable by authenticated).
 // Everything after login uses supabaseForRequest(<user JWT>).
 //
 // Errors from these queries are logged here and thrown as a generic INTERNAL error, so no raw
@@ -152,6 +155,17 @@ export async function recordLoginAttempt(attempt: LoginAttempt): Promise<void> {
     user_agent: attempt.userAgent ? attempt.userAgent.slice(0, 512) : null,
   });
   if (error) fail(error, 'login_attempts insert');
+}
+
+/**
+ * D24. Clears must_change_password on every employee row of this login. Call it ONLY after
+ * Supabase Auth confirmed the password update, with the user id Supabase Auth verified.
+ */
+export async function clearMustChangePassword(authUserId: string): Promise<void> {
+  const { error } = await supabaseAdmin.rpc('auth_clear_must_change_password', {
+    p_auth_user_id: authUserId,
+  });
+  if (error) fail(error, 'must_change_password clear');
 }
 
 function isIp(value: string): boolean {
