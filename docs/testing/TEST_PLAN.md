@@ -42,7 +42,7 @@ cd ../EcoFin-API
 
 # Unit tests
 npm test
-# Expected: 112 tests pass (env from src/test/setup-env.ts)
+# Expected: 190 tests pass, 13 skipped (env from src/test/setup-env.ts)
 
 # Integration tests (require local Supabase running, env from supabase status)
 S=$(npx -y supabase@2.119.0 status -o json)
