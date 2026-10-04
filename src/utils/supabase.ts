@@ -26,6 +26,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../types/database.types';
 import { getEnv } from './env';
+import { validDeviceId } from './validation';
 
 export type DbClient = SupabaseClient<Database>;
 
@@ -39,9 +40,12 @@ const baseAuthOptions = {
 
 /** Request details passed to PostgREST so app.write_audit can record them. */
 export interface RequestMeta {
+  /** The client IP as Express resolved it behind `trust proxy`, never the raw header chain. */
   ip?: string | undefined;
   userAgent?: string | undefined;
   requestId?: string | undefined;
+  /** The client's `x-device-id` (F07), only when it is a UUID; the DB drops another shop's device. */
+  deviceId?: string | undefined;
 }
 
 /**
@@ -85,6 +89,9 @@ export function supabaseForRequest(
   if (meta?.ip) headers['x-forwarded-for'] = meta.ip;
   if (meta?.userAgent) headers['user-agent'] = meta.userAgent;
   if (meta?.requestId) headers['x-request-id'] = meta.requestId;
+  // app.write_audit (F07) reads these request headers for every audit row.
+  const deviceId = validDeviceId(meta?.deviceId);
+  if (deviceId) headers['x-device-id'] = deviceId;
   return createClient<Database>(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
     auth: baseAuthOptions,
     global: { headers },
