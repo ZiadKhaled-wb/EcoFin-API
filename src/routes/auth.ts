@@ -17,6 +17,7 @@ import {
 } from '@ziadkhaled-wb/contracts';
 import { asyncHandler } from '../utils/asyncHandler';
 import { authenticate } from '../middleware/auth';
+import { authenticatedOnly, publicRoute } from '../middleware/permissions';
 import { requestContext } from '../middleware/requestContext';
 import { validate } from '../middleware/validate';
 import {
@@ -30,9 +31,11 @@ import * as authController from '../controllers/auth.controller';
 const router = Router();
 
 // --- Public -----------------------------------------------------------------
+// D19: each route has one access marker (publicRoute / authenticatedOnly / requirePermission).
 // F05: validate() whitelists each request by its contract schema (no schema = nothing accepted).
 router.post(
   '/login',
+  publicRoute(),
   loginLimiter,
   validate({ body: AuthLoginBody }),
   asyncHandler(authController.login),
@@ -41,18 +44,21 @@ router.post(
 // use up the login budget.
 router.post(
   '/refresh',
+  publicRoute(),
   refreshLimiter,
   validate({ body: AuthRefreshBody }),
   asyncHandler(authController.refresh),
 );
 router.post(
   '/forgot-password',
+  publicRoute(),
   forgotPasswordLimiter,
   validate({ body: AuthForgotPasswordBody }),
   asyncHandler(authController.forgotPassword),
 );
 router.post(
   '/reset-password',
+  publicRoute(),
   resetPasswordLimiter,
   validate({ body: AuthResetPasswordBody }),
   asyncHandler(authController.resetPassword),
@@ -67,13 +73,21 @@ router.get(
   '/me',
   authenticate,
   contextAllowingPasswordChange,
+  authenticatedOnly(),
   validate(),
   asyncHandler(authController.me),
 );
-router.post('/logout', authenticate, validate(), asyncHandler(authController.logout));
+router.post(
+  '/logout',
+  authenticate,
+  authenticatedOnly(),
+  validate(),
+  asyncHandler(authController.logout),
+);
 router.post(
   '/select-shop',
   authenticate,
+  authenticatedOnly(),
   validate({ body: AuthSelectShopBody }),
   asyncHandler(authController.selectShop),
 );
@@ -81,6 +95,7 @@ router.post(
   '/change-password',
   authenticate,
   contextAllowingPasswordChange,
+  authenticatedOnly(),
   validate({ body: AuthChangePasswordBody }),
   asyncHandler(authController.changePassword),
 );

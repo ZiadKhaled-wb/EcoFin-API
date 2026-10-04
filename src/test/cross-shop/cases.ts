@@ -12,6 +12,12 @@ import { crossShopCase, SHOP_A, SHOP_B } from './harness';
 const OWNER_A = 'owner.one@ecotech.test';
 const OWNER_B = 'owner.two@ecotech.test';
 const SEED_PASSWORD = 'LocalDev-Only-2026!';
+// Seed ids (supabase/seeds/02_dev_data.sql).
+const SHOP_A_BR1 = 'd2000000-0000-0000-0000-000000000011';
+const SHOP_A_BR2 = 'd2000000-0000-0000-0000-000000000012';
+const SHOP_B_BR1 = 'd2000000-0000-0000-0000-000000000021';
+const CASHIER_A = 'd3000000-0000-0000-0000-000000000012';
+const CASHIER_B = 'd3000000-0000-0000-0000-000000000022';
 
 crossShopCase({
   method: 'GET',
@@ -98,5 +104,86 @@ crossShopCase({
     const bStill = await h.call('GET', '/api/auth/me', { token: b.accessToken });
     h.expect(bStill.res.status).toBe(200);
     h.expect((bStill.res.body as { org: { id: string } }).org.id).toBe(SHOP_B);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/me/permissions',
+  name: "shop A's owner can't read shop B's permissions; own answer lists only shop A branches",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const aimed = await h.call('GET', '/api/me/permissions', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(aimed.res.status).toBe(403);
+    h.expect(h.code(aimed.res)).toBe('SHOP_NOT_ALLOWED');
+
+    const own = await h.call('GET', '/api/me/permissions', { token: a.accessToken });
+    h.expect(own.res.status).toBe(200);
+    const body = own.res.body as { keys: string[]; branchIds: string[]; allBranches: boolean };
+    h.expect(body.allBranches).toBe(true);
+    h.expect(body.branchIds.sort()).toEqual([SHOP_A_BR1, SHOP_A_BR2]);
+    h.expect(body.branchIds).not.toContain(SHOP_B_BR1);
+  },
+});
+
+crossShopCase({
+  method: 'PUT',
+  path: '/api/employees/:employeeId/permissions',
+  name: "shop A's owner on shop B's employee: 404, nothing changed or written in B",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const before = await h.accessOf(CASHIER_B);
+    const body = { permissionKey: 'sale.void', granted: true, reason: 'cross-shop test' };
+
+    const byId = await h.call('PUT', `/api/employees/${CASHIER_B}/permissions`, {
+      token: a.accessToken,
+      body,
+    });
+    h.expect(byId.res.status).toBe(404);
+    h.expect(h.code(byId.res)).toBe('NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, byId.ip)).toBe(0);
+
+    const byHeader = await h.call('PUT', `/api/employees/${CASHIER_B}/permissions`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(byHeader.res.status).toBe(403);
+    h.expect(h.code(byHeader.res)).toBe('SHOP_NOT_ALLOWED');
+    h.expect(await h.auditRowsFrom(SHOP_B, byHeader.ip)).toBe(0);
+
+    h.expect(await h.accessOf(CASHIER_B)).toEqual(before);
+  },
+});
+
+crossShopCase({
+  method: 'PUT',
+  path: '/api/employees/:employeeId/branches',
+  name: "shop A's owner: B's employee is 404, B's branch is refused; nothing changed",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const beforeB = await h.accessOf(CASHIER_B);
+    const beforeA = await h.accessOf(CASHIER_A);
+
+    const otherEmployee = await h.call('PUT', `/api/employees/${CASHIER_B}/branches`, {
+      token: a.accessToken,
+      body: { branchIds: [SHOP_A_BR1], reason: 'cross-shop test' },
+    });
+    h.expect(otherEmployee.res.status).toBe(404);
+    h.expect(h.code(otherEmployee.res)).toBe('NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, otherEmployee.ip)).toBe(0);
+
+    const otherBranch = await h.call('PUT', `/api/employees/${CASHIER_A}/branches`, {
+      token: a.accessToken,
+      body: { branchIds: [SHOP_A_BR1, SHOP_B_BR1], reason: 'cross-shop test' },
+    });
+    h.expect(otherBranch.res.status).toBe(422);
+    h.expect(h.code(otherBranch.res)).toBe('BRANCH_NOT_IN_ORG');
+
+    h.expect(await h.accessOf(CASHIER_B)).toEqual(beforeB);
+    h.expect(await h.accessOf(CASHIER_A)).toEqual(beforeA);
   },
 });

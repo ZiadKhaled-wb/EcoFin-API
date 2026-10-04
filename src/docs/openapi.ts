@@ -29,6 +29,7 @@ export const openApiSpec = {
         { name: 'Health', description: 'Health check' },
         { name: 'Auth — public', description: 'No authentication required' },
         { name: 'Auth — authenticated', description: 'Requires a bearer JWT' },
+        { name: 'Access (F06)', description: 'Permissions and branch scope' },
     ],
     components: {
         securitySchemes: {
@@ -491,6 +492,131 @@ export const openApiSpec = {
                     401: { $ref: '#/components/responses/Error' },
                     403: { $ref: '#/components/responses/Error' },
                     429: { $ref: '#/components/responses/Error' },
+                },
+            },
+        },
+        '/api/me/permissions': {
+            get: {
+                tags: ['Access (F06)'],
+                summary: 'Your effective permissions and branches',
+                description:
+                    'Role defaults plus or minus per-employee overrides; the owner has every key and every branch (allBranches: true).',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: {
+                    200: {
+                        description: 'Permission keys and branch scope',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    required: ['keys', 'branchIds', 'allBranches'],
+                                    properties: {
+                                        keys: { type: 'array', items: { type: 'string', example: 'sale.create' } },
+                                        branchIds: { type: 'array', items: { type: 'string', format: 'uuid' } },
+                                        allBranches: { type: 'boolean' },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    401: { $ref: '#/components/responses/Error' },
+                    403: { $ref: '#/components/responses/Error' },
+                },
+            },
+        },
+        '/api/employees/{employeeId}/permissions': {
+            put: {
+                tags: ['Access (F06)'],
+                summary: 'Add or remove one permission for an employee (employee.manage)',
+                description:
+                    'Setting a key back to the role default removes the override. Not allowed on the owner or on yourself (403 FORBIDDEN). Another shop\'s employee: 404. One audit row per call.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                additionalProperties: false,
+                                required: ['permissionKey', 'granted', 'reason'],
+                                properties: {
+                                    permissionKey: { type: 'string', example: 'sale.void' },
+                                    granted: { type: 'boolean' },
+                                    reason: { type: 'string', minLength: 1, maxLength: 500, description: 'Stored on the audit row' },
+                                },
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: 'The effective value',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        employeeId: { type: 'string', format: 'uuid' },
+                                        permissionKey: { type: 'string' },
+                                        granted: { type: 'boolean' },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: { $ref: '#/components/responses/Error' },
+                    401: { $ref: '#/components/responses/Error' },
+                    403: { $ref: '#/components/responses/Error' },
+                    404: { $ref: '#/components/responses/Error' },
+                },
+            },
+        },
+        '/api/employees/{employeeId}/branches': {
+            put: {
+                tags: ['Access (F06)'],
+                summary: 'Replace an employee\'s branch list (employee.manage)',
+                description:
+                    'Every branch must be in your shop (422 BRANCH_NOT_IN_ORG). An empty list removes every branch. Not allowed on the owner or on yourself. One audit row per call.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                additionalProperties: false,
+                                required: ['branchIds', 'reason'],
+                                properties: {
+                                    branchIds: { type: 'array', maxItems: 100, items: { type: 'string', format: 'uuid' } },
+                                    reason: { type: 'string', minLength: 1, maxLength: 500, description: 'Stored on the audit row' },
+                                },
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: 'The new branch list',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        employeeId: { type: 'string', format: 'uuid' },
+                                        branchIds: { type: 'array', items: { type: 'string', format: 'uuid' } },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: { $ref: '#/components/responses/Error' },
+                    401: { $ref: '#/components/responses/Error' },
+                    403: { $ref: '#/components/responses/Error' },
+                    404: { $ref: '#/components/responses/Error' },
+                    422: { $ref: '#/components/responses/Error' },
                 },
             },
         },

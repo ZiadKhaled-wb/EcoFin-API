@@ -49,6 +49,8 @@ export interface CrossShopHarness {
   code(res: Response): string;
   /** audit_log rows in `orgId` written from `ip` (service-role read, test only). */
   auditRowsFrom(orgId: string, ip: string): Promise<number>;
+  /** An employee's permission overrides and branch ids (service-role read, test only). */
+  accessOf(employeeId: string): Promise<{ overrides: string[]; branchIds: string[] }>;
 }
 
 export interface CrossShopCase {
@@ -77,7 +79,7 @@ export interface CrossShopReport {
 }
 
 export function checkCrossShop(
-  routes: readonly RouteInfo[],
+  routes: readonly Pick<RouteInfo, 'method' | 'path'>[],
   caseList: readonly Pick<CrossShopCase, 'method' | 'path'>[],
   publicRoutes: readonly string[] = PUBLIC_ROUTES,
 ): CrossShopReport {
