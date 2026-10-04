@@ -245,15 +245,18 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
           .query(query)
           .set('X-Forwarded-For', nextIp())
           .set('Authorization', `Bearer ${owner.accessToken}`);
+      // Other test files log in as this owner in parallel; a fixed upper bound keeps their
+      // new auth.login rows from shifting the pages between requests.
+      const to = new Date().toISOString();
       const two = AuditSearchResponse.parse(
-        (await get({ pageSize: 2, action: 'auth.login' })).body,
+        (await get({ pageSize: 2, action: 'auth.login', to })).body,
       );
       expect(two.items).toHaveLength(2);
       const p2 = AuditSearchResponse.parse(
-        (await get({ pageSize: 1, page: 2, action: 'auth.login' })).body,
+        (await get({ pageSize: 1, page: 2, action: 'auth.login', to })).body,
       );
       expect(p2.items[0]?.id).toBe(two.items[1]?.id);
-      const past = await get({ pageSize: 100, page: 10_000, action: 'auth.login' });
+      const past = await get({ pageSize: 100, page: 10_000, action: 'auth.login', to });
       expect(past.status).toBe(200);
       const pastBody = AuditSearchResponse.parse(past.body);
       expect(pastBody.items).toEqual([]);
