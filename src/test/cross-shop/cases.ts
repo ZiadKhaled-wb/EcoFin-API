@@ -187,3 +187,43 @@ crossShopCase({
     h.expect(await h.accessOf(CASHIER_A)).toEqual(beforeA);
   },
 });
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/audit',
+  name: "shop A's owner never sees shop B's audit rows, can't aim at B or pass an org",
+  async run(h) {
+    const OWNER_B_EMPLOYEE = 'd3000000-0000-0000-0000-000000000021';
+    await h.login(OWNER_B); // writes an auth.login row in shop B
+    const a = await h.login(OWNER_A);
+
+    const byActor = await h.call('GET', '/api/audit', {
+      token: a.accessToken,
+      query: `actorEmployeeId=${OWNER_B_EMPLOYEE}&action=auth.login`,
+    });
+    h.expect(byActor.res.status).toBe(200);
+    h.expect((byActor.res.body as { total: number }).total).toBe(0);
+
+    const page = await h.call('GET', '/api/audit', {
+      token: a.accessToken,
+      query: 'pageSize=100',
+    });
+    h.expect(page.res.status).toBe(200);
+    const rows = (
+      page.res.body as { items: { employeeId: string | null; branchId: string | null }[] }
+    ).items;
+    h.expect(rows.length).toBeGreaterThan(0); // A's own logins are there
+    h.expect(rows.some((r) => r.employeeId === OWNER_B_EMPLOYEE)).toBe(false);
+    h.expect(rows.some((r) => r.branchId === SHOP_B_BR1)).toBe(false);
+
+    const aimed = await h.call('GET', '/api/audit', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(aimed.res.status).toBe(403);
+    h.expect(h.code(aimed.res)).toBe('SHOP_NOT_ALLOWED');
+
+    const orgInQuery = await h.call('GET', '/api/audit', {
+      token: a.accessToken,
+      query: `organization_id=${SHOP_B}`,
+    });
+    h.expect(orgInQuery.res.status).toBe(400);
+  },
+});

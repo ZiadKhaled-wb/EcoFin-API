@@ -85,6 +85,12 @@ export const isValidTenantSlug = (value: unknown): value is string => {
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
+const DEVICE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The client's x-device-id (F07) when it is a UUID (lower-cased), else undefined. */
+export const validDeviceId = (value: unknown): string | undefined =>
+  typeof value === 'string' && DEVICE_ID.test(value) ? value.toLowerCase() : undefined;
+
 export const isValidIdempotencyKey = (value: unknown): value is string => {
   if (typeof value !== 'string') return false;
   return UUID_V4.test(value) || ULID.test(value);

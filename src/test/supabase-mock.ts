@@ -30,11 +30,13 @@ export interface SupabaseMock {
   select: Mock;
   eq: Mock;
   gte: Mock;
+  lte: Mock;
   neq: Mock;
   in: Mock;
   is: Mock;
   order: Mock;
   limit: Mock;
+  range: Mock;
   update: Mock;
   insert: Mock;
   delete: Mock;
@@ -63,11 +65,13 @@ const CHAINABLE = [
   'select',
   'eq',
   'gte',
+  'lte',
   'neq',
   'in',
   'is',
   'order',
   'limit',
+  'range',
   'update',
   'insert',
   'delete',

@@ -47,6 +47,36 @@ describe('supabaseForRequest', () => {
   it('refuses an empty token instead of falling back to anon', () => {
     expect(() => supabaseForRequest('')).toThrow();
   });
+
+  // F07: app.write_audit reads these headers for every audit row.
+  it('forwards request id, resolved IP, user agent and a valid device id', () => {
+    const device = '44444444-4444-4444-8444-44444444ABCD';
+    supabaseForRequest('jwt-a', undefined, {
+      ip: '203.0.113.9',
+      userAgent: 'Mozilla/5.0 test',
+      requestId: 'req-123',
+      deviceId: device,
+    });
+    expect(created.calls[0]?.options['global']).toEqual({
+      headers: {
+        Authorization: 'Bearer jwt-a',
+        'x-forwarded-for': '203.0.113.9',
+        'user-agent': 'Mozilla/5.0 test',
+        'x-request-id': 'req-123',
+        'x-device-id': device.toLowerCase(),
+      },
+    });
+  });
+
+  it.each([['not-a-uuid'], ['44444444-4444-4444-8444-444444444444, 55555555'], ['']])(
+    'never forwards an invalid device id (%s)',
+    (deviceId) => {
+      supabaseForRequest('jwt-a', undefined, { deviceId });
+      const headers = (created.calls[0]?.options['global'] as { headers: Record<string, string> })
+        .headers;
+      expect(headers).not.toHaveProperty('x-device-id');
+    },
+  );
 });
 
 describe('createAuthClient', () => {

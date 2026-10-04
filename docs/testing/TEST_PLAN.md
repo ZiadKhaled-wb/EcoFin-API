@@ -33,6 +33,9 @@ npm run db:smoke -- supabase/tests/f05_tenant_test.sql
 
 npm run db:smoke -- supabase/tests/f06_permissions_test.sql
 # Expected: "passed 67, failed 0" (F06 permissions + grant limits)
+
+npm run db:smoke -- supabase/tests/f07_audit_test.sql
+# Expected: "passed 20, failed 0" (F07 audit log)
 ```
 
 ### Contracts
@@ -129,6 +132,7 @@ E2E_OWNER_EMAIL=owner.one@ecotech.test \
 | F04 | B6-46 | Refresh immediately after change-password | integration | same | two logins; change password on the first; refresh both at once | other session 401 `TOKEN_INVALID`; this one 200 | auth.sessions.integration.test.ts: "refresh immediately after change-password…" | passing now (local + CI db job) |
 | F05 | B8-01…22 | Tenant isolation: context + status gate, org keys refused, strict validate, assertSameOrg, file paths, cross-shop suite and CI gate, SQL grants/RLS/storage | unit + SQL + integration | see `docs/testing/plans/B8.md` | see B8.md | see B8.md | src/middleware/*.test.ts, src/utils/tenant.test.ts, src/test/cross-shop/*, supabase/tests/f05_tenant_test.sql | passing now (CI on PR 9: check + db green) |
 | F06 | B10-01…22 | Permissions: all 61 keys denied/granted/removed/owner, setters (permission, other shop, reason, owner/self, one audit row), my_permissions, middleware over 61 keys, route markers + CI check, HTTP and cross-shop | unit + SQL + integration | see `docs/testing/plans/B10.md` (client: EcoFin-Web B10-web.md) | see B10.md | see B10.md | supabase/tests/f06_permissions_test.sql, src/middleware/permissions.test.ts, src/test/route-access/*, src/routes/employees.integration.test.ts | passing now (local) |
+| F07 | B11-01…14 | Audit: forwarded headers (request id, resolved IP, user agent, device), search endpoint (audit.view, filters, pagination, actor names), audit registry + CI check, one row per write route, append-only and read rules in SQL, cross-shop | unit + SQL + integration | see `docs/testing/plans/B11.md` (client: EcoFin-Web B11-web.md) | see B11.md | see B11.md | src/routes/audit*.test.ts, src/test/audit-registry/*, supabase/tests/f07_audit_test.sql | passing now (local) |
 | F04 | B6-40 | Local JWT expiry 15 min and reset link to the web page (D24) | manual | stack restarted after the config change | curl password grant; forgot-password; read the Mailpit message | `expires_in: 900`; link has `redirect_to=http://localhost:5173/reset-password` | n.a. (supabase/config.toml) | manual (observed) |
 | F04 | B7-19 | e2e: expired access token, refresh runs, the NEW token works | e2e | RUN_E2E=1, API + Supabase running, seeded owner | `... -g "expired access token"` | /api/auth/refresh returns 200; stored token replaced; `GET /api/auth/me` with the new token and orgId returns 200 (old-token rejection not asserted: the contract does not promise rotation) | e2e/auth.spec.ts: expired access token: the silent refresh runs and the NEW token works on /me | written-skipped |
 | F04 | B7-19b | e2e: 401 path, exactly one refresh, retried call succeeds | e2e | as above | `... -g "401 path"` | garbage token + future expiry; two parallel calls through the app's api client both return 200; exactly 1 refresh request | e2e/auth.spec.ts: 401 path: a garbage token with a future expiry... | written-skipped |
@@ -185,4 +189,4 @@ E2E_OWNER_EMAIL=owner.one@ecotech.test \
 
 ## Deferred stories
 
-**F05 (B8):** `docs/testing/plans/B8.md`. **F06 (B10):** `docs/testing/plans/B10.md` + EcoFin-Web `B10-web.md`. **F07 (B11):** plan not written yet.
+**F05 (B8):** `docs/testing/plans/B8.md`. **F06 (B10):** `docs/testing/plans/B10.md` + EcoFin-Web `B10-web.md`. **F07 (B11):** `docs/testing/plans/B11.md` + EcoFin-Web `B11-web.md`.

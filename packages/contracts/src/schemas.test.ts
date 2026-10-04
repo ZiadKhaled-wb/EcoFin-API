@@ -328,6 +328,7 @@ describe('audit schemas', () => {
       id: 1,
       branchId: null,
       employeeId: id,
+      actorName: 'Owner One',
       superAdminId: null,
       deviceId: null,
       ip: '1.2.3.4',
@@ -345,6 +346,20 @@ describe('audit schemas', () => {
     expect(
       AuditSearch.response.safeParse({ items: [row], page: 1, pageSize: 50, total: 1 }).success,
     ).toBe(true);
+    // 0.3.0: actorName is required (null for platform actions).
+    expect(
+      AuditSearch.response.safeParse({
+        items: [{ ...row, employeeId: null, actorName: null }],
+        page: 1,
+        pageSize: 50,
+        total: 1,
+      }).success,
+    ).toBe(true);
+    const { actorName: _omit, ...withoutName } = row;
+    expect(
+      AuditSearch.response.safeParse({ items: [withoutName], page: 1, pageSize: 50, total: 1 })
+        .success,
+    ).toBe(false);
     expect(
       AuditSearch.response.safeParse({
         items: [{ ...row, severity: 'fatal' }],

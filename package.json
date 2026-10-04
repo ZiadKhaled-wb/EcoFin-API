@@ -37,10 +37,12 @@
     "precheck:cross-shop": "npm run build:contracts",
     "check:cross-shop": "tsx scripts/check-cross-shop.ts",
     "precheck:permissions": "npm run build:contracts",
-    "check:permissions": "tsx scripts/check-permissions.ts"
+    "check:permissions": "tsx scripts/check-permissions.ts",
+    "precheck:audit": "npm run build:contracts",
+    "check:audit": "tsx scripts/check-audit.ts"
   },
   "dependencies": {
-    "@ziadkhaled-wb/contracts": "0.2.0",
+    "@ziadkhaled-wb/contracts": "0.3.0",
     "@supabase/supabase-js": "^2.117.2",
     "cors": "^2.8.6",
     "dotenv": "^18.0.4",

@@ -16,6 +16,7 @@ import {
   type DbClient,
   type RequestMeta,
 } from '../utils/supabase';
+import { validDeviceId } from '../utils/validation';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError, BadRequest, ServerError, Unauthorized } from '../utils/errors';
 import { logger } from '../utils/logger';
@@ -78,7 +79,12 @@ export const authenticate = asyncHandler(
 );
 
 export function requestMeta(req: Request): RequestMeta {
-  return { ip: req.ip, userAgent: req.get('user-agent'), requestId: req.requestId };
+  return {
+    ip: req.ip,
+    userAgent: req.get('user-agent'),
+    requestId: req.requestId,
+    deviceId: validDeviceId(req.get('x-device-id')),
+  };
 }
 
 /** A per-request client for the authenticated caller. Throws if `authenticate` did not run. */
