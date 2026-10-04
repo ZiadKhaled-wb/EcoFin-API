@@ -131,6 +131,13 @@ jobs:
       - name: F07 audit SQL test
         run: node scripts/db-smoke.mjs supabase/tests/f07_audit_test.sql
 
+      - name: F11 numbering SQL test
+        run: node scripts/db-smoke.mjs supabase/tests/f11_numbering_test.sql
+
+      # 1,000 concurrent document creations (pgbench from the db image) with rollbacks mixed in.
+      - name: F11 numbering concurrency proof
+        run: node scripts/db-numbering-proof.mjs
+
       # Local demo keys printed by the CLI for this throwaway stack, not secrets.
       - name: Integration tests (RUN_INTEGRATION=1, auth + cross-shop)
         run: |
