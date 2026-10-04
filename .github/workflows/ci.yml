@@ -42,6 +42,11 @@ jobs:
       - name: Cross-shop route check
         run: npm run check:cross-shop
 
+      # F06 / D19: every route needs exactly one access marker (requirePermission(key),
+      # authenticatedOnly() or publicRoute()); this names any route without one.
+      - name: Permission marker check
+        run: npm run check:permissions
+
       - name: Build
         run: npm run build
 
@@ -115,6 +120,9 @@ jobs:
 
       - name: F05 tenant SQL test
         run: node scripts/db-smoke.mjs supabase/tests/f05_tenant_test.sql
+
+      - name: F06 permissions SQL test
+        run: node scripts/db-smoke.mjs supabase/tests/f06_permissions_test.sql
 
       # Local demo keys printed by the CLI for this throwaway stack, not secrets.
       - name: Integration tests (RUN_INTEGRATION=1, auth + cross-shop)

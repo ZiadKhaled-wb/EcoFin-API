@@ -35,10 +35,12 @@
     "db:types": "npx -y supabase@2.119.0 gen types typescript --local --schema public | node scripts/db-types.mjs",
     "db:smoke": "node scripts/db-smoke.mjs",
     "precheck:cross-shop": "npm run build:contracts",
-    "check:cross-shop": "tsx scripts/check-cross-shop.ts"
+    "check:cross-shop": "tsx scripts/check-cross-shop.ts",
+    "precheck:permissions": "npm run build:contracts",
+    "check:permissions": "tsx scripts/check-permissions.ts"
   },
   "dependencies": {
-    "@ziadkhaled-wb/contracts": "0.1.0",
+    "@ziadkhaled-wb/contracts": "0.2.0",
     "@supabase/supabase-js": "^2.117.2",
     "cors": "^2.8.6",
     "dotenv": "^18.0.4",

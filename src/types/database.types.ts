@@ -7816,6 +7816,14 @@ export type Database = {
       auth_record_login: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_password_change: { Args: Record<PropertyKey, never>; Returns: undefined };
+      my_permissions: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          all_branches: boolean;
+          branch_ids: string[];
+          keys: string[];
+        }[];
+      };
       my_shops: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -7835,6 +7843,26 @@ export type Database = {
           organization_id: string | null;
           refusal: string | null;
           role: Database['public']['Enums']['employee_role'] | null;
+        }[];
+      };
+      set_employee_branches: {
+        Args: { p_branch_ids: string[]; p_employee_id: string; p_reason: string };
+        Returns: {
+          branch_ids: string[];
+          employee_id: string;
+        }[];
+      };
+      set_employee_permission: {
+        Args: {
+          p_employee_id: string;
+          p_granted: boolean;
+          p_permission_key: string;
+          p_reason: string;
+        };
+        Returns: {
+          employee_id: string;
+          granted: boolean;
+          permission_key: string;
         }[];
       };
     };

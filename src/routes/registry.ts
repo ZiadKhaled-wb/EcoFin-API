@@ -13,6 +13,8 @@ export interface RouteInfo {
   method: string;
   /** Full path as mounted, e.g. /api/auth/me. */
   path: string;
+  /** The route's own handler chain, in order (route markers such as requirePermission live here). */
+  handlers: unknown[];
 }
 
 const prefixes = new WeakMap<Application, Map<unknown, string>>();
@@ -32,7 +34,7 @@ export function mountRouter(app: Application, prefix: string, router: Router): v
 interface Layer {
   name: string;
   handle: unknown;
-  route?: { path: unknown; methods: Record<string, boolean | undefined> };
+  route?: { path: unknown; methods: Record<string, boolean | undefined>; stack?: unknown };
 }
 
 function stackOf(holder: unknown): Layer[] {
@@ -48,12 +50,17 @@ function join(prefix: string, path: string): string {
 function routesOf(layer: Layer, prefix: string, where: string): RouteInfo[] {
   if (!layer.route) return [];
   const { path, methods } = layer.route;
+  const handlers = stackOf(layer.route).map((inner) => inner.handle);
   if (typeof path !== 'string') {
     throw new Error(`listRoutes: ${where} has a non-string route path; use a string path.`);
   }
   return Object.keys(methods)
     .filter((m) => methods[m])
-    .map((m) => ({ method: m === '_all' ? 'ALL' : m.toUpperCase(), path: join(prefix, path) }));
+    .map((m) => ({
+      method: m === '_all' ? 'ALL' : m.toUpperCase(),
+      path: join(prefix, path),
+      handlers,
+    }));
 }
 
 /** Every route the app serves, sorted by path then method. */
@@ -83,4 +90,5 @@ export function listRoutes(app: Application): RouteInfo[] {
 }
 
 /** `GET /api/auth/me`: the key used by route registries (cross-shop cases, F06, F07). */
-export const routeKey = (route: RouteInfo): string => `${route.method} ${route.path}`;
+export const routeKey = (route: Pick<RouteInfo, 'method' | 'path'>): string =>
+  `${route.method} ${route.path}`;

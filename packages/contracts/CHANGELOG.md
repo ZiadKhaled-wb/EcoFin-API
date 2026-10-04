@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- Access (F06): the employee id moves from the request bodies to the path (`EmployeeIdParams`, used by `PUT /employees/:employeeId/permissions` and `/branches`); `EmployeeBranchesAssignBody` gains a required `reason` (stored on the audit row), like the permission override. Breaking for these two bodies only; nothing used them in 0.1.0.
+
 ## 0.1.0
 
 - First release: common types (Uuid, Money, dates, pagination, idempotency key), error codes and shape, roles, 61 permission keys with role defaults, schemas for auth (F04), access (F06), audit search (F07) and health (F08).

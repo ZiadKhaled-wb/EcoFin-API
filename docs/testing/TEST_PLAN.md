@@ -30,6 +30,9 @@ npm run db:smoke -- supabase/tests/f04_auth_test.sql
 
 npm run db:smoke -- supabase/tests/f05_tenant_test.sql
 # Expected: "passed 41, failed 0" (F05 tenant isolation)
+
+npm run db:smoke -- supabase/tests/f06_permissions_test.sql
+# Expected: "passed 52, failed 0" (F06 permissions)
 ```
 
 ### Contracts
@@ -125,6 +128,7 @@ E2E_OWNER_EMAIL=owner.one@ecotech.test \
 | F04 | B6-45 | Refresh immediately after logout | integration | same | two logins of one user; logout the first; refresh both at once | first 401 `TOKEN_INVALID`; second 200 (only one session ended) | auth.sessions.integration.test.ts: "refresh immediately after logout is refused…" | passing now (local + CI db job) |
 | F04 | B6-46 | Refresh immediately after change-password | integration | same | two logins; change password on the first; refresh both at once | other session 401 `TOKEN_INVALID`; this one 200 | auth.sessions.integration.test.ts: "refresh immediately after change-password…" | passing now (local + CI db job) |
 | F05 | B8-01…22 | Tenant isolation: context + status gate, org keys refused, strict validate, assertSameOrg, file paths, cross-shop suite and CI gate, SQL grants/RLS/storage | unit + SQL + integration | see `docs/testing/plans/B8.md` | see B8.md | see B8.md | src/middleware/*.test.ts, src/utils/tenant.test.ts, src/test/cross-shop/*, supabase/tests/f05_tenant_test.sql | passing now (CI on PR 9: check + db green) |
+| F06 | B10-01…22 | Permissions: all 61 keys denied/granted/removed/owner, setters (permission, other shop, reason, owner/self, one audit row), my_permissions, middleware over 61 keys, route markers + CI check, HTTP and cross-shop | unit + SQL + integration | see `docs/testing/plans/B10.md` (client: EcoFin-Web B10-web.md) | see B10.md | see B10.md | supabase/tests/f06_permissions_test.sql, src/middleware/permissions.test.ts, src/test/route-access/*, src/routes/employees.integration.test.ts | passing now (local) |
 | F04 | B6-40 | Local JWT expiry 15 min and reset link to the web page (D24) | manual | stack restarted after the config change | curl password grant; forgot-password; read the Mailpit message | `expires_in: 900`; link has `redirect_to=http://localhost:5173/reset-password` | n.a. (supabase/config.toml) | manual (observed) |
 | F04 | B7-19 | e2e: expired access token, refresh runs, the NEW token works | e2e | RUN_E2E=1, API + Supabase running, seeded owner | `... -g "expired access token"` | /api/auth/refresh returns 200; stored token replaced; `GET /api/auth/me` with the new token and orgId returns 200 (old-token rejection not asserted: the contract does not promise rotation) | e2e/auth.spec.ts: expired access token: the silent refresh runs and the NEW token works on /me | written-skipped |
 | F04 | B7-19b | e2e: 401 path, exactly one refresh, retried call succeeds | e2e | as above | `... -g "401 path"` | garbage token + future expiry; two parallel calls through the app's api client both return 200; exactly 1 refresh request | e2e/auth.spec.ts: 401 path: a garbage token with a future expiry... | written-skipped |
@@ -173,7 +177,7 @@ E2E_OWNER_EMAIL=owner.one@ecotech.test \
 - Language choice surviving a reload: already covered by B9-20 (passing locally).
 - The walkthrough (B7-24, B9-23) found the top bar overflowing below ~720 px and dropdowns wider than a phone screen with long names; both fixed in EcoFin-Web.
 
-**Still open:** B9-21 and B9-22 (the 403 guard) need F06's `GET /api/me/permissions`; they fail until F06 ships.
+**B9-21 and B9-22** (the 403 guard) pass since F06 serves `GET /api/me/permissions` (local run, 4 Oct).
 
 ## 4 Oct 2026 run (local stack)
 - API: `RUN_INTEGRATION=1` full suite 290/290; SQL smoke 79/0, f04 48/0, f05 41/0. CI `db` job now runs the SQL tests and the integration suites on every PR.
@@ -181,4 +185,4 @@ E2E_OWNER_EMAIL=owner.one@ecotech.test \
 
 ## Deferred stories
 
-**F05 (B8):** plan in `docs/testing/plans/B8.md`. **F06 (B10), F07 (B11):** plans not written yet.
+**F05 (B8):** `docs/testing/plans/B8.md`. **F06 (B10):** `docs/testing/plans/B10.md` + EcoFin-Web `B10-web.md`. **F07 (B11):** plan not written yet.

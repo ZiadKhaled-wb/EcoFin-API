@@ -2,7 +2,9 @@
 import express from 'express';
 import type { Router } from 'express';
 import authRoutes from './routes/auth.js';
+import employeesRoutes from './routes/employees.js';
 import healthRoutes from './routes/health.js';
+import meRoutes from './routes/me.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { noClientOrg } from './middleware/noClientOrg.js';
 import { requestId } from './middleware/requestId.js';
@@ -39,6 +41,8 @@ export function createApp(options: CreateAppOptions = {}) {
   if (options.docsRouter) mountRouter(app, '/docs', options.docsRouter);
 
   mountRouter(app, '/api/auth', authRoutes);
+  mountRouter(app, '/api/me', meRoutes);
+  mountRouter(app, '/api/employees', employeesRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
