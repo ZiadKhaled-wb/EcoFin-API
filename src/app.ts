@@ -4,6 +4,7 @@ import type { Router } from 'express';
 import authRoutes from './routes/auth.js';
 import healthRoutes from './routes/health.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { noClientOrg } from './middleware/noClientOrg.js';
 import { requestId } from './middleware/requestId.js';
 import { corsAllowList, securityHeaders } from './middleware/security.js';
 import { getEnv, type Env } from './utils/env.js';
@@ -27,6 +28,8 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use(securityHeaders());
   app.use(corsAllowList(env.CORS_ALLOWED_ORIGINS));
   app.use(express.json({ limit: '1mb' }));
+  // F05: the shop comes from the session, never from the body or query.
+  app.use(noClientOrg);
 
   app.use('/health', healthRoutes);
 
