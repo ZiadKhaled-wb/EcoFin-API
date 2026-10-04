@@ -1,3 +1,5 @@
+> **Historical (written when contracts were a separate repo).** Since D26 this package lives in `EcoFin-API/packages/contracts` as an npm workspace; `file:../EcoFin-Contracts` no longer applies. Current rules: `EcoFin-API/docs/tasks/SPRINT1_RULES.md` and `EcoFin-API/DECISIONS.md`.
+
 # Sprint 1: rules for every builder and reviewer
 
 Read this, then your own `docs/tasks/<ID>.md`. It applies to every Sprint 1 task in every repo (API, Web, Contracts).

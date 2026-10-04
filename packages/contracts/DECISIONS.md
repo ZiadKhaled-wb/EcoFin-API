@@ -1,3 +1,5 @@
+> **Historical (written when contracts were a separate repo).** Since D26 this package lives in `EcoFin-API/packages/contracts` as an npm workspace; `file:../EcoFin-Contracts` no longer applies. Current rules: `EcoFin-API/docs/tasks/SPRINT1_RULES.md` and `EcoFin-API/DECISIONS.md`.
+
 # Decisions (contracts repo)
 
 Full list with reasons: `EcoFin-API/DECISIONS.md`. These are the ones that affect this package.
