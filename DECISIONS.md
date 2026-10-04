@@ -105,3 +105,12 @@ Supabase tokens carry no shop. The active shop is chosen per request by the `x-o
 - No file may reference a `../` path outside its repo. No Dockerfile changes.
 - GitHub Packages requires the npm scope to equal the owning GitHub user/org: publishing `@ecotech/*` needs a GitHub org `ecotech` (or a scope rename). See the run report.
 - The old `EcoFin-Contracts` folder is deleted after the move; its history is kept inside `EcoFin-API`.
+
+### D27. The API runs as a Docker container on an Azure VM; Cloudflare Workers removed (Q01 · EC-103; user decision, 4 Oct)
+- Development API: `https://20.56.139.170.sslip.io` (Caddy + Let's Encrypt in front of the container). Every push to `main` that passes CI runs `.github/workflows/deploy-dev.yml`: `supabase db push` (EcoFin-Development) → image `ghcr.io/ziadkhaled-wb/ecofin-api:sha-<commit>` → deploy over SSH → HTTPS smoke test. Runbook: `docs/05-operations/deployment.md`.
+- `src/worker.ts`, `wrangler.jsonc`, the `cloudflare:node` type shim, the `*:worker` scripts and the wrangler packages are gone. Do not reintroduce them.
+- `npm run build` = `tsc --noEmit` + an esbuild bundle of `src/server.ts` (dependencies stay external). Plain `tsc` output cannot start under Node: relative imports have no `.js` extension (`ERR_MODULE_NOT_FOUND`).
+- Supersedes the "no Dockerfile changes" line of D26: the `Dockerfile` installs the workspace, builds `packages/contracts` and ships its `dist/` next to the bundle.
+- Production (`NODE_ENV=production`) requires `CORS_ALLOWED_ORIGINS`; it is set on the VM (`/opt/ecofin/api.env`).
+- `integration/sprint-1` goes to `main` with `EcoFin-Web` still on the vendored contracts tarball (D26 called that a blocker). Accepted temporarily to unblock deployment; publishing `@ecotech/contracts` (org or scope decision) stays open and must replace the tarball.
+- Local dev: npm workspaces need a file system with symlinks/junctions. A repo on an exFAT drive fails `npm ci` with `EISDIR ... symlink`; keep the repos on NTFS (or WSL).

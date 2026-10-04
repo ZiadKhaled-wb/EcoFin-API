@@ -66,8 +66,7 @@ function getRedisCall(): Promise<RedisCall | undefined> {
     const url = getEnv().RATE_LIMIT_REDIS_URL;
     if (!url) return undefined;
     try {
-      // Dynamic import: ioredis uses raw TCP, which Cloudflare Workers don't support,
-      // so this fails gracefully there.
+      // Dynamic import: ioredis is only loaded when RATE_LIMIT_REDIS_URL is set.
       const { default: Redis } = await import('ioredis');
       const client = new Redis(url);
       return (command, ...args) => client.call(command, ...args) as Promise<RedisReply>;

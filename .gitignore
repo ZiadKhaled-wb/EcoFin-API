@@ -28,8 +28,6 @@ logs/
 coverage/
 .vitest/
 
-# Wrangler local state
-.wrangler/
 
 # OS
 Thumbs.db

@@ -1,1 +1,6 @@
 * text=auto eol=lf
+
+# Executed on Linux (VM, containers): must stay LF even if the rule above changes.
+*.sh            text eol=lf
+deploy/**       text eol=lf
+Dockerfile      text eol=lf

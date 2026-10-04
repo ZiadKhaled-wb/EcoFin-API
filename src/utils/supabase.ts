@@ -46,7 +46,7 @@ export interface RequestMeta {
 
 /**
  * The env is read on first use, not at import, so importing this module never throws and tests
- * can import it freely. Startup validates the env separately (getEnv() in server.ts / worker.ts).
+ * can import it freely. Startup validates the env separately (getEnv() in server.ts).
  */
 function lazyClient(create: () => SupabaseClient): SupabaseClient {
   let client: SupabaseClient | undefined;

@@ -1,7 +1,6 @@
 node_modules/
 dist/
 coverage/
-.wrangler/
 package-lock.json
 graphify-out/
 supabase/
@@ -10,4 +9,3 @@ docs/
 .claude/
 .github/
 *.md
-wrangler.jsonc

@@ -2,7 +2,7 @@
 //
 // Environment configuration. Nothing here runs at import time: `loadEnv()` parses a source and
 // either returns the typed env or throws ONE error naming every bad or missing variable (never
-// their values). `server.ts` / `worker.ts` call `getEnv()` on startup so a bad deployment stops
+// their values). `server.ts` calls `getEnv()` on startup so a bad deployment stops
 // with a clear message; tests can import any module freely.
 import 'dotenv/config';
 

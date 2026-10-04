@@ -83,3 +83,7 @@ Three greps run in CI (add to your pre-commit hook if you have one):
 ## Open questions
 
 See the "Open questions" section of ADR-0004.
+
+## Deployment
+
+See [docs/05-operations/deployment.md](docs/05-operations/deployment.md): Docker image, Azure VM (Caddy + HTTPS), and the `Deploy (development)` workflow.
