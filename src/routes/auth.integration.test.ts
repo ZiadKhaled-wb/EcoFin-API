@@ -218,6 +218,57 @@ describe.skipIf(!RUN)('F04 auth against local Supabase', () => {
     expect(await auditCount(emp, 'auth.login')).toBe(loginsBefore + 1);
   });
 
+  // Test-plan gap (F04): a username that doesn't exist in the shop, and a shop-B username tried
+  // with shop A's slug, look exactly like a wrong password; each writes one login_attempts row
+  // and no audit_log row in either shop.
+  it('unknown username / other-shop username: same 401 as a wrong password, login_attempts only', async () => {
+    const ip = '192.0.2.77';
+    const attempt = (identifier: string, tenantSlug: string, password = 'wrong-password') =>
+      request(app)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ identifier, password, tenantSlug });
+    const ghost = `ghost.${Date.now()}`;
+    // Counted before and after, so rows from earlier local runs don't matter.
+    const attempts = async (identifier: string) => {
+      const { count, error } = await service
+        .from('login_attempts')
+        .select('id', { count: 'exact', head: true })
+        .eq('identifier', identifier)
+        .eq('tenant_slug', 'dev-shop-one')
+        .eq('success', false)
+        .eq('ip', ip);
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    };
+    const auditRows = async () => {
+      const { count, error } = await service
+        .from('audit_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('ip', ip);
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    };
+    const otherShopBefore = await attempts('cashier.two');
+    const auditBefore = await auditRows();
+
+    const wrongPassword = await attempt('owner.one', 'dev-shop-one');
+    const unknown = await attempt(ghost, 'dev-shop-one', PASSWORD);
+    const otherShop = await attempt('cashier.two', 'dev-shop-one', PASSWORD);
+    for (const res of [wrongPassword, unknown, otherShop]) {
+      expect(res.status).toBe(401);
+      expect(code(res)).toBe('INVALID_CREDENTIALS');
+      // Same body apart from the per-request id.
+      const { requestId: _id, ...rest } = ErrorResponse.parse(res.body).error;
+      const { requestId: _wid, ...expected } = ErrorResponse.parse(wrongPassword.body).error;
+      expect(rest).toEqual(expected);
+    }
+
+    expect(await attempts(ghost)).toBe(1);
+    expect(await attempts('cashier.two')).toBe(otherShopBefore + 1);
+    expect(await auditRows()).toBe(auditBefore);
+  });
+
   it('the 6th attempt after 5 failures in the window is 429 TOO_MANY_LOGIN_ATTEMPTS', async () => {
     const ghost = `ghost-${Date.now()}@ecotech.test`;
     for (let i = 0; i < 5; i++) {

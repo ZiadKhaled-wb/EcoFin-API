@@ -1,6 +1,6 @@
 # Sprint 1 test plan (F01–F09)
 
-**Date:** 3 Oct 2026  
+**Date:** 3 Oct 2026 (updated 4 Oct 2026: F05 added, Sprint 1 gaps closed, first full local run)  
 **Coverage:** Features F01 (tooling), F02 (database), F03 (contracts), F04 (auth), F08 (server basics), F09 (UI shell)  
 **Source plans:** EcoFin-API `docs/testing/plans/B1.md`, `B3.md`, `B5.md`, `B6.md`; EcoFin-Web `docs/testing/plans/B2.md`, `B7.md`, `B9.md`; contracts `packages/contracts/docs/testing/plans/B4.md`
 
@@ -27,6 +27,9 @@ npm run db:smoke
 
 npm run db:smoke -- supabase/tests/f04_auth_test.sql
 # Expected: "passed 48, failed 0" (F04 auth tests)
+
+npm run db:smoke -- supabase/tests/f05_tenant_test.sql
+# Expected: "passed 41, failed 0" (F05 tenant isolation)
 ```
 
 ### Contracts
@@ -115,6 +118,13 @@ E2E_OWNER_EMAIL=owner.one@ecotech.test \
 | F04 | B6-32 | Wrong current password -> 401 INVALID_CREDENTIALS (not a token code), session unchanged | integration + unit | same | change-password with a wrong current password | 401 `INVALID_CREDENTIALS`; `/me` still 200; attempt recorded | auth.integration.test.ts: "change-password with a wrong current password…"; auth.service.test.ts: "wrong current password -> 401…" | written-skipped / passing now |
 | F04 | B6-33 | GoTrue revocation check (library behaviour) | manual | stack up, local anon key | curl: password grant -> `GET /auth/v1/user` -> `POST /auth/v1/logout?scope=local` -> `GET /auth/v1/user` -> refresh | 200, 204, then 403 `session_not_found`, refresh 400 `refresh_token_not_found` (GoTrue v2.197.0). PostgREST still accepts the old JWT until it expires (see summary). | n.a. | manual (observed 3 Oct) |
 | F04 | B6-35 | select-shop (D23): multi-shop token, no x-org-id, picks a shop | unit (HTTP) + integration | mocked / local stack | `POST /api/auth/select-shop {orgId}` with a multi-shop token, no `x-org-id`; then a shop the login isn't in; no token | 200 contract `{ user, shop }` (shop B, ACCOUNTANT), `my_shops` read with no header, `auth_record_login` in shop B (+1 `auth.login` row for the shop-B employee); then `/me` with `x-org-id` B works; other shop 403 `SHOP_NOT_ALLOWED` with no audit; no token 401 | routes/auth.test.ts: "POST /api/auth/select-shop" (4 cases); auth.service.test.ts: "selectShop" (2); auth.integration.test.ts: "select-shop: a two-shop login picks shop B…" | passing now / written-skipped (passed locally) |
+| F04 | B6-41 | Unknown username / another shop's username with this shop's slug: same as a wrong password, audit-wise too | integration | `db:reset`, local stack, `RUN_INTEGRATION=1` | login `ghost.<ts>` and `cashier.two` with slug `dev-shop-one`, and `owner.one` with a wrong password, all from one IP | all 401 `INVALID_CREDENTIALS` with the same body (bar requestId); +1 `login_attempts` row each (`success=false`, slug kept); 0 `audit_log` rows from that IP | auth.integration.test.ts: "unknown username / other-shop username: same 401 as a wrong password, login_attempts only" | passing now (local + CI db job) |
+| F04/F05 | B6-42 | Role change applies to the next request on the same token | integration | same; employee created by the test | login; `/me` = CASHIER; service sets role ACCOUNTANT; `/me` with the same token | ACCOUNTANT, no re-login (per-request `session_context()`) | auth.sessions.integration.test.ts: "a role change applies to the very next request on the same token" | passing now (local + CI db job) |
+| F04/F05 | B6-43 | Disabling the employee ends the live session at once; refresh does not get around it | integration | same | login; set `is_active=false`; `/me`; refresh; `/me` with the new token; new login; re-enable | 403 `ACCOUNT_DISABLED` on the live token, the refreshed token and a new login; works again after re-enabling | auth.sessions.integration.test.ts: "disabling the employee blocks the live token at once…" | passing now (local + CI db job) |
+| F04/F05 | B6-44 | Archiving the employee ends the live session at once | integration | same | login; set `archived_at`; `/me` | 403 `ACCOUNT_DISABLED` | auth.sessions.integration.test.ts: "archiving the employee blocks the live token at once" | passing now (local + CI db job) |
+| F04 | B6-45 | Refresh immediately after logout | integration | same | two logins of one user; logout the first; refresh both at once | first 401 `TOKEN_INVALID`; second 200 (only one session ended) | auth.sessions.integration.test.ts: "refresh immediately after logout is refused…" | passing now (local + CI db job) |
+| F04 | B6-46 | Refresh immediately after change-password | integration | same | two logins; change password on the first; refresh both at once | other session 401 `TOKEN_INVALID`; this one 200 | auth.sessions.integration.test.ts: "refresh immediately after change-password…" | passing now (local + CI db job) |
+| F05 | B8-01…22 | Tenant isolation: context + status gate, org keys refused, strict validate, assertSameOrg, file paths, cross-shop suite and CI gate, SQL grants/RLS/storage | unit + SQL + integration | see `docs/testing/plans/B8.md` | see B8.md | see B8.md | src/middleware/*.test.ts, src/utils/tenant.test.ts, src/test/cross-shop/*, supabase/tests/f05_tenant_test.sql | passing now (CI on PR 9: check + db green) |
 | F04 | B6-40 | Local JWT expiry 15 min and reset link to the web page (D24) | manual | stack restarted after the config change | curl password grant; forgot-password; read the Mailpit message | `expires_in: 900`; link has `redirect_to=http://localhost:5173/reset-password` | n.a. (supabase/config.toml) | manual (observed) |
 | F04 | B7-19 | e2e: expired access token, refresh runs, the NEW token works | e2e | RUN_E2E=1, API + Supabase running, seeded owner | `... -g "expired access token"` | /api/auth/refresh returns 200; stored token replaced; `GET /api/auth/me` with the new token and orgId returns 200 (old-token rejection not asserted: the contract does not promise rotation) | e2e/auth.spec.ts: expired access token: the silent refresh runs and the NEW token works on /me | written-skipped |
 | F04 | B7-19b | e2e: 401 path, exactly one refresh, retried call succeeds | e2e | as above | `... -g "401 path"` | garbage token + future expiry; two parallel calls through the app's api client both return 200; exactly 1 refresh request | e2e/auth.spec.ts: 401 path: a garbage token with a future expiry... | written-skipped |
@@ -152,17 +162,23 @@ E2E_OWNER_EMAIL=owner.one@ecotech.test \
 
 **F03 (B4 contracts):** None. All permission keys, roles, error codes and schema checks are covered.
 
-**F04 (B6 API auth, B7 Web auth):**
-- Login audit: "login with username that doesn't exist in the shop" (cross-shop security check, mentioned in B6-03 but no explicit row for the audit behavior)
-- Session revocation on permission change: audit row written, but "when do permissions change?" is not addressed (out of scope for F04; depends on future admin/config features)
-- Refresh token reuse window: the 11-second wait in B6-25 tests the behavior but does not cover edge cases like "refresh immediately after revocation" (integration test sufficient)
+**F04 (B6 API auth, B7 Web auth):** closed 4 Oct 2026.
+- Login audit for an unknown username, or another shop's username with this shop's slug: B6-41 (`login_attempts` row, no `audit_log` row, same 401 as a wrong password).
+- Session revocation on a change to the employee: there is no permissions admin yet, but every request re-reads the employee (F05 `session_context()`), so a role change applies on the next request and disabling or archiving ends live sessions at once, refresh included: B6-42…44. Permission overrides themselves are F06's to test.
+- Refresh immediately after revocation (logout, change-password): B6-45, B6-46.
 
-**F08 (B5 server basics):** None. All error codes, validation, helmet headers, CORS, rate limiting and health checks are covered.
+**F09 (B9 UI shell):** closed 4 Oct 2026 (EcoFin-Web `e2e/rtl.spec.ts`, plan B9-24…27).
+- Long Arabic text (mixed digits and Latin) in shop and branch names at 360 and 1280 px: wraps or truncates, never overflows (B9-24, B9-25).
+- Links in RTL: the forgot-password link and the sidebar links mirror and keep their style (B9-26, B9-27).
+- Language choice surviving a reload: already covered by B9-20 (passing locally).
+- The walkthrough (B7-24, B9-23) found the top bar overflowing below ~720 px and dropdowns wider than a phone screen with long names; both fixed in EcoFin-Web.
 
-**F09 (B9 UI shell):**
-- Language switch persistence across browser restart (tested in B9-12 with localStorage, but no e2e reload test beyond B9-20's "choice survives reload")
-- RTL/LTR with long Arabic text and edge cases like numbers, links in lists (visual check B9-23, but no automated row for text overflow or link color in RTL)
+**Still open:** B9-21 and B9-22 (the 403 guard) need F06's `GET /api/me/permissions`; they fail until F06 ships.
+
+## 4 Oct 2026 run (local stack)
+- API: `RUN_INTEGRATION=1` full suite 290/290; SQL smoke 79/0, f04 48/0, f05 41/0. CI `db` job now runs the SQL tests and the integration suites on every PR.
+- Web: e2e 15 passed, 2 failing by design until F06 (B9-21/22); unit 93/93.
 
 ## Deferred stories
 
-**F05 (B8), F06 (B10), F07 (B11):** Test plans not written. These stories are deferred to a later run.
+**F05 (B8):** plan in `docs/testing/plans/B8.md`. **F06 (B10), F07 (B11):** plans not written yet.
