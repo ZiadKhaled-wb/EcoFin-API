@@ -78,7 +78,7 @@ export const openApiSpec = {
                 },
             },
 
-            // ---------- Auth (shapes from @ecotech/contracts `auth`) ----------
+            // ---------- Auth (shapes from @ziadkhaled-wb/contracts `auth`) ----------
 
             ShopMembership: {
                 type: 'object',

@@ -5,8 +5,8 @@ Decisions taken during Sprint 1 that the docs don't already settle. Newest last.
 ## Sprint 1 (3 Oct 2026)
 
 ### D1. Contracts package lives in a third repo `EcoFin-Contracts/` (decided by the team)
-- Package `@ecotech/contracts`, built with `tsc`, version `0.1.0`.
-- Both repos depend on it with `"@ecotech/contracts": "file:../EcoFin-Contracts"` **for now**.
+- Package `@ziadkhaled-wb/contracts`, built with `tsc`, version `0.1.0`.
+- Both repos depend on it with `"@ziadkhaled-wb/contracts": "file:../EcoFin-Contracts"` **for now**.
 - **Before merging Sprint 1 to `main`:** create the GitHub repo `EcoFin-Contracts`, push it, tag `v0.1.0`, and switch both repos to `"github:<owner>/EcoFin-Contracts#v0.1.0"`. Until then **GitHub CI can't install this repo**, because `../EcoFin-Contracts` doesn't exist on the runner.
 - The new repo has no `main` yet. Its first commit is on `integration/sprint-1`; `main` is created when you publish it.
 
@@ -71,7 +71,7 @@ Every API route carries a permission marker (`requirePermission(key)`, `authenti
 `anon` has no grants, so a public health check can't touch the DB any other way. Allowed: one cheap read-only query with a short timeout, returning only the contract fields. That's the only service-role use outside D14's auth module.
 
 ### D21. Incident: `EcoFin-Contracts` wiped by a worktree removal, rebuilt and verified (3 Oct, 12:06)
-**What happened:** the master ran `git worktree remove --force` on an API worktree. On Windows, git followed the npm `file:` link `node_modules/@ecotech/contracts` (a junction) and deleted its **target**: the whole `EcoFin-Contracts` folder, `.git` included. The repo had never been pushed.
+**What happened:** the master ran `git worktree remove --force` on an API worktree. On Windows, git followed the npm `file:` link `node_modules/@ziadkhaled-wb/contracts` (a junction) and deleted its **target**: the whole `EcoFin-Contracts` folder, `.git` included. The repo had never been pushed.
 **Recovery:** the repo was re-initialised, and the F03 builder's recorded steps were replayed in order (its writes and commands, including its own commits). The rebuilt package passes all 27 tests, and its built `dist/`, `package.json`, README and CHANGELOG are **byte-identical** to the reviewer's `npm pack` of the approved version. Commit hashes in `EcoFin-Contracts` differ from the original; content doesn't.
 **Rule from now on (anyone, not just agents):** before deleting a worktree or clone that has run `npm ci`/`npm install`, unlink every link inside it first, then remove it. A junction is removed safely with `cmd /c rmdir <link>` (it never touches the target). In Git Bash:
 ```bash
@@ -99,9 +99,9 @@ Supabase tokens carry no shop. The active shop is chosen per request by the `x-o
 - **Known, accepted for now:** login lockout is check-then-act, so a parallel burst from many IPs can slightly exceed the limit. An unknown username answers a little faster (timing). Both are low risk; revisit in hardening.
 
 ### D26. No third repo: contracts live in `EcoFin-API/packages/contracts` (supersedes D1 and §4; user decision, 4 Oct)
-- `EcoFin-API` is an npm workspace (`packages/*`). `@ecotech/contracts` (same name, version `0.1.0`) lives in `packages/contracts`, and the API uses it through the workspace, so nothing outside the repo is needed to build, test or deploy the API.
+- `EcoFin-API` is an npm workspace (`packages/*`). `@ziadkhaled-wb/contracts` (same name, version `0.1.0`) lives in `packages/contracts`, and the API uses it through the workspace, so nothing outside the repo is needed to build, test or deploy the API.
 - It is published privately to **GitHub Packages** by a CI workflow on tags `contracts-v*` (`publishConfig.registry = https://npm.pkg.github.com`, auth through `NPM_TOKEN`).
-- `EcoFin-Web` depends on `"@ecotech/contracts": "0.1.0"` from GitHub Packages (`.npmrc` with `${NPM_TOKEN}`). **Until the first publish**, `integration/sprint-1` only uses a local copy. That is a **blocker before `main`**.
+- `EcoFin-Web` depends on `"@ziadkhaled-wb/contracts": "0.1.0"` from GitHub Packages (`.npmrc` with `${NPM_TOKEN}`). **Until the first publish**, `integration/sprint-1` only uses a local copy. That is a **blocker before `main`**.
 - No file may reference a `../` path outside its repo. No Dockerfile changes.
 - GitHub Packages requires the npm scope to equal the owning GitHub user/org: publishing `@ecotech/*` needs a GitHub org `ecotech` (or a scope rename). See the run report.
 - The old `EcoFin-Contracts` folder is deleted after the move; its history is kept inside `EcoFin-API`.
@@ -112,5 +112,11 @@ Supabase tokens carry no shop. The active shop is chosen per request by the `x-o
 - `npm run build` = `tsc --noEmit` + an esbuild bundle of `src/server.ts` (dependencies stay external). Plain `tsc` output cannot start under Node: relative imports have no `.js` extension (`ERR_MODULE_NOT_FOUND`).
 - Supersedes the "no Dockerfile changes" line of D26: the `Dockerfile` installs the workspace, builds `packages/contracts` and ships its `dist/` next to the bundle.
 - Production (`NODE_ENV=production`) requires `CORS_ALLOWED_ORIGINS`; it is set on the VM (`/opt/ecofin/api.env`).
-- `integration/sprint-1` goes to `main` with `EcoFin-Web` still on the vendored contracts tarball (D26 called that a blocker). Accepted temporarily to unblock deployment; publishing `@ecotech/contracts` (org or scope decision) stays open and must replace the tarball.
+- `integration/sprint-1` goes to `main` with `EcoFin-Web` still on the vendored contracts tarball (D26 called that a blocker). Accepted temporarily to unblock deployment; publishing `@ziadkhaled-wb/contracts` (org or scope decision) stays open and must replace the tarball.
 - Local dev: npm workspaces need a file system with symlinks/junctions. A repo on an exFAT drive fails `npm ci` with `EISDIR ... symlink`; keep the repos on NTFS (or WSL).
+
+### D28. Contracts package renamed to `@ziadkhaled-wb/contracts` and published with GitHub's built-in token (user decision, 4 Oct)
+- GitHub Packages only accepts a scope equal to the repo owner. EcoFin-API belongs to the user account `ZiadKhaled-wb`, so `@ecotech/contracts` could never be published (D26 left this open). Renamed to `@ziadkhaled-wb/contracts` in both repos instead of creating an `ecotech` org (an org transfer would change repo URLs, image paths, deploy secrets and the Vercel connection).
+- `.github/workflows/contracts-publish.yml` publishes with `secrets.GITHUB_TOKEN` (`packages: write`); no `NPM_TOKEN` secret in EcoFin-API. Release = bump `packages/contracts/package.json` version, merge, push tag `contracts-vX.Y.Z`; the workflow refuses a tag that doesn't match the version.
+- EcoFin-Web installs the published version from GitHub Packages (`.npmrc` refers only to `${NPM_TOKEN}`): a classic token with `read:packages` lives in Vercel (`NPM_TOKEN`), in the EcoFin-Web Actions secrets (`NPM_TOKEN`) and in each developer's environment. The vendored tarball is removed (closes the D26/D27 blocker).
+- The package inherits access from the EcoFin-API repo, so every collaborator with read access to EcoFin-API can install it with their own token.

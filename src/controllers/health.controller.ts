@@ -2,7 +2,7 @@
 //
 // GET /health: public, no auth. Reports only the contract fields (status, db, version, time).
 import type { Request, Response } from 'express';
-import type { HealthResponse } from '@ecotech/contracts';
+import type { HealthResponse } from '@ziadkhaled-wb/contracts';
 import { supabaseAdmin } from '../utils/supabase';
 import { logger } from '../utils/logger';
 

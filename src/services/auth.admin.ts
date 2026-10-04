@@ -16,7 +16,7 @@
 import { supabaseAdmin } from '../utils/supabase';
 import { ServerError } from '../utils/errors';
 import { logger } from '../utils/logger';
-import type { OrgStatus } from '@ecotech/contracts';
+import type { OrgStatus } from '@ziadkhaled-wb/contracts';
 import type { Database } from '../types/database.types';
 
 type EmployeeRole = Database['public']['Enums']['employee_role'];

@@ -4,7 +4,7 @@
 // alongside the human-readable `message`. The controller/errorHandler layer
 // never has to parse strings to decide how to react. Codes come from the shared contracts.
 
-import { errorCodeHttpStatus, type ErrorCode } from '@ecotech/contracts';
+import { errorCodeHttpStatus, type ErrorCode } from '@ziadkhaled-wb/contracts';
 
 export type { ErrorCode };
 

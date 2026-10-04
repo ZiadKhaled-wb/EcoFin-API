@@ -9,7 +9,7 @@
 // Loading the employee per request and enforcing org scope is F05; permissions are F06.
 
 import type { Request, Response, NextFunction } from 'express';
-import { Uuid } from '@ecotech/contracts';
+import { Uuid } from '@ziadkhaled-wb/contracts';
 import {
   createAuthClient,
   supabaseForRequest,

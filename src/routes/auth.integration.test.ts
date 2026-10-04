@@ -14,7 +14,7 @@ import {
   AuthSelectShopResponse,
   AuthSession,
   ErrorResponse,
-} from '@ecotech/contracts';
+} from '@ziadkhaled-wb/contracts';
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
 

@@ -40,7 +40,7 @@ Docker is only for running local Supabase (`supabase start`). **Never** add a `D
 - A business rule you can't find in the slice, data model or baseline SQL: **stop and report**. Don't guess. Something you need that isn't merged yet: **stop and report**. Don't build a stand-in.
 - Tests that need the running server or DB: write them **now** as real test files that skip unless `RUN_INTEGRATION=1` (Vitest: `describe.skipIf(process.env.RUN_INTEGRATION !== '1')`) or `RUN_E2E=1` (Playwright). They must be complete, so they run as they are once the env works.
 - Never edit `supabase/migrations/20261002000000_v1_baseline.sql`. New SQL goes in a **new** migration with the timestamp your task gives you.
-- Contracts: import shapes from `@ecotech/contracts`. Don't define API types locally. Don't change the contracts package unless your task says so. If a schema you need is missing, stop and report.
+- Contracts: import shapes from `@ziadkhaled-wb/contracts`. Don't define API types locally. Don't change the contracts package unless your task says so. If a schema you need is missing, stop and report.
 
 ## Test plan (required)
 Write `docs/testing/plans/<ID>.md` in the repo you worked in, one row per test:

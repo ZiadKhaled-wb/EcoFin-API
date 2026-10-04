@@ -14,7 +14,7 @@
 import rateLimit from 'express-rate-limit';
 import type { RedisReply } from 'rate-limit-redis';
 import type { Request, Response, RequestHandler } from 'express';
-import { errorCodeHttpStatus, type ErrorResponse } from '@ecotech/contracts';
+import { errorCodeHttpStatus, type ErrorResponse } from '@ziadkhaled-wb/contracts';
 import { getEnv } from '../utils/env';
 import { logger } from '../utils/logger';
 

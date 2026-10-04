@@ -8,7 +8,7 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { errorCodeHttpStatus, type ErrorCode, type ErrorResponse } from '@ecotech/contracts';
+import { errorCodeHttpStatus, type ErrorCode, type ErrorResponse } from '@ziadkhaled-wb/contracts';
 import { AppError, mapDbError, safeMessage } from '../utils/errors';
 import { SENSITIVE_KEYS, logger } from '../utils/logger';
 

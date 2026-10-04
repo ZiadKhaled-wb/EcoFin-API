@@ -1,6 +1,6 @@
 // server/src/services/auth.service.ts
 //
-// F04 auth and sessions. Request and response shapes come from @ecotech/contracts (auth module).
+// F04 auth and sessions. Request and response shapes come from @ziadkhaled-wb/contracts (auth module).
 //
 //   * Supabase Auth calls use a NEW anon client each time (createAuthClient), so no client ever
 //     keeps a user session between requests.
@@ -23,7 +23,7 @@ import type {
   AuthSession,
   AuthUser,
   ShopMembership,
-} from '@ecotech/contracts';
+} from '@ziadkhaled-wb/contracts';
 import {
   createAuthClient,
   supabaseForRequest,

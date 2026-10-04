@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { errorCodeHttpStatus } from '@ecotech/contracts';
+import { errorCodeHttpStatus } from '@ziadkhaled-wb/contracts';
 import { AppError, BadRequest, mapDbError } from './errors';
 
 describe('AppError', () => {
