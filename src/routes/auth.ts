@@ -9,6 +9,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler';
 import { authenticate } from '../middleware/auth';
+import { requestContext } from '../middleware/requestContext';
 import {
   loginLimiter,
   forgotPasswordLimiter,
@@ -28,9 +29,18 @@ router.post('/forgot-password', forgotPasswordLimiter, asyncHandler(authControll
 router.post('/reset-password', resetPasswordLimiter, asyncHandler(authController.resetPassword));
 
 // --- Authenticated ------------------------------------------------------------
-router.get('/me', authenticate, asyncHandler(authController.me));
+// F05 status gate (requestContext): me and change-password must still work while
+// must_change_password is set. logout and select-shop skip the gate, so a user of a closed shop
+// can still log out or switch shops.
+const contextAllowingPasswordChange = requestContext({ allowMustChangePassword: true });
+router.get('/me', authenticate, contextAllowingPasswordChange, asyncHandler(authController.me));
 router.post('/logout', authenticate, asyncHandler(authController.logout));
 router.post('/select-shop', authenticate, asyncHandler(authController.selectShop));
-router.post('/change-password', authenticate, asyncHandler(authController.changePassword));
+router.post(
+  '/change-password',
+  authenticate,
+  contextAllowingPasswordChange,
+  asyncHandler(authController.changePassword),
+);
 
 export default router;

@@ -1,10 +1,10 @@
 // server/src/types/express.d.ts
 //
 // Ambient module augmentation for Express's Request. Every middleware and
-// controller reads req.auth / req.user / req.employee through this declaration —
+// controller reads req.auth / req.user / req.ctx through this declaration —
 // no `(req as any)` anywhere in the codebase.
 
-import type { TenantRole } from '../utils/validation';
+import type { RequestContext } from '../middleware/requestContext';
 
 export interface AuthenticatedUser {
   id: string;
@@ -24,20 +24,6 @@ export interface RequestAuth {
   orgId?: string | undefined;
 }
 
-/** Tenant employee context. Loaded per request by the F05 org-scope middleware (not built yet). */
-export interface AuthenticatedEmployee {
-  id: string;
-  organization_id: string;
-  auth_id: string;
-  branch_id: string | null;
-  role: TenantRole;
-  permissions: string[];
-  is_active: boolean;
-  username: string | null;
-  email: string | null;
-  must_change_password: boolean;
-}
-
 declare global {
   namespace Express {
     interface Request {
@@ -47,8 +33,8 @@ declare global {
       auth?: RequestAuth | undefined;
       /** Same user, kept for the logger and error handler. */
       user?: AuthenticatedUser | undefined;
-      /** Tenant user context (F05). */
-      employee?: AuthenticatedEmployee | undefined;
+      /** Tenant context of the caller (F05 loadRequestContext); read it with getCtx(req). */
+      ctx?: RequestContext | undefined;
     }
   }
 }
