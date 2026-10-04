@@ -12,13 +12,20 @@ export const MePermissionsResponse = z.object({
 export const MePermissions = { response: MePermissionsResponse };
 export type MePermissionsResponse = z.infer<typeof MePermissionsResponse>;
 
-// F06 · set one permission override (employee_permission_overrides). The reason goes to the audit row.
+/** Reason stored on the audit row of an access change (required). */
+const AuditReason = z.string().trim().min(1).max(500);
+
+// F06 · path params of /employees/:employeeId/... (0.2.0: the id lives in the path, not the body)
+export const EmployeeIdParams = z.object({ employeeId: Uuid }).strict();
+export type EmployeeIdParams = z.infer<typeof EmployeeIdParams>;
+
+// F06 · PUT /employees/:employeeId/permissions: set one permission override
+// (employee_permission_overrides). The reason goes to the audit row.
 export const EmployeePermissionOverrideBody = z
   .object({
-    employeeId: Uuid,
     permissionKey: PermissionKey,
     granted: z.boolean(),
-    reason: z.string().trim().min(1).max(500),
+    reason: AuditReason,
   })
   .strict();
 export const EmployeePermissionOverrideResponse = z.object({
@@ -27,20 +34,21 @@ export const EmployeePermissionOverrideResponse = z.object({
   granted: z.boolean(),
 });
 export const EmployeePermissionOverride = {
+  params: EmployeeIdParams,
   body: EmployeePermissionOverrideBody,
   response: EmployeePermissionOverrideResponse,
 };
 export type EmployeePermissionOverrideBody = z.infer<typeof EmployeePermissionOverrideBody>;
 export type EmployeePermissionOverrideResponse = z.infer<typeof EmployeePermissionOverrideResponse>;
 
-// F06 · replace an employee's branch list (employee_branches)
+// F06 · PUT /employees/:employeeId/branches: replace an employee's branch list (employee_branches)
 export const EmployeeBranchesAssignBody = z
   .object({
-    employeeId: Uuid,
     branchIds: z
       .array(Uuid)
       .max(100)
       .refine((ids) => new Set(ids).size === ids.length, 'Duplicate branch ids'),
+    reason: AuditReason,
   })
   .strict();
 export const EmployeeBranchesAssignResponse = z.object({
@@ -48,6 +56,7 @@ export const EmployeeBranchesAssignResponse = z.object({
   branchIds: z.array(Uuid),
 });
 export const EmployeeBranchesAssign = {
+  params: EmployeeIdParams,
   body: EmployeeBranchesAssignBody,
   response: EmployeeBranchesAssignResponse,
 };

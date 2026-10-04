@@ -11,6 +11,7 @@ import {
   AuthSelectShop,
   CONTRACTS_VERSION,
   EmployeeBranchesAssign,
+  EmployeeIdParams,
   EmployeePermissionOverride,
   ErrorResponse,
   Health,
@@ -239,14 +240,27 @@ describe('access schemas', () => {
     ).toBe(false);
     expect(MePermissions.response.safeParse({ keys: [], branchIds: [] }).success).toBe(false);
   });
+  it('employee id params', () => {
+    expect(EmployeeIdParams.safeParse({ employeeId: id }).success).toBe(true);
+    expect(EmployeeIdParams.safeParse({ employeeId: 'x' }).success).toBe(false);
+    expect(EmployeeIdParams.safeParse({ employeeId: id, orgId: id2 }).success).toBe(false);
+    expect(EmployeePermissionOverride.params).toBe(EmployeeIdParams);
+    expect(EmployeeBranchesAssign.params).toBe(EmployeeIdParams);
+  });
   it('permission override body', () => {
-    const ok = { employeeId: id, permissionKey: 'sale.void', granted: true, reason: 'cover shift' };
+    const ok = { permissionKey: 'sale.void', granted: true, reason: 'cover shift' };
     expect(EmployeePermissionOverride.body.safeParse(ok).success).toBe(true);
     expect(EmployeePermissionOverride.body.safeParse({ ...ok, granted: 'yes' }).success).toBe(
       false,
     );
     expect(EmployeePermissionOverride.body.safeParse({ ...ok, reason: '  ' }).success).toBe(false);
-    expect(EmployeePermissionOverride.body.safeParse({ employeeId: id }).success).toBe(false);
+    expect(EmployeePermissionOverride.body.safeParse({ permissionKey: 'sale.void' }).success).toBe(
+      false,
+    );
+    // 0.2.0: the employee id is in the path only.
+    expect(EmployeePermissionOverride.body.safeParse({ ...ok, employeeId: id }).success).toBe(
+      false,
+    );
     expect(EmployeePermissionOverride.body.safeParse({ ...ok, organization_id: id2 }).success).toBe(
       false,
     );
@@ -260,14 +274,22 @@ describe('access schemas', () => {
   });
   it('assign branches body', () => {
     expect(
-      EmployeeBranchesAssign.body.safeParse({ employeeId: id, branchIds: [id, id2] }).success,
+      EmployeeBranchesAssign.body.safeParse({ branchIds: [id, id2], reason: 'moved' }).success,
     ).toBe(true);
     expect(
-      EmployeeBranchesAssign.body.safeParse({ employeeId: id, branchIds: [id, id] }).success,
+      EmployeeBranchesAssign.body.safeParse({ branchIds: [id, id], reason: 'moved' }).success,
     ).toBe(false);
     expect(
-      EmployeeBranchesAssign.body.safeParse({ employeeId: id, branchIds: ['x'] }).success,
+      EmployeeBranchesAssign.body.safeParse({ branchIds: ['x'], reason: 'moved' }).success,
     ).toBe(false);
+    // An empty list (no branches) is allowed; the reason is required.
+    expect(EmployeeBranchesAssign.body.safeParse({ branchIds: [], reason: 'left' }).success).toBe(
+      true,
+    );
+    expect(EmployeeBranchesAssign.body.safeParse({ branchIds: [] }).success).toBe(false);
+    expect(EmployeeBranchesAssign.body.safeParse({ branchIds: [], reason: ' ' }).success).toBe(
+      false,
+    );
     expect(EmployeeBranchesAssign.body.safeParse({ employeeId: id }).success).toBe(false);
     expect(
       EmployeeBranchesAssign.body.safeParse({ employeeId: id, branchIds: [], organization_id: id2 })
