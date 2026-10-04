@@ -43,7 +43,10 @@ jobs:
           fi
 
       # GitHub's built-in token (permissions: packages: write above); no secret needed.
+      # The repo .npmrc reads ${NPM_TOKEN} and takes precedence over the .npmrc that
+      # setup-node writes (NODE_AUTH_TOKEN), so both must carry the token.
       - name: Publish
         run: npm publish -w @ziadkhaled-wb/contracts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
