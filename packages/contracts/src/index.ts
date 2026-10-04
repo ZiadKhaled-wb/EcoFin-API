@@ -1,6 +1,7 @@
-export const CONTRACTS_VERSION = '0.3.0';
+export const CONTRACTS_VERSION = '0.4.0';
 
 export * from './common.js';
+export * from './money.js';
 export * from './errors.js';
 export * from './roles.js';
 export * from './permissions.js';

@@ -42,7 +42,7 @@
     "check:audit": "tsx scripts/check-audit.ts"
   },
   "dependencies": {
-    "@ziadkhaled-wb/contracts": "0.3.0",
+    "@ziadkhaled-wb/contracts": "0.4.0",
     "@supabase/supabase-js": "^2.117.2",
     "cors": "^2.8.6",
     "dotenv": "^18.0.4",
