@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+
+- Audit (F07): `AuditRow` gains `actorName` (the acting employee's full name, null for platform/service actions), so the owner's audit screen can show who did it without a separate employees endpoint. Additive for readers; servers must now send it.
+
 ## 0.2.0
 
 - Access (F06): the employee id moves from the request bodies to the path (`EmployeeIdParams`, used by `PUT /employees/:employeeId/permissions` and `/branches`); `EmployeeBranchesAssignBody` gains a required `reason` (stored on the audit row), like the permission override. Breaking for these two bodies only; nothing used them in 0.1.0.

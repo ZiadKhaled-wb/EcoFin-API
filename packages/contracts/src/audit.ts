@@ -26,6 +26,8 @@ export const AuditRow = z.object({
   id: z.number().int(),
   branchId: Uuid.nullable(),
   employeeId: Uuid.nullable(),
+  /** The acting employee's full name (0.3.0); null for platform/service actions. */
+  actorName: z.string().nullable(),
   superAdminId: Uuid.nullable(),
   deviceId: Uuid.nullable(),
   ip: z.string().nullable(),
