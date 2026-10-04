@@ -530,7 +530,7 @@ export const openApiSpec = {
                 tags: ['Access (F06)'],
                 summary: 'Add or remove one permission for an employee (employee.manage)',
                 description:
-                    'Setting a key back to the role default removes the override. Not allowed on the owner or on yourself (403 FORBIDDEN). Another shop\'s employee: 404. One audit row per call.',
+                    'Setting a key back to the role default removes the override. 403 FORBIDDEN: the owner or yourself as target; a non-owner granting or removing a key they don\'t hold, or employee.manage (owner-only). Another shop\'s employee: 404. One audit row per call.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
                 requestBody: {
@@ -578,7 +578,7 @@ export const openApiSpec = {
                 tags: ['Access (F06)'],
                 summary: 'Replace an employee\'s branch list (employee.manage)',
                 description:
-                    'Every branch must be in your shop (422 BRANCH_NOT_IN_ORG). An empty list removes every branch. Not allowed on the owner or on yourself. One audit row per call.',
+                    'Every branch must be in your shop (422 BRANCH_NOT_IN_ORG). An empty list removes every branch. 403 FORBIDDEN: the owner or yourself as target; a non-owner adding or removing a branch they don\'t work in. One audit row per call.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
                 requestBody: {
