@@ -38,3 +38,6 @@ Thumbs.db
 supabase/.temp/
 supabase/.branches/
 supabase/.env
+
+# Personal AI tool config (not shared)
+opencode.jsonc
