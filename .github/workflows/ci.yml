@@ -37,12 +37,18 @@ jobs:
       - name: Test (API and contracts)
         run: npm test
 
+      # F05 / D19: every route needs a cross-shop case (src/test/cross-shop/cases.ts) or must be
+      # public; this names any route without one.
+      - name: Cross-shop route check
+        run: npm run check:cross-shop
+
       - name: Build
         run: npm run build
 
   # F02: the baseline builds an empty database, a second run changes nothing,
-  # the seeded super admin works, and the smoke test passes. Local Supabase only:
-  # this job never links to or pushes to a real project.
+  # the seeded super admin works, and the smoke test passes. F04/F05 SQL tests and the
+  # RUN_INTEGRATION=1 suites (auth, cross-shop) run against the same local stack.
+  # Local Supabase only: this job never links to or pushes to a real project.
   db:
     runs-on: ubuntu-latest
     env:
@@ -51,17 +57,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # db-smoke.mjs uses only Node built-ins, so no npm ci here.
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          cache: npm
+
+      # For the integration tests (the app runs in-process against the local stack).
+      - name: Install dependencies
+        run: npm ci
 
       - uses: supabase/setup-cli@v1
         with:
           version: 2.119.0
 
-      - name: Start empty database (applies migrations and seeds)
-        run: supabase db start
+      # The integration tests need Auth, PostgREST, Kong, Storage and Mailpit, not just Postgres.
+      - name: Start local Supabase (applies migrations and seeds)
+        run: supabase start -x studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor,realtime
 
       - name: Rebuild from zero
         run: supabase db reset
@@ -98,6 +109,23 @@ jobs:
 
       - name: Smoke test
         run: node scripts/db-smoke.mjs
+
+      - name: F04 auth SQL test
+        run: node scripts/db-smoke.mjs supabase/tests/f04_auth_test.sql
+
+      - name: F05 tenant SQL test
+        run: node scripts/db-smoke.mjs supabase/tests/f05_tenant_test.sql
+
+      # Local demo keys printed by the CLI for this throwaway stack, not secrets.
+      - name: Integration tests (RUN_INTEGRATION=1, auth + cross-shop)
+        run: |
+          status=$(supabase status -o json)
+          field() { node -e 'console.log(JSON.parse(process.argv[1])[process.argv[2]])' "$status" "$1"; }
+          export SUPABASE_URL="$(field API_URL)"
+          export SUPABASE_ANON_KEY="$(field ANON_KEY)"
+          export SUPABASE_SERVICE_ROLE_KEY="$(field SERVICE_ROLE_KEY)"
+          export FRONTEND_URL=http://localhost:5173 RUN_INTEGRATION=1 LOG_LEVEL=error
+          npm run test:api
 
       - name: Stop database
         if: always()

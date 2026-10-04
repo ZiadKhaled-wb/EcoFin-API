@@ -93,7 +93,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
     method: req.method,
     path: req.path,
     userId: req.user?.id,
-    orgId: req.employee?.organization_id,
+    orgId: req.ctx?.orgId,
   };
 
   // Response already started: let Express close the connection.

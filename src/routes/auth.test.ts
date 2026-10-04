@@ -30,7 +30,9 @@ vi.mock('../utils/supabase', () => ({
   supabaseForRequest: (token: string, orgId?: string) => ({
     rpc: (name: string) => {
       rpc.calls.push({ name, token, orgId });
-      return Promise.resolve(rpc.results[name] ?? { data: [], error: null });
+      const result = Promise.resolve(rpc.results[name] ?? { data: [], error: null });
+      // .single() (session_context): the queued result already holds the one row.
+      return Object.assign(result, { single: () => result });
     },
   }),
   updatePasswordWithToken: vi.fn(),
@@ -225,6 +227,75 @@ describe('POST /api/auth/select-shop', () => {
       401,
       'UNAUTHORIZED',
     );
+  });
+});
+
+describe('F05 status gate (session_context) on the auth routes', () => {
+  const USER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const refusal = (code: string) => ({
+    data: {
+      employee_id: null,
+      organization_id: null,
+      role: null,
+      default_branch_id: null,
+      branch_ids: null,
+      must_change_password: null,
+      refusal: code,
+    },
+    error: null,
+  });
+
+  beforeEach(() => {
+    authApi.getUser.mockResolvedValue({
+      data: { user: { id: USER, email: 'u@x.test' } },
+      error: null,
+    });
+  });
+
+  it.each([
+    ['get', '/api/auth/me', {}],
+    [
+      'post',
+      '/api/auth/change-password',
+      { currentPassword: 'Old-pass-123!', newPassword: 'New-pass-456!' },
+    ],
+  ] as const)(
+    '%s %s: a refused context (shop inactive) -> 403 SHOP_INACTIVE before the handler',
+    async (method, path, body) => {
+      rpc.results['session_context'] = refusal('SHOP_INACTIVE');
+      const res = await request(app)[method](path).set('Authorization', 'Bearer a.b.c').send(body);
+      expectError(res, 403, 'SHOP_INACTIVE');
+      expect(rpc.calls.map((c) => c.name)).toEqual(['session_context']);
+    },
+  );
+
+  it('the gate runs with the caller token and its x-org-id', async () => {
+    const ORG = '11111111-1111-4111-8111-111111111111';
+    rpc.results['session_context'] = refusal('SHOP_NOT_ALLOWED');
+    const res = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', 'Bearer a.b.c')
+      .set('x-org-id', ORG);
+    expectError(res, 403, 'SHOP_NOT_ALLOWED');
+    expect(rpc.calls).toEqual([{ name: 'session_context', token: 'a.b.c', orgId: ORG }]);
+  });
+
+  it('logout skips the gate: a user of an inactive shop can still log out', async () => {
+    rpc.results['session_context'] = refusal('SHOP_INACTIVE');
+    authApi.admin.signOut.mockResolvedValue({ data: null, error: null });
+    const res = await request(app).post('/api/auth/logout').set('Authorization', 'Bearer a.b.c');
+    expect(res.status).toBe(200);
+    expect(Ack.parse(res.body)).toEqual({ ok: true });
+    expect(rpc.calls.some((c) => c.name === 'session_context')).toBe(false);
+  });
+
+  it('select-shop skips the gate (it picks the shop itself)', async () => {
+    rpc.results['session_context'] = refusal('SHOP_SELECTION_REQUIRED');
+    await request(app)
+      .post('/api/auth/select-shop')
+      .set('Authorization', 'Bearer a.b.c')
+      .send({ orgId: '11111111-1111-4111-8111-111111111111' });
+    expect(rpc.calls.some((c) => c.name === 'session_context')).toBe(false);
   });
 });
 

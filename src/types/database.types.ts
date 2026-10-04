@@ -7825,6 +7825,18 @@ export type Database = {
           tenant_slug: string;
         }[];
       };
+      session_context: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          branch_ids: string[] | null;
+          default_branch_id: string | null;
+          employee_id: string | null;
+          must_change_password: boolean | null;
+          organization_id: string | null;
+          refusal: string | null;
+          role: Database['public']['Enums']['employee_role'] | null;
+        }[];
+      };
     };
     Enums: {
       adjustment_reason: 'damage' | 'loss' | 'found' | 'correction' | 'count' | 'other';
