@@ -131,6 +131,13 @@ jobs:
       - name: F07 audit SQL test
         run: node scripts/db-smoke.mjs supabase/tests/f07_audit_test.sql
 
+      - name: F10 ledger SQL test
+        run: node scripts/db-smoke.mjs supabase/tests/f10_ledger_test.sql
+
+      # 100 parallel sales of the last 10 units, and 50 parallel requests with one idempotency key.
+      - name: F10 ledger concurrency proof
+        run: node scripts/db-ledger-proof.mjs
+
       - name: F11 numbering SQL test
         run: node scripts/db-smoke.mjs supabase/tests/f11_numbering_test.sql
 
@@ -148,6 +155,10 @@ jobs:
           export SUPABASE_SERVICE_ROLE_KEY="$(field SERVICE_ROLE_KEY)"
           export FRONTEND_URL=http://localhost:5173 RUN_INTEGRATION=1 LOG_LEVEL=error
           npm run test:api
+
+      # F10: after everything above wrote to the database, every cache must still equal its ledger.
+      - name: Ledger reconciliation after the full test suite
+        run: node scripts/db-reconcile.mjs
 
       - name: Stop database
         if: always()
