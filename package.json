@@ -10,7 +10,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "build:contracts": "npm run build -w @ecotech/contracts",
+    "build:contracts": "npm run build -w @ziadkhaled-wb/contracts",
     "predev": "npm run build:contracts",
     "dev": "tsx watch src/server.ts",
     "prebuild": "npm run build:contracts",
@@ -23,7 +23,7 @@
     "format:check": "prettier --check .",
     "pretest:api": "npm run build:contracts",
     "test:api": "vitest run",
-    "test:contracts": "npm run test -w @ecotech/contracts",
+    "test:contracts": "npm run test -w @ziadkhaled-wb/contracts",
     "test": "npm run test:api && npm run test:contracts",
     "pretest:watch": "npm run build:contracts",
     "test:watch": "vitest",
@@ -36,7 +36,7 @@
     "db:smoke": "node scripts/db-smoke.mjs"
   },
   "dependencies": {
-    "@ecotech/contracts": "0.1.0",
+    "@ziadkhaled-wb/contracts": "0.1.0",
     "@supabase/supabase-js": "^2.117.2",
     "cors": "^2.8.6",
     "dotenv": "^18.0.4",

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { ZodError, z } from 'zod';
-import { ErrorResponse, HealthResponse } from '@ecotech/contracts';
+import { ErrorResponse, HealthResponse } from '@ziadkhaled-wb/contracts';
 
 const db = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock('./utils/supabase', () => ({

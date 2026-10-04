@@ -2,7 +2,7 @@
 // Skipped unless RUN_INTEGRATION=1.
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import { HealthResponse } from '@ecotech/contracts';
+import { HealthResponse } from '@ziadkhaled-wb/contracts';
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
 

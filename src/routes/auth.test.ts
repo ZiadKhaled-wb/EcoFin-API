@@ -3,7 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import { AuthApiError } from '@supabase/supabase-js';
-import { Ack, AuthSelectShopResponse, ErrorResponse } from '@ecotech/contracts';
+import { Ack, AuthSelectShopResponse, ErrorResponse } from '@ziadkhaled-wb/contracts';
 
 const admin = vi.hoisted(() => ({
   findLoginEmailByUsername: vi.fn(),

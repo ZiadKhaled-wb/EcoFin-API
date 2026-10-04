@@ -1,7 +1,12 @@
 // Unit tests for the F04 auth service. Supabase and the service-role module are mocked.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthError, AuthApiError } from '@supabase/supabase-js';
-import { AuthLoginResponse, AuthMeResponse, AuthSession, ErrorResponse } from '@ecotech/contracts';
+import {
+  AuthLoginResponse,
+  AuthMeResponse,
+  AuthSession,
+  ErrorResponse,
+} from '@ziadkhaled-wb/contracts';
 import type { MembershipRow } from './auth.admin';
 
 // ---------------------------------------------------------------- mocks

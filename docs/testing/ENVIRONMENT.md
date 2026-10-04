@@ -59,7 +59,7 @@ Local URLs: DB `postgresql://postgres:postgres@127.0.0.1:54322/postgres`, API `h
 The Supabase stack uses ports 54321–54329. Only one local Supabase project can run at a time with default ports, so run `supabase stop` before starting another one.
 
 ## ⚠️ Deleting worktrees on Windows
-`git worktree remove --force` (and some recursive deletes) follow the npm workspace link `node_modules/@ecotech/contracts` (a junction to `packages/contracts`) and delete its target. That happened once, when the package was still a separate folder (DECISIONS D21, D26). Unlink the links first: see D21 for the exact commands.
+`git worktree remove --force` (and some recursive deletes) follow the npm workspace link `node_modules/@ziadkhaled-wb/contracts` (a junction to `packages/contracts`) and delete its target. That happened once, when the package was still a separate folder (DECISIONS D21, D26). Unlink the links first: see D21 for the exact commands.
 
 ## Not possible yet
 - Starting the API server, and so every HTTP-level integration and e2e test. Those are written and skipped unless `RUN_INTEGRATION=1` / `RUN_E2E=1`. See `docs/testing/TEST_PLAN.md`.

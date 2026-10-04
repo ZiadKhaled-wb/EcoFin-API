@@ -16,7 +16,7 @@ import {
   type AuthMeResponse,
   type AuthRefreshResponse,
   type AuthSelectShopResponse,
-} from '@ecotech/contracts';
+} from '@ziadkhaled-wb/contracts';
 import * as authService from '../services/auth.service';
 import { requestMeta } from '../middleware/auth';
 import type { RequestAuth } from '../types/express';

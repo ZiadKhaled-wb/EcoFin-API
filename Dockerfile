@@ -2,7 +2,7 @@
 #
 # EcoFin API image. Built by .github/workflows/deploy-dev.yml and pushed to
 # ghcr.io; the VM only pulls and runs it (see docs/05-operations/deployment.md).
-# The repo is an npm workspace: packages/contracts (@ecotech/contracts) is built
+# The repo is an npm workspace: packages/contracts (@ziadkhaled-wb/contracts) is built
 # first and shipped next to the bundled server.
 
 ARG NODE_VERSION=24

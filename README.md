@@ -42,7 +42,7 @@ Then seed the first super admin (see `docs/db/seed-first-super-admin.sql`).
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
 | `npm test` | Vitest, single run (API plus `packages/contracts`) |
-| `npm run build:contracts` | Build the shared `@ecotech/contracts` workspace package |
+| `npm run build:contracts` | Build the shared `@ziadkhaled-wb/contracts` workspace package |
 | `npm run test:watch` | Vitest, watch mode |
 | `npm run test:coverage` | Coverage report |
 
