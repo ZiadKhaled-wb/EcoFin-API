@@ -1,48 +1,42 @@
 // server/src/app.ts
-import express, { type Request, type Response, type NextFunction } from 'express';
+import express from 'express';
 import type { Router } from 'express';
-import cors from 'cors';
-import { randomUUID } from 'node:crypto';
 import authRoutes from './routes/auth.js';
+import healthRoutes from './routes/health.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
-import { env } from './utils/env.js';
+import { requestId } from './middleware/requestId.js';
+import { corsAllowList, securityHeaders } from './middleware/security.js';
+import { getEnv, type Env } from './utils/env.js';
 
-export function createApp(docsRouter?: Router) {
-    const app = express();
+export interface CreateAppOptions {
+  /** Swagger UI router, mounted at /docs. */
+  docsRouter?: Router;
+  /** Parsed env. Defaults to the cached process env (validated on startup). */
+  env?: Pick<Env, 'TRUST_PROXY' | 'CORS_ALLOWED_ORIGINS'>;
+}
 
-    app.set('trust proxy', 1);
+export function createApp(options: CreateAppOptions = {}) {
+  const env = options.env ?? getEnv();
+  const app = express();
 
-    // CORS — allow the frontend origin to make cross-origin requests
-    app.use(cors({
-        origin: env.FRONTEND_URL,
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id'],
-    }));
+  // Number of reverse-proxy hops to trust for req.ip (and so the rate limiter's key).
+  app.set('trust proxy', env.TRUST_PROXY);
+  app.disable('x-powered-by');
 
-    app.use(express.json({ limit: '1mb' }));
+  app.use(requestId());
+  app.use(securityHeaders());
+  app.use(corsAllowList(env.CORS_ALLOWED_ORIGINS));
+  app.use(express.json({ limit: '1mb' }));
 
-    app.use((req: Request, res: Response, next: NextFunction) => {
-        const headerId = req.headers['x-request-id'];
-        req.requestId =
-            typeof headerId === 'string' && headerId.length > 0
-                ? headerId
-                : randomUUID();
-        res.setHeader('x-request-id', req.requestId);
-        next();
-    });
+  app.use('/health', healthRoutes);
 
-    app.get('/health', (_req, res) => {
-        res.json({ ok: true, service: env.SERVICE_NAME, env: env.NODE_ENV });
-    });
+  // API docs — no auth, dev-only by default. Mount BEFORE the 404 handler.
+  if (options.docsRouter) app.use('/docs', options.docsRouter);
 
-    // API docs — no auth, dev-only by default. Mount BEFORE the 404 handler.
-    if (docsRouter) app.use('/docs', docsRouter);
+  app.use('/api/auth', authRoutes);
 
-    app.use('/api/auth', authRoutes);
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
-    app.use(notFoundHandler);
-    app.use(errorHandler);
-
-    return app;
+  return app;
 }

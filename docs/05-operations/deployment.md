@@ -71,7 +71,7 @@ ssh -i <admin-key> <admin>@<vm-ip>
 sudo -u deploy nano /opt/ecofin/api.env
 ```
 Fill `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` from the
-**EcoFin-Development** project, and `FRONTEND_URL` with the Vercel development URL.
+**EcoFin-Development** project, and `FRONTEND_URL` + `CORS_ALLOWED_ORIGINS` with the Vercel development URL (`CORS_ALLOWED_ORIGINS` is required in production; comma-separate several origins).
 The file stays on the VM (mode 600) and is never committed.
 
 ### 5. GitHub: environment `development`
@@ -91,7 +91,7 @@ is passed to the VM for each pull, so no registry password is stored on the VM.
 ### 6. Vercel (web)
 Preview / development environment variables of the web project:
 `VITE_API_URL=https://<API_DOMAIN>`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (EcoFin-Development).
-`FRONTEND_URL` on the VM must be the exact web origin, because CORS allows one origin.
+`CORS_ALLOWED_ORIGINS` on the VM must list the exact web origin(s).
 
 ## Everyday use
 
@@ -124,5 +124,5 @@ already-tested image tag. Production deploy = run that workflow with the tag.
 | `ssh: connect ... timed out` | NSG rule for port 22 / VM running / IP changed |
 | Caddy has no certificate | Port 443 open in the NSG and `API_DOMAIN` resolves to the VM. Port 80 is optional: with it closed, Caddy still gets the certificate over 443 (TLS-ALPN challenge); only the http→https redirect is lost. |
 | API container restarts | `ecofin-deploy logs`: usually a missing or invalid value in `api.env` |
-| Browser CORS error | `FRONTEND_URL` in `api.env` must equal the web origin exactly |
+| Browser CORS error | `CORS_ALLOWED_ORIGINS` in `api.env` must contain the web origin exactly |
 | Migrate job fails to connect | Use the Session pooler URL, percent-encode the password |

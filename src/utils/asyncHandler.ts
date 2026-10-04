@@ -1,9 +1,9 @@
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
 
 export type AsyncRequestHandler = (
-    req: Request,
-    res: Response,
-    next: NextFunction,
+  req: Request,
+  res: Response,
+  next: NextFunction,
 ) => Promise<unknown>;
 
 /**
@@ -12,9 +12,9 @@ export type AsyncRequestHandler = (
  * of becoming an unhandled rejection. Sync throws are caught by Express itself.
  */
 export const asyncHandler = (fn: AsyncRequestHandler): RequestHandler => {
-    return (req, res, next) => {
-        // Promise.resolve handles a handler that (accidentally) returns a
-        // non-Promise value — we still want a uniform .catch.
-        Promise.resolve(fn(req, res, next)).catch(next);
-    };
+  return (req, res, next) => {
+    // Promise.resolve handles a handler that (accidentally) returns a
+    // non-Promise value — we still want a uniform .catch.
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
 };

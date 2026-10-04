@@ -17,3 +17,6 @@ tests
 deploy
 opencode.jsonc
 *.log
+**/node_modules
+**/dist
+**/coverage

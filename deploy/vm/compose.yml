@@ -11,25 +11,25 @@ services:
     init: true
     read_only: true
     tmpfs: [/tmp]
-    security_opt: ["no-new-privileges:true"]
-    expose: ["3001"]          # reachable only from Caddy, never published
+    security_opt: ['no-new-privileges:true']
+    expose: ['3001'] # reachable only from Caddy, never published
     logging: &logging
       driver: json-file
-      options: { max-size: "10m", max-file: "5" }
+      options: { max-size: '10m', max-file: '5' }
 
   caddy:
     image: caddy:2
     restart: unless-stopped
     depends_on: [api]
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
     environment:
       API_DOMAIN: ${API_DOMAIN:?API_DOMAIN is not set in /opt/ecofin/.env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data        # certificates: keep this volume
+      - caddy_data:/data # certificates: keep this volume
       - caddy_config:/config
     logging: *logging
 

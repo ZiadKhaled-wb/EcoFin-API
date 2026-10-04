@@ -14,11 +14,16 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      # The API imports the built package (packages/contracts/dist), so build it first.
+      # typecheck, test and build also do this through their pre* hooks.
+      - name: Build contracts
+        run: npm run build:contracts
 
       - name: Typecheck
         run: npm run typecheck
@@ -26,11 +31,74 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        env:
-          NODE_ENV: test
-          SUPABASE_URL: https://ci-test.supabase.co
-          SUPABASE_ANON_KEY: ci-test-anon-key
-          SUPABASE_SERVICE_ROLE_KEY: ci-test-service-role-key
-          FRONTEND_URL: https://ci-test.example.com
+      - name: Format check
+        run: npm run format:check
+
+      - name: Test (API and contracts)
         run: npm test
+
+      - name: Build
+        run: npm run build
+
+  # F02: the baseline builds an empty database, a second run changes nothing,
+  # the seeded super admin works, and the smoke test passes. Local Supabase only:
+  # this job never links to or pushes to a real project.
+  db:
+    runs-on: ubuntu-latest
+    env:
+      DB_CONTAINER: supabase_db_ecofin-api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # db-smoke.mjs uses only Node built-ins, so no npm ci here.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.119.0
+
+      - name: Start empty database (applies migrations and seeds)
+        run: supabase db start
+
+      - name: Rebuild from zero
+        run: supabase db reset
+
+      - name: Running the migrations twice changes nothing
+        run: |
+          # pg_dump 17.6+ writes a random \restrict key on each run; drop those two lines.
+          dump() {
+            docker exec "$DB_CONTAINER" pg_dump -U postgres -d postgres --no-owner -N supabase_migrations \
+              | grep -Ev '^[\](un)?restrict ' > "$1"
+          }
+          dump "$RUNNER_TEMP/before.sql"
+          supabase migration up --local
+          dump "$RUNNER_TEMP/after.sql"
+          test -s "$RUNNER_TEMP/before.sql"
+          diff "$RUNNER_TEMP/before.sql" "$RUNNER_TEMP/after.sql"
+          echo "Second migration run: no changes ($(wc -l < "$RUNNER_TEMP/before.sql") dump lines)"
+
+      - name: Seeded super admin can sign in and is a super admin
+        run: |
+          result=$(docker exec -i "$DB_CONTAINER" psql -X -q -At -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT 'password_ok=' || (encrypted_password = extensions.crypt('LocalDev-Only-2026!', encrypted_password))
+          FROM auth.users WHERE email = 'superadmin@ecotech.test';
+          BEGIN;
+          SET LOCAL ROLE authenticated;
+          SELECT set_config('request.jwt.claims', '{"sub":"f0000000-0000-0000-0000-000000000001","role":"authenticated"}', true) IS NULL;
+          SELECT 'is_super_admin=' || app.is_super_admin();
+          ROLLBACK;
+          SQL
+          )
+          echo "$result"
+          grep -qx 'password_ok=true' <<< "$result"
+          grep -qx 'is_super_admin=true' <<< "$result"
+
+      - name: Smoke test
+        run: node scripts/db-smoke.mjs
+
+      - name: Stop database
+        if: always()
+        run: supabase stop --no-backup

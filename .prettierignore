@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+package-lock.json
+graphify-out/
+supabase/
+migrations/
+docs/
+.claude/
+.github/
+*.md

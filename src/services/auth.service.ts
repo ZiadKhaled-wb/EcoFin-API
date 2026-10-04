@@ -1,680 +1,596 @@
 // server/src/services/auth.service.ts
 //
-// Activation + login + password management. See ADR-0004 for the reasoning
-// behind the ordering choices (especially activateWorkspace).
+// F04 auth and sessions. Request and response shapes come from @ecotech/contracts (auth module).
 //
-// Pre-auth flows (login identifier resolution, checkLicense, activate,
-// forgot-password) use supabaseAdmin: there is no JWT yet, no tenant
-// context, and these operations are inherently platform-level.
-//
-// After signInWithPassword succeeds, every read goes through supabaseUser(jwt)
-// so RLS is the real gate. If a read fails, the fallback is "fix the policy",
-// not "use the service key".
+//   * Supabase Auth calls use a NEW anon client each time (createAuthClient), so no client ever
+//     keeps a user session between requests.
+//   * Service-role steps (username -> email, membership checks, login_attempts) live in
+//     auth.admin.ts only (D14).
+//   * Everything that runs as the user goes through supabaseForRequest(<JWT>, <x-org-id>), and
+//     every write is a SECURITY DEFINER function (migration 20261003060000_f04_auth.sql).
+//   * Client-facing messages are generic; the client localises from the error code.
 
-import { supabaseAdmin, supabaseAnon, supabaseUser } from '../utils/supabase';
-import { AppError, BadRequest, Unauthorized, Forbidden, NotFound } from '../utils/errors';
+import type { Session } from '@supabase/supabase-js';
+import type {
+  AuthChangePasswordBody,
+  AuthForgotPasswordBody,
+  AuthLoginBody,
+  AuthLoginResponse,
+  AuthMeResponse,
+  AuthRefreshResponse,
+  AuthResetPasswordBody,
+  AuthSelectShopResponse,
+  AuthSession,
+  AuthUser,
+  ShopMembership,
+} from '@ecotech/contracts';
 import {
-    isNonEmptyString,
-    isValidEmail,
-    isValidPassword,
-    isValidLicenseKey,
-    isValidTenantSlug,
-    type TenantRole,
-} from '../utils/validation';
+  createAuthClient,
+  supabaseForRequest,
+  updatePasswordWithToken,
+  type DbClient,
+  type RequestMeta,
+} from '../utils/supabase';
+import { AppError, BadRequest, ServerError, Unauthorized, mapDbError } from '../utils/errors';
+import { getEnv } from '../utils/env';
 import { logger } from '../utils/logger';
+import { decodeJwtPayload, looksLikeJwt } from '../utils/jwt';
+import { authErrorStatus, isAuthClientError } from '../utils/authErrors';
+import {
+  countRecentFailures,
+  findLoginEmailByUsername,
+  loadMemberships,
+  recordLoginAttempt,
+  clearMustChangePassword,
+  type MembershipRow,
+} from './auth.admin';
+import type { RequestAuth } from '../types/express';
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+const invalidCredentials = () => Unauthorized('Invalid credentials.', 'INVALID_CREDENTIALS');
+const tokenInvalid = () => new AppError('Invalid or expired token.', 'TOKEN_INVALID');
+
+function toAuthSession(session: Session): AuthSession {
+  const expiresAtSeconds =
+    session.expires_at ?? Math.floor(Date.now() / 1000) + (session.expires_in ?? 0);
+  return {
+    accessToken: session.access_token,
+    refreshToken: session.refresh_token,
+    expiresAt: new Date(expiresAtSeconds * 1000).toISOString(),
+  };
+}
+
+/** Today's date (YYYY-MM-DD) in the shop's timezone, like app.org_today(). */
+export function todayIn(timezone: string, now: Date = new Date()): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(now);
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(now);
+  }
+}
+
+/** P05: expired = subscription_end < org_today. No end date = not expired. */
+function subscriptionExpired(row: MembershipRow, now: Date): boolean {
+  return row.subscriptionEnd !== null && row.subscriptionEnd < todayIn(row.timezone, now);
+}
+
+/** Revokes one session (scope local) or all of the user's sessions. Never throws. */
+async function revokeSession(
+  accessToken: string,
+  scope: 'local' | 'global' | 'others',
+): Promise<boolean> {
+  try {
+    const { error } = await createAuthClient().auth.admin.signOut(accessToken, scope);
+    if (error) {
+      logger.error({ err: error, scope }, 'auth: session revocation failed');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.error({ err, scope }, 'auth: session revocation failed');
+    return false;
+  }
+}
+
+/** Throws the contract error for a database error (mapped code or generic INTERNAL). */
+function dbError(err: unknown, what: string): AppError {
+  const mapped = mapDbError(err);
+  if (mapped) return mapped;
+  logger.error({ err }, `auth: ${what} failed`);
+  return ServerError('Request failed.');
+}
+
+async function myShops(db: DbClient): Promise<ShopMembership[]> {
+  const { data, error } = await db.rpc('my_shops');
+  if (error) throw dbError(error, 'my_shops');
+  return (data ?? []).map((row) => ({
+    orgId: row.org_id,
+    orgName: row.org_name,
+    tenantSlug: row.tenant_slug,
+    role: row.role,
+  }));
+}
+
+async function lockoutCheck(
+  identifier: string,
+  tenantSlug: string | null,
+  attempt: LoginAttemptBase,
+) {
+  const env = getEnv();
+  const failures = await countRecentFailures(identifier, tenantSlug, env.LOGIN_WINDOW_MINUTES);
+  if (failures >= env.LOGIN_MAX_FAILURES) {
+    await recordLoginAttempt({ ...attempt, success: false });
+    throw new AppError(
+      'Too many failed login attempts. Try again later.',
+      'TOO_MANY_LOGIN_ATTEMPTS',
+    );
+  }
+}
+
+interface LoginAttemptBase {
+  identifier: string;
+  tenantSlug: string | null;
+  ip?: string | undefined;
+  userAgent?: string | undefined;
+}
+
+/** Signs in with a fresh client. Wrong password (or any 4xx from Auth) -> null. */
+async function signIn(email: string, password: string): Promise<Session | null> {
+  const { data, error } = await createAuthClient().auth.signInWithPassword({ email, password });
+  if (error) {
+    if (authErrorStatus(error) === 429) {
+      logger.warn({ err: error }, 'auth: Supabase Auth rate-limited a sign-in');
+      throw new AppError('Too many requests. Try again later.', 'TOO_MANY_REQUESTS');
+    }
+    if (!isAuthClientError(error)) {
+      logger.error({ err: error }, 'auth: Supabase Auth sign-in call failed');
+      throw ServerError('Login failed.');
+    }
+    return null;
+  }
+  return data.session ?? null;
+}
 
 // ============================================================================
 // Login
 // ============================================================================
 
-export interface LoginUser {
-    id: string;
-    personId: string;
-    email: string | null;
-    username: string | null;
-    role: TenantRole | 'SUPER_ADMIN';
-    branchId: string | null;
-    orgId: string | null;
-    permissions: string[];
-    isSuperAdmin: boolean;
+interface ShopDecision {
+  shops: ShopMembership[];
+  activeShop: ShopMembership | null;
+  mustChangePassword: boolean;
 }
 
-export interface LoginResult {
-    user: LoginUser;
-    session: { access_token: string; refresh_token: string };
-    must_change_password: boolean;
+/**
+ * Picks the shops this login may use and refuses the login when none is usable:
+ *   ACCOUNT_DISABLED      every candidate employee row is inactive or archived
+ *   SHOP_INACTIVE         the shop status is anything but 'active' (suspended, expired, closed)
+ *   SUBSCRIPTION_EXPIRED  subscription_end is before today in the shop's timezone (P05)
+ * `targetSlug` (username login, or email + tenantSlug) limits the decision to that shop.
+ */
+async function decideShops(
+  userId: string,
+  accessToken: string,
+  targetSlug: string | null,
+  meta: RequestMeta,
+): Promise<ShopDecision> {
+  const rows = await loadMemberships(userId);
+
+  if (rows.length === 0) {
+    // Platform super admin (no employee rows): self-read of super_admins with the user's JWT.
+    const db = supabaseForRequest(accessToken, undefined, meta);
+    const { data, error } = await db
+      .from('super_admins')
+      .select('is_active')
+      .eq('auth_user_id', userId)
+      .maybeSingle();
+    if (error) throw dbError(error, 'super admin lookup');
+    if (!data) throw invalidCredentials();
+    if (!data.is_active) throw new AppError('Account disabled.', 'ACCOUNT_DISABLED');
+    return { shops: [], activeShop: null, mustChangePassword: false };
+  }
+
+  const candidates = targetSlug ? rows.filter((r) => r.tenantSlug === targetSlug) : rows;
+  if (candidates.length === 0) throw invalidCredentials();
+
+  const active = candidates.filter((r) => r.isActive && !r.archived);
+  if (active.length === 0) throw new AppError('Account disabled.', 'ACCOUNT_DISABLED');
+  const open = active.filter((r) => r.orgStatus === 'active');
+  if (open.length === 0) throw new AppError('Shop inactive.', 'SHOP_INACTIVE');
+  const now = new Date();
+  const usable = open.filter((r) => !subscriptionExpired(r, now));
+  if (usable.length === 0) throw new AppError('Subscription expired.', 'SUBSCRIPTION_EXPIRED');
+
+  // D14: the list itself comes from my_shops() with the user's JWT.
+  const listed = await myShops(supabaseForRequest(accessToken, undefined, meta));
+  const usableIds = new Set(usable.map((r) => r.orgId));
+  const shops = listed.filter((s) => usableIds.has(s.orgId));
+  if (shops.length === 0) {
+    logger.error({ userId }, 'login: membership check and my_shops() disagree');
+    throw ServerError('Login failed.');
+  }
+
+  const activeShop = shops.length === 1 ? (shops[0] ?? null) : null;
+  const flagRows = activeShop ? usable.filter((r) => r.orgId === activeShop.orgId) : usable;
+  return {
+    shops,
+    activeShop,
+    mustChangePassword: flagRows.some((r) => r.mustChangePassword),
+  };
 }
 
-// Every credential failure returns this exact message. Do not vary it.
-const INVALID_CREDENTIALS = 'بيانات الدخول غير صحيحة.';
-
-export async function login(
-    tenant_slug: string,
-    identifier: string,
-    password: string,
-): Promise<LoginResult> {
-    if (!isNonEmptyString(tenant_slug) || !isNonEmptyString(identifier) || !isNonEmptyString(password)) {
-        throw Unauthorized(INVALID_CREDENTIALS, 'INVALID_CREDENTIALS');
-    }
-
-    const slug = tenant_slug.trim().toLowerCase();
-    if (!isValidTenantSlug(slug)) {
-        throw Unauthorized(INVALID_CREDENTIALS, 'INVALID_CREDENTIALS');
-    }
-
-    // 1. Resolve the tenant. Pre-auth, service-role.
-    const { data: org, error: orgError } = await supabaseAdmin
-        .from('organizations')
-        .select('id, tenant_slug, name, is_active, is_suspended')
-        .eq('tenant_slug', slug)
-        .maybeSingle();
-
-    if (orgError) {
-        logger.error({ err: orgError, slug }, 'login: organization lookup failed');
-        throw new AppError('فشل تسجيل الدخول.', 'INTERNAL', 500);
-    }
-    if (!org || !org.is_active || org.is_suspended) {
-        // Do not distinguish "unknown slug" from "suspended org".
-        throw Unauthorized(INVALID_CREDENTIALS, 'INVALID_CREDENTIALS');
-    }
-
-    // 2. Resolve the identifier to an email.
-    let email: string | null = null;
-    const trimmed = identifier.trim();
-
-    if (trimmed.includes('@')) {
-        if (!isValidEmail(trimmed)) {
-            throw Unauthorized(INVALID_CREDENTIALS, 'INVALID_CREDENTIALS');
-        }
-        email = trimmed.toLowerCase();
-    } else {
-        const { data: emp, error: empError } = await supabaseAdmin
-            .from('employees')
-            .select('auth_id')
-            .eq('organization_id', org.id)
-            .eq('username', trimmed)
-            .maybeSingle();
-
-        if (empError) {
-            logger.error({ err: empError, slug }, 'login: username lookup failed');
-            throw new AppError('فشل تسجيل الدخول.', 'INTERNAL', 500);
-        }
-        if (!emp?.auth_id) {
-            throw Unauthorized(INVALID_CREDENTIALS, 'INVALID_CREDENTIALS');
-        }
-
-        const { data: authUser, error: authUserError } =
-            await supabaseAdmin.auth.admin.getUserById(emp.auth_id);
-        if (authUserError || !authUser?.user?.email) {
-            throw Unauthorized(INVALID_CREDENTIALS, 'INVALID_CREDENTIALS');
-        }
-        email = authUser.user.email.toLowerCase();
-    }
-
-    // 3. Sign in with the anon client — respects Supabase's own rate limiting.
-    const { data: signIn, error: signInError } = await supabaseAnon.auth.signInWithPassword({
-        email,
-        password,
-    });
-    if (signInError || !signIn?.user || !signIn?.session) {
-        throw Unauthorized(INVALID_CREDENTIALS, 'INVALID_CREDENTIALS');
-    }
-
-    const jwt = signIn.session.access_token;
-    const userClient = supabaseUser(jwt);
-
-    // 4. Load the caller's employee row via RLS. Do NOT fall back to service
-    //    role: a broken policy should fail login loudly.
-    // server/src/services/auth.service.ts
-
-    // After signInWithPassword succeeds.
-    const { data: employee, error: empReadError } = await supabaseAdmin
-        .from('employees')
-        .select('id, organization_id, role, username, branch_id, permissions, is_active, must_change_password')
-        .eq('auth_id', signIn.user.id)
-        .maybeSingle();
-
-    if (empReadError) {
-        logger.error({ err: empReadError, userId: signIn.user.id }, 'login: employee read failed');
-        throw new AppError('فشل تسجيل الدخول.', 'INTERNAL', 500);
-    }
-
-    if (employee) {
-        // Cross-check the tenant matches the slug the caller supplied.
-        if (employee.organization_id !== org.id) {
-            logger.warn({ /* … */ }, 'login: tenant mismatch between JWT and requested slug');
-            throw Unauthorized(INVALID_CREDENTIALS, 'INVALID_CREDENTIALS');
-        }
-        if (!employee.is_active) {
-            // Password was correct. This distinction is safe to disclose.
-            throw Forbidden('هذا الحساب معطل. يرجى التواصل مع الإدارة.', 'ACCOUNT_DISABLED');
-        }
-
-        return {
-            user: {
-                id: signIn.user.id,
-                personId: employee.id,
-                email,
-                username: employee.username ?? null,
-                role: employee.role as TenantRole,
-                branchId: employee.branch_id ?? null,
-                orgId: employee.organization_id,
-                permissions: Array.isArray(employee.permissions)
-                    ? (employee.permissions as string[])
-                    : [],
-                isSuperAdmin: false,
-            },
-            session: {
-                access_token: signIn.session.access_token,
-                refresh_token: signIn.session.refresh_token,
-            },
-            must_change_password: Boolean(employee.must_change_password),
-        };
-    }
-
-    // 5. No employee row. Try super admins.
-    const { data: sa, error: saError } = await userClient
-        .from('super_admins')
-        .select('id, email, is_active, full_name')
-        .eq('auth_user_id', signIn.user.id)
-        .maybeSingle();
-
-    if (saError) {
-        logger.error({ err: saError, userId: signIn.user.id }, 'login: super-admin read failed');
-        throw new AppError('فشل تسجيل الدخول.', 'INTERNAL', 500);
-    }
-    if (sa && sa.is_active) {
-        // A super admin is a platform user — the slug they supplied is
-        // informational, not a scope constraint. See open question in ADR.
-        return {
-            user: {
-                id: signIn.user.id,
-                personId: sa.id,
-                email: signIn.user.email ?? email,
-                username: null,
-                role: 'SUPER_ADMIN',
-                branchId: null,
-                orgId: org.id,
-                permissions: [],
-                isSuperAdmin: true,
-            },
-            session: {
-                access_token: signIn.session.access_token,
-                refresh_token: signIn.session.refresh_token,
-            },
-            must_change_password: false,
-        };
-    }
-
-    // No employee, no super admin. Misprovisioned account.
-    throw Unauthorized(INVALID_CREDENTIALS, 'INVALID_CREDENTIALS');
+async function recordLogin(accessToken: string, orgId: string, meta: RequestMeta): Promise<void> {
+  const { error } = await supabaseForRequest(accessToken, orgId, meta).rpc('auth_record_login');
+  if (error) throw dbError(error, 'auth_record_login');
 }
 
-// ============================================================================
-// checkLicense
-// ============================================================================
+export async function login(body: AuthLoginBody, meta: RequestMeta): Promise<AuthLoginResponse> {
+  const identifier = body.identifier.trim().toLowerCase();
+  const isEmail = identifier.includes('@');
+  const tenantSlug = body.tenantSlug ?? null;
+  const attempt: LoginAttemptBase = {
+    identifier,
+    tenantSlug,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+  };
 
-export interface CheckLicenseResult {
-    license_key: string;
-    is_used: boolean;
-    plan_key: string | null;
-    org_name: string | null;
-}
+  // D17: refuse before Supabase Auth is called.
+  await lockoutCheck(identifier, isEmail ? null : tenantSlug, attempt);
 
-// Deliberately does NOT return owner_email. The activation form lets the
-// user type their own email; if it doesn't match, activateWorkspace rejects.
-// Returning the owner email during a side-effect-free lookup was an
-// enumeration leak (see ADR-0004).
-export async function checkLicense(licenseKey: string): Promise<CheckLicenseResult> {
-    if (!isValidLicenseKey(licenseKey)) {
-        throw BadRequest('كود التفعيل غير صالح.', 'LICENSE_INVALID');
+  const failed = async () => {
+    await recordLoginAttempt({ ...attempt, success: false });
+    return invalidCredentials();
+  };
+
+  // Unknown slug, unknown username and wrong password all end in the same INVALID_CREDENTIALS.
+  const email = isEmail
+    ? identifier
+    : tenantSlug
+      ? await findLoginEmailByUsername(tenantSlug, identifier)
+      : null;
+  if (!email) throw await failed();
+
+  const session = await signIn(email, body.password);
+  if (!session?.user) throw await failed();
+
+  // Password is right. Any refusal from here on revokes the session that was just created.
+  try {
+    const decision = await decideShops(session.user.id, session.access_token, tenantSlug, meta);
+    if (decision.activeShop) {
+      await recordLogin(session.access_token, decision.activeShop.orgId, meta);
     }
-    const normalized = licenseKey.trim().toUpperCase();
+    await recordLoginAttempt({ ...attempt, success: true });
 
-    const { data: license, error } = await supabaseAdmin
-        .from('saaslicenses')
-        .select('license_key, is_used, is_active, is_revoked, expires_at, plan_key, issued_to_org_id')
-        .eq('license_key', normalized)
-        .maybeSingle();
-
-    if (error) {
-        logger.error({ err: error }, 'checkLicense: query failed');
-        throw new AppError('فشل التحقق من كود التفعيل.', 'INTERNAL', 500);
-    }
-    if (!license) {
-        throw BadRequest('كود التفعيل غير صحيح.', 'LICENSE_INVALID');
-    }
-
-    const isUsable =
-        !license.is_used &&
-        license.is_active &&
-        !license.is_revoked &&
-        (!license.expires_at || new Date(license.expires_at) > new Date());
-
-    let orgName: string | null = null;
-    if (isUsable && license.issued_to_org_id) {
-        const { data: org } = await supabaseAdmin
-            .from('organizations')
-            .select('name')
-            .eq('id', license.issued_to_org_id)
-            .maybeSingle();
-        orgName = org?.name ?? null;
-    }
-
+    const user: AuthUser = { id: session.user.id, email: session.user.email ?? null };
     return {
-        license_key: license.license_key,
-        is_used: license.is_used,
-        plan_key: license.plan_key ?? null,
-        org_name: orgName,
+      ...toAuthSession(session),
+      user,
+      mustChangePassword: decision.mustChangePassword,
+      // With a target shop, only that shop is returned so the client knows which one is active.
+      shops: decision.activeShop ? [decision.activeShop] : decision.shops,
+      requiresShopSelection: decision.activeShop === null && decision.shops.length > 1,
     };
+  } catch (err) {
+    await revokeSession(session.access_token, 'local');
+    if (err instanceof AppError && err.code === 'INVALID_CREDENTIALS') {
+      throw await failed();
+    }
+    // Not a credential failure: record it without counting against the lockout twice.
+    await recordLoginAttempt({ ...attempt, success: false }).catch(() => undefined);
+    throw err;
+  }
 }
 
 // ============================================================================
-// activateWorkspace
+// Select shop (D23). Works with a multi-shop login token and no x-org-id: the body's orgId is
+// the choice, checked against my_shops(). The client keeps its tokens and sends x-org-id.
 // ============================================================================
 
-export interface ActivateWorkspacePayload {
-    license_key: string;
-    email: string;
-    username: string;
-    password: string;
-    confirmPassword: string;
-}
-
-export interface ActivateWorkspaceResult {
-    tenant_slug: string;
-    tenant_name: string;
-    org_id: string;
-}
-
-// NOTE on ordering (see ADR-0004 §"activation ordering"):
-//
-//   1. Pre-flight read. Read-only.
-//   2. Update the Supabase Auth password FIRST. On failure, no state changed.
-//   3. Call the activate_workspace RPC, which performs the atomic DB writes
-//      (license flip + username + audit) inside one transaction.
-//
-// If step 3 fails after step 2 succeeded, the user can retry activation
-// safely — the Auth password is set but the license is still unused. If
-// step 2 had run after step 3 instead, a network blip on the Auth call
-// would leave the license marked used and the user permanently locked out.
-export async function activateWorkspace(
-    payload: ActivateWorkspacePayload,
-): Promise<ActivateWorkspaceResult> {
-    const { license_key, email, username, password, confirmPassword } = payload;
-
-    if (!isValidLicenseKey(license_key)) throw BadRequest('كود التفعيل غير صالح.', 'LICENSE_INVALID');
-    if (!isValidEmail(email)) throw BadRequest('البريد الإلكتروني غير صالح.', 'VALIDATION_FAILED');
-    if (!isNonEmptyString(username) || username.trim().length < 3) {
-        throw BadRequest('اسم المستخدم يجب ألا يقل عن 3 أحرف.', 'VALIDATION_FAILED');
-    }
-    if (!isValidPassword(password)) {
-        throw BadRequest('كلمة المرور ضعيفة (8 أحرف على الأقل).', 'VALIDATION_FAILED');
-    }
-    if (password !== confirmPassword) {
-        throw BadRequest('كلمتا المرور غير متطابقتين.', 'VALIDATION_FAILED');
-    }
-
-    const normalizedKey = license_key.trim().toUpperCase();
-    const trimmedUsername = username.trim();
-
-    // Step 1 — pre-flight reads.
-    const { data: license, error: licError } = await supabaseAdmin
-        .from('saaslicenses')
-        .select('id, is_used, is_active, is_revoked, expires_at, issued_to_org_id')
-        .eq('license_key', normalizedKey)
-        .maybeSingle();
-
-    if (licError) {
-        logger.error({ err: licError }, 'activateWorkspace: license lookup failed');
-        throw new AppError('فشل التفعيل.', 'INTERNAL', 500);
-    }
-    if (!license) throw BadRequest('كود التفعيل غير صحيح.', 'LICENSE_INVALID');
-    if (license.is_used) throw BadRequest('تم استخدام كود التفعيل هذا بالفعل.', 'LICENSE_USED');
-    if (!license.is_active || license.is_revoked) {
-        throw BadRequest('كود التفعيل غير صالح.', 'LICENSE_INVALID');
-    }
-    if (license.expires_at && new Date(license.expires_at) <= new Date()) {
-        throw BadRequest('انتهت صلاحية كود التفعيل.', 'LICENSE_EXPIRED');
-    }
-    if (!license.issued_to_org_id) {
-        throw NotFound(
-            'لم يتم تجهيز المنشأة الخاصة بهذا الكود بعد. يرجى التواصل مع الدعم.',
-            'LICENSE_NOT_PROVISIONED',
-        );
-    }
-
-    const { data: owner, error: ownerError } = await supabaseAdmin
-        .from('employees')
-        .select('id, auth_id')
-        .eq('organization_id', license.issued_to_org_id)
-        .eq('role', 'OWNER')
-        .maybeSingle();
-
-    if (ownerError) {
-        logger.error(
-            { err: ownerError, orgId: license.issued_to_org_id },
-            'activateWorkspace: owner lookup failed',
-        );
-        throw new AppError('فشل التفعيل.', 'INTERNAL', 500);
-    }
-    if (!owner?.auth_id) {
-        throw NotFound('لم يتم العثور على حساب المالك المرتبط بهذا الكود.', 'NOT_FOUND');
-    }
-
-    const { data: authUserData, error: authUserError } =
-        await supabaseAdmin.auth.admin.getUserById(owner.auth_id);
-    if (authUserError || !authUserData?.user?.email) {
-        throw new AppError('تعذر التحقق من بيانات الحساب.', 'INTERNAL', 500);
-    }
-    if (
-        authUserData.user.email.trim().toLowerCase() !== email.trim().toLowerCase()
-    ) {
-        throw Unauthorized(
-            'البريد الإلكتروني لا يطابق البريد المسجل لهذا الكود.',
-            'INVALID_CREDENTIALS',
-        );
-    }
-
-    // Step 2 — password FIRST. On failure nothing else has changed.
-    const { error: pwError } = await supabaseAdmin.auth.admin.updateUserById(
-        owner.auth_id,
-        { password },
-    );
-    if (pwError) {
-        logger.error({ err: pwError, ownerId: owner.id }, 'activateWorkspace: password update failed');
-        throw new AppError('فشل تحديث كلمة المرور.', 'INTERNAL', 500);
-    }
-
-    // Step 3 — atomic DB writes via RPC. The function re-validates the
-    // license inside its own transaction (SELECT ... FOR UPDATE), so a
-    // concurrent activation on the same key cannot double-succeed.
-    const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('activate_workspace', {
-        p_license_key: normalizedKey,
-        p_owner_auth_id: owner.auth_id,
-        p_username: trimmedUsername,
-    });
-
-    if (rpcError) {
-        // The Auth password is already set but the DB state is unchanged.
-        // This is a recoverable state: the user can re-run activation. Log
-        // loudly so a human sees it if it happens in production.
-        const message = rpcError.message ?? '';
-        if (message.includes('LICENSE_USED')) {
-            throw BadRequest('تم استخدام كود التفعيل هذا بالفعل.', 'LICENSE_USED');
-        }
-        if (message.includes('USERNAME_TAKEN')) {
-            throw BadRequest(
-                'اسم المستخدم هذا مستخدم بالفعل، يرجى اختيار اسم آخر.',
-                'VALIDATION_FAILED',
-            );
-        }
-        if (message.includes('LICENSE_EXPIRED')) {
-            throw BadRequest('انتهت صلاحية كود التفعيل.', 'LICENSE_EXPIRED');
-        }
-        if (message.includes('LICENSE_INVALID')) {
-            throw BadRequest('كود التفعيل غير صالح.', 'LICENSE_INVALID');
-        }
-        if (message.includes('OWNER_NOT_FOUND')) {
-            throw NotFound('لم يتم العثور على حساب المالك المرتبط بهذا الكود.', 'NOT_FOUND');
-        }
-
-        logger.error(
-            {
-                err: rpcError,
-                licenseKey: normalizedKey,
-                ownerId: owner.id,
-                ownerAuthId: owner.auth_id,
-            },
-            'P1: activateWorkspace RPC failed AFTER password update — state is recoverable but requires follow-up',
-        );
-        throw new AppError(
-            'فشل تفعيل المنشأة. يرجى المحاولة مرة أخرى أو التواصل مع الدعم.',
-            'INTERNAL',
-            500,
-        );
-    }
-
-    const row = Array.isArray(rpcData) ? rpcData[0] : rpcData;
-    if (!row?.tenant_slug || !row?.org_id) {
-        logger.error(
-            { rpcData, licenseKey: normalizedKey },
-            'P1: activateWorkspace RPC returned unexpected shape',
-        );
-        throw new AppError('فشل تفعيل المنشأة.', 'INTERNAL', 500);
-    }
-
-    return {
-        tenant_slug: row.tenant_slug as string,
-        tenant_name: (row.tenant_name as string) ?? '',
-        org_id: row.org_id as string,
-    };
+export async function selectShop(
+  auth: RequestAuth,
+  orgId: string,
+  meta: RequestMeta,
+): Promise<AuthSelectShopResponse> {
+  const shops = await myShops(supabaseForRequest(auth.accessToken, undefined, meta));
+  const shop = shops.find((s) => s.orgId === orgId.toLowerCase());
+  if (!shop) throw new AppError('Shop not allowed.', 'SHOP_NOT_ALLOWED');
+  await recordLogin(auth.accessToken, shop.orgId, meta);
+  return { user: { id: auth.userId, email: auth.email }, shop };
 }
 
 // ============================================================================
-// forgotPassword
+// Refresh
 // ============================================================================
-//
-// Always returns success to the caller. Never reveals whether the tenant
-// exists, whether the identifier maps to a user, or whether an email was
-// actually sent.
-export async function forgotPassword(tenant_slug: string, identifier: string): Promise<void> {
-    if (!isNonEmptyString(tenant_slug) || !isNonEmptyString(identifier)) return;
 
-    const slug = tenant_slug.trim().toLowerCase();
-    if (!isValidTenantSlug(slug)) return;
+export async function refresh(refreshToken: string): Promise<AuthRefreshResponse> {
+  const { data, error } = await createAuthClient().auth.refreshSession({
+    refresh_token: refreshToken,
+  });
+  if (error && !isAuthClientError(error)) {
+    logger.error({ err: error }, 'refresh: Supabase Auth call failed');
+    throw ServerError('Refresh failed.');
+  }
+  if (error || !data.session) throw tokenInvalid();
+  return toAuthSession(data.session);
+}
 
-    const { data: org } = await supabaseAdmin
-        .from('organizations')
-        .select('id')
-        .eq('tenant_slug', slug)
-        .maybeSingle();
-    if (!org) return;
+// ============================================================================
+// Logout
+// ============================================================================
 
-    let email: string | null = null;
-    const trimmed = identifier.trim();
+const NO_SHOP_SESSION = new Set(['SHOP_SELECTION_REQUIRED', 'NOT_AN_EMPLOYEE', 'SHOP_NOT_ALLOWED']);
 
-    if (trimmed.includes('@')) {
-        if (isValidEmail(trimmed)) email = trimmed.toLowerCase();
+export async function logout(auth: RequestAuth, meta: RequestMeta): Promise<void> {
+  // Audit first (needs the still-valid token), then revoke. Logout always revokes, even when
+  // the audit can't be written (no active shop, e.g. a multi-shop login before selection).
+  const { error } = await supabaseForRequest(auth.accessToken, auth.orgId, meta).rpc(
+    'auth_record_logout',
+  );
+  if (error) {
+    const mapped = mapDbError(error);
+    if (mapped && NO_SHOP_SESSION.has(mapped.code)) {
+      logger.info({ userId: auth.userId, code: mapped.code }, 'logout: no shop session, no audit');
     } else {
-        const { data: emp } = await supabaseAdmin
-            .from('employees')
-            .select('auth_id')
-            .eq('organization_id', org.id)
-            .eq('username', trimmed)
-            .maybeSingle();
-        if (emp?.auth_id) {
-            const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(emp.auth_id);
-            email = authUser?.user?.email ?? null;
-        }
+      logger.error({ err: error, userId: auth.userId }, 'logout: audit failed');
     }
+  }
+  const revoked = await revokeSession(auth.accessToken, 'local');
+  if (!revoked) throw ServerError('Logout failed.');
+}
+
+// ============================================================================
+// Forgot password (always 202, never says whether the account exists)
+// ============================================================================
+
+export async function forgotPassword(body: AuthForgotPasswordBody): Promise<void> {
+  try {
+    const identifier = body.identifier.trim().toLowerCase();
+    const email = identifier.includes('@')
+      ? identifier
+      : body.tenantSlug
+        ? await findLoginEmailByUsername(body.tenantSlug, identifier)
+        : null;
     if (!email) return;
 
-    // Confirm the email belongs to this org before sending. Otherwise a
-    // user could type a foreign email and trigger a reset link for a
-    // different tenant's user via a tenant-scoped form.
-    const { data: empByEmail } = await supabaseAdmin
-        .from('employees')
-        .select('auth_id')
-        .eq('organization_id', org.id)
-        .eq('email', email)
-        .maybeSingle();
-    if (!empByEmail) return;
-
-    const redirectTo = `${process.env.FRONTEND_URL ?? 'http://localhost:5173'}/reset-password`;
-
-    const { error } = await supabaseAnon.auth.resetPasswordForEmail(email, { redirectTo });
-    if (error) {
-        // Log the failure but do not surface it — the response shape is
-        // identical regardless.
-        logger.warn({ err: error, slug }, 'forgotPassword: resetPasswordForEmail failed');
-    }
+    const redirectTo = `${getEnv().FRONTEND_URL.replace(/\/+$/, '')}/reset-password`;
+    const { error } = await createAuthClient().auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) logger.warn({ err: error }, 'forgotPassword: resetPasswordForEmail failed');
+  } catch (err) {
+    // The answer is the same whatever happens.
+    logger.error({ err }, 'forgotPassword: failed');
+  }
 }
 
 // ============================================================================
-// resetOwnerPassword
+// Reset password (from the emailed recovery link)
 // ============================================================================
-//
-// Owner-scoped, in-app password reset for another employee in the same org.
-// The middleware chain already enforces auth + isOwner; this function
-// re-checks the tenant scope so a routing mistake can't turn into a
-// cross-tenant account takeover.
-export async function resetOwnerPassword(
-    userId: string,
-    newPassword: string,
-    callerOrgId: string,
-): Promise<void> {
-    if (!isNonEmptyString(userId) || !isNonEmptyString(newPassword)) {
-        throw BadRequest('حقول مطلوبة مفقودة.', 'VALIDATION_FAILED');
-    }
-    if (!isNonEmptyString(callerOrgId)) {
-        throw Forbidden('تعذر تحديد المؤسسة الخاصة بك.', 'TENANT_SCOPE_REQUIRED');
-    }
-    if (!isValidPassword(newPassword)) {
-        throw BadRequest('كلمة المرور الجديدة ضعيفة.', 'VALIDATION_FAILED');
-    }
 
-    const { data: target, error: targetError } = await supabaseAdmin
-        .from('employees')
-        .select('id, organization_id')
-        .eq('auth_id', userId)
-        .maybeSingle();
-
-    if (targetError) {
-        logger.error({ err: targetError, userId }, 'resetOwnerPassword: target lookup failed');
-        throw new AppError('فشل إعادة تعيين كلمة المرور.', 'INTERNAL', 500);
-    }
-    if (!target) {
-        throw NotFound('لم يتم العثور على هذا الحساب.', 'NOT_FOUND');
-    }
-    if (target.organization_id !== callerOrgId) {
-        logger.warn(
-            { callerOrgId, targetOrgId: target.organization_id, targetUserId: userId },
-            'resetOwnerPassword: cross-tenant attempt blocked',
-        );
-        throw Forbidden(
-            'لا يمكنك إعادة تعيين كلمة المرور لحساب خارج مؤسستك.',
-            'FORBIDDEN',
-        );
-    }
-
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-        password: newPassword,
+/**
+ * `token` is the access token of the recovery session (what the reset page gets from the
+ * Supabase link) or the link's token_hash. Either way Supabase Auth validates it. A normal
+ * password-login token is refused: it must come from the emailed link (amr method otp/recovery),
+ * otherwise a stolen access token could change the password without the current one.
+ */
+export async function resetPassword(body: AuthResetPasswordBody): Promise<void> {
+  let accessToken = body.token;
+  if (!looksLikeJwt(body.token)) {
+    const { data, error } = await createAuthClient().auth.verifyOtp({
+      token_hash: body.token,
+      type: 'recovery',
     });
-    if (error) {
-        logger.error({ err: error, userId, callerOrgId }, 'resetOwnerPassword: update failed');
-        throw new AppError('فشل تحديث كلمة المرور.', 'INTERNAL', 500);
+    if (error && !isAuthClientError(error)) {
+      logger.error({ err: error }, 'resetPassword: Supabase Auth verifyOtp failed');
+      throw ServerError('Reset failed.');
     }
+    if (error || !data.session) throw tokenInvalid();
+    accessToken = data.session.access_token;
+  }
+
+  const { data, error } = await createAuthClient().auth.getUser(accessToken);
+  if (error && !isAuthClientError(error)) {
+    logger.error({ err: error }, 'resetPassword: Supabase Auth getUser failed');
+    throw ServerError('Reset failed.');
+  }
+  if (error || !data.user) throw tokenInvalid();
+  const claims = decodeJwtPayload(accessToken);
+  const fromRecoveryLink = (claims?.amr ?? []).some(
+    (m) => m.method === 'otp' || m.method === 'recovery',
+  );
+  if (!fromRecoveryLink || claims?.sub !== data.user.id) throw tokenInvalid();
+
+  await setPassword(accessToken, body.newPassword);
+
+  // The recovery session and every other session of this user end here.
+  const revoked = await revokeSession(accessToken, 'global');
+  if (!revoked)
+    logger.error({ userId: data.user.id }, 'P1: password reset but sessions not revoked');
+}
+
+async function setPassword(accessToken: string, newPassword: string): Promise<void> {
+  let result;
+  try {
+    result = await updatePasswordWithToken(accessToken, newPassword);
+  } catch (err) {
+    logger.error({ err }, 'auth: password update call failed');
+    throw ServerError('Password update failed.');
+  }
+  if (result.ok) return;
+  if (result.status === 401 || result.status === 403) throw tokenInvalid();
+  if (result.status === 400 || result.status === 422) {
+    // same_password, weak_password, ...
+    throw BadRequest('The new password was rejected.', 'VALIDATION_FAILED', {
+      reason: result.code ?? 'rejected',
+    });
+  }
+  logger.error({ status: result.status, code: result.code }, 'auth: password update failed');
+  throw ServerError('Password update failed.');
 }
 
 // ============================================================================
-// changePassword
+// Change password (logged in)
 // ============================================================================
-//
-// The temp-password flow. Called on a session where the employee row has
-// must_change_password = true — the only endpoint (besides logout) that
-// such a user can reach.
+
 export async function changePassword(
-    employeeId: string,
-    callerAuthId: string,
-    callerOrgId: string,
-    currentPassword: string,
-    newPassword: string,
-    confirmPassword: string,
+  auth: RequestAuth,
+  body: AuthChangePasswordBody,
+  meta: RequestMeta,
 ): Promise<void> {
-    if (!isNonEmptyString(currentPassword)) {
-        throw BadRequest('كلمة المرور الحالية مطلوبة.', 'VALIDATION_FAILED');
-    }
-    if (!isValidPassword(newPassword)) {
-        throw BadRequest('كلمة المرور الجديدة ضعيفة (8 أحرف على الأقل).', 'VALIDATION_FAILED');
-    }
-    if (newPassword !== confirmPassword) {
-        throw BadRequest('كلمتا المرور غير متطابقتين.', 'VALIDATION_FAILED');
-    }
-    if (currentPassword === newPassword) {
-        throw BadRequest('يجب اختيار كلمة مرور مختلفة عن الحالية.', 'VALIDATION_FAILED');
-    }
+  if (body.currentPassword === body.newPassword) {
+    throw BadRequest('The new password must differ from the current one.', 'VALIDATION_FAILED');
+  }
+  const email = auth.email?.toLowerCase();
+  if (!email) throw invalidCredentials();
 
-    // Look up the caller's email so we can verify the current password.
-    const { data: authUser, error: authErr } =
-        await supabaseAdmin.auth.admin.getUserById(callerAuthId);
-    if (authErr || !authUser?.user?.email) {
-        throw new AppError('تعذر التحقق من الحساب.', 'INTERNAL', 500);
-    }
+  // The shop session must be clear before anything changes (the flag and audit need it).
+  const { db } = await shopSessionClient(auth, meta);
 
-    // Verify current password via the anon client — this respects rate limits
-    // and gives us Supabase's own verification rather than trusting our own.
-    const { error: signInError } = await supabaseAnon.auth.signInWithPassword({
-        email: authUser.user.email,
-        password: currentPassword,
-    });
-    if (signInError) {
-        throw Unauthorized('كلمة المرور الحالية غير صحيحة.', 'INVALID_CREDENTIALS');
-    }
+  // Guessing the current password counts against the same lockout as login (D17).
+  const attempt: LoginAttemptBase = {
+    identifier: email,
+    tenantSlug: null,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+  };
+  await lockoutCheck(email, null, attempt);
+  const check = await signIn(email, body.currentPassword);
+  if (!check) {
+    await recordLoginAttempt({ ...attempt, success: false });
+    throw invalidCredentials();
+  }
+  // The check created a session of its own; end it.
+  await revokeSession(check.access_token, 'local');
+  await recordLoginAttempt({ ...attempt, success: true });
 
-    const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(callerAuthId, {
-        password: newPassword,
-    });
-    if (updateErr) {
-        logger.error({ err: updateErr, employeeId }, 'changePassword: auth update failed');
-        throw new AppError('فشل تحديث كلمة المرور.', 'INTERNAL', 500);
-    }
+  await setPassword(auth.accessToken, body.newPassword);
 
-    // Clear the flag. Scoped to the caller's org — defence in depth.
-    const { error: clearErr } = await supabaseAdmin
-        .from('employees')
-        .update({
-            must_change_password: false,
-            password_changed_at: new Date().toISOString(),
-        })
-        .eq('id', employeeId)
-        .eq('organization_id', callerOrgId);
+  // Supabase Auth confirmed the new password. Other devices must log in again with it; this
+  // session stays. Done first because it matters most.
+  if (!(await revokeSession(auth.accessToken, 'others'))) {
+    logger.error({ userId: auth.userId }, 'P1: password changed but other sessions not revoked');
+  }
 
-    if (clearErr) {
-        // The password IS updated; only the flag write failed. The user can
-        // log in with the new password. Log P1 for a human to notice.
-        logger.error(
-            { err: clearErr, employeeId, callerOrgId },
-            'P1: changePassword updated the auth password but failed to clear must_change_password',
-        );
-        throw new AppError(
-            'تم تحديث كلمة المرور. يرجى إعادة تسجيل الدخول.',
-            'INTERNAL',
-            500,
-        );
-    }
+  // Audit row in the active shop (user JWT, org from the session).
+  const { error } = await db.rpc('auth_record_password_change');
+  if (error) {
+    logger.error({ err: error, userId: auth.userId }, 'P1: password changed but audit failed');
+    throw dbError(error, 'auth_record_password_change');
+  }
+
+  // D24: the flag is cleared only here, through the service role, with the verified user id.
+  // If this fails the user is asked to change the password again: the safe direction.
+  await clearMustChangePassword(auth.userId);
 }
 
 // ============================================================================
-// refreshSession
+// Shop session for authenticated auth routes (/me, change-password)
 // ============================================================================
-//
-// Exchanges a Supabase refresh token for a new access + refresh token pair.
-// Pre-auth flow: the caller's access token has expired by definition, so we
-// use supabaseAnon (no JWT to attach). Supabase rotates the refresh token on
-// every call, so we return the new one alongside the new access token.
 
-export interface RefreshResult {
-    session: { access_token: string; refresh_token: string };
+/**
+ * The client for the caller's active shop:
+ *   - x-org-id given: must be one of my_shops(), else SHOP_NOT_ALLOWED;
+ *   - no header and exactly one usable shop: that shop;
+ *   - no header and several: SHOP_SELECTION_REQUIRED; none: NOT_AN_EMPLOYEE.
+ * The database applies the same rule again (app.current_org_id / app.require_session_employee).
+ */
+export async function shopSessionClient(
+  auth: RequestAuth,
+  meta: RequestMeta,
+): Promise<{ db: DbClient; orgId: string }> {
+  const shops = await myShops(supabaseForRequest(auth.accessToken, undefined, meta));
+  let orgId: string;
+  if (auth.orgId) {
+    if (!shops.some((s) => s.orgId === auth.orgId)) {
+      throw new AppError('Shop not allowed.', 'SHOP_NOT_ALLOWED');
+    }
+    orgId = auth.orgId;
+  } else if (shops.length === 1 && shops[0]) {
+    orgId = shops[0].orgId;
+  } else if (shops.length > 1) {
+    throw new AppError('Select a shop first.', 'SHOP_SELECTION_REQUIRED');
+  } else {
+    throw new AppError('Not an employee of an active shop.', 'NOT_AN_EMPLOYEE');
+  }
+  return { db: supabaseForRequest(auth.accessToken, orgId, meta), orgId };
 }
 
-export async function refreshSession(refreshToken: string): Promise<RefreshResult> {
-    if (!isNonEmptyString(refreshToken)) {
-        throw Unauthorized('رمز التحديث مطلوب.', 'UNAUTHORIZED');
-    }
+// ============================================================================
+// Me
+// ============================================================================
 
-    const { data, error } = await supabaseAnon.auth.refreshSession({
-        refresh_token: refreshToken,
-    });
+export async function getMe(auth: RequestAuth, meta: RequestMeta): Promise<AuthMeResponse> {
+  const { db, orgId } = await shopSessionClient(auth, meta);
 
-    if (error || !data?.session) {
-        throw Unauthorized('انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.', 'UNAUTHORIZED');
-    }
+  const { data: emp, error: empError } = await db
+    .from('employees')
+    .select('id, full_name, email, username, role, default_branch_id, must_change_password')
+    .eq('auth_user_id', auth.userId)
+    .eq('organization_id', orgId)
+    .maybeSingle();
+  if (empError) throw dbError(empError, 'me: employee');
+  if (!emp) throw new AppError('Not an employee of an active shop.', 'NOT_AN_EMPLOYEE');
 
-    return {
-        session: {
-            access_token: data.session.access_token,
-            refresh_token: data.session.refresh_token,
-        },
-    };
+  const { data: org, error: orgError } = await db
+    .from('organizations')
+    .select('id, tenant_slug, name, timezone, default_language, status, plan_key, subscription_end')
+    .eq('id', orgId)
+    .maybeSingle();
+  if (orgError) throw dbError(orgError, 'me: organization');
+  if (!org) throw new AppError('Not an employee of an active shop.', 'NOT_AN_EMPLOYEE');
+
+  let branches: AuthMeResponse['branches'];
+  if (emp.role === 'OWNER') {
+    const { data, error } = await db
+      .from('branches')
+      .select('id, code, name, is_main')
+      .eq('is_active', true)
+      .order('code');
+    if (error) throw dbError(error, 'me: branches');
+    branches = (data ?? []).map((b) => ({
+      id: b.id,
+      code: b.code,
+      name: b.name,
+      isMain: b.is_main,
+    }));
+  } else {
+    const { data, error } = await db
+      .from('employee_branches')
+      .select('branches!inner(id, code, name, is_main, is_active)')
+      .eq('employee_id', emp.id);
+    if (error) throw dbError(error, 'me: branches');
+    const rows = (data ?? []) as unknown as {
+      branches: { id: string; code: string; name: string; is_main: boolean; is_active: boolean };
+    }[];
+    branches = rows
+      .map((r) => r.branches)
+      .filter((b) => b.is_active)
+      .sort((a, b) => a.code.localeCompare(b.code))
+      .map((b) => ({ id: b.id, code: b.code, name: b.name, isMain: b.is_main }));
+  }
+
+  return {
+    employee: {
+      id: emp.id,
+      fullName: emp.full_name,
+      email: emp.email,
+      username: emp.username,
+      role: emp.role,
+      defaultBranchId: emp.default_branch_id,
+      mustChangePassword: emp.must_change_password,
+    },
+    org: {
+      id: org.id,
+      tenantSlug: org.tenant_slug,
+      name: org.name,
+      timezone: org.timezone,
+      defaultLanguage: org.default_language === 'en' ? 'en' : 'ar',
+      status: org.status,
+      planKey: org.plan_key,
+      subscriptionEnd: org.subscription_end,
+    },
+    branches,
+  };
 }
