@@ -47,6 +47,10 @@ jobs:
       - name: Permission marker check
         run: npm run check:permissions
 
+      # F07 / D19: every write route names the audit action it writes (or none, with a reason).
+      - name: Audit registry check
+        run: npm run check:audit
+
       - name: Build
         run: npm run build
 
@@ -123,6 +127,9 @@ jobs:
 
       - name: F06 permissions SQL test
         run: node scripts/db-smoke.mjs supabase/tests/f06_permissions_test.sql
+
+      - name: F07 audit SQL test
+        run: node scripts/db-smoke.mjs supabase/tests/f07_audit_test.sql
 
       # Local demo keys printed by the CLI for this throwaway stack, not secrets.
       - name: Integration tests (RUN_INTEGRATION=1, auth + cross-shop)

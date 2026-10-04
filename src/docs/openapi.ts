@@ -30,6 +30,7 @@ export const openApiSpec = {
         { name: 'Auth — public', description: 'No authentication required' },
         { name: 'Auth — authenticated', description: 'Requires a bearer JWT' },
         { name: 'Access (F06)', description: 'Permissions and branch scope' },
+        { name: 'Audit (F07)', description: 'Search the shop audit log (audit.view)' },
     ],
     components: {
         securitySchemes: {
@@ -617,6 +618,73 @@ export const openApiSpec = {
                     403: { $ref: '#/components/responses/Error' },
                     404: { $ref: '#/components/responses/Error' },
                     422: { $ref: '#/components/responses/Error' },
+                },
+            },
+        },
+        '/api/audit': {
+            get: {
+                tags: ['Audit (F07)'],
+                summary: 'Search the audit log of your shop (audit.view)',
+                description:
+                    'Newest first. Rows are already PII-stripped. Only your shop is searched (the session decides; an org in the query is 400). Unknown filters are 400.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 }, description: 'Page number' },
+                    { name: 'pageSize', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 }, description: 'Rows per page' },
+                    { name: 'from', in: 'query', required: false, schema: { type: 'string', format: 'date-time' }, description: 'Created at or after' },
+                    { name: 'to', in: 'query', required: false, schema: { type: 'string', format: 'date-time' }, description: 'Created at or before' },
+                    { name: 'actorEmployeeId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' }, description: 'Who did it' },
+                    { name: 'action', in: 'query', required: false, schema: { type: 'string', example: 'auth.login' }, description: 'Exact action' },
+                    { name: 'entityType', in: 'query', required: false, schema: { type: 'string', example: 'employee' }, description: 'Record type' },
+                    { name: 'entityId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' }, description: 'Record id' },
+                    { name: 'branchId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' }, description: 'Branch' },
+                ],
+                responses: {
+                    200: {
+                        description: 'One page of audit rows',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    required: ['items', 'page', 'pageSize', 'total'],
+                                    properties: {
+                                        items: {
+                                            type: 'array',
+                                            items: {
+                                                type: 'object',
+                                                properties: {
+                                                    id: { type: 'integer' },
+                                                    branchId: { ...{ type: 'string', format: 'uuid' }, nullable: true },
+                                                    employeeId: { ...{ type: 'string', format: 'uuid' }, nullable: true },
+                                                    actorName: { type: 'string', nullable: true },
+                                                    superAdminId: { ...{ type: 'string', format: 'uuid' }, nullable: true },
+                                                    deviceId: { ...{ type: 'string', format: 'uuid' }, nullable: true },
+                                                    ip: { type: 'string', nullable: true },
+                                                    userAgent: { type: 'string', nullable: true },
+                                                    requestId: { type: 'string', nullable: true },
+                                                    action: { type: 'string' },
+                                                    entityType: { type: 'string', nullable: true },
+                                                    entityId: { ...{ type: 'string', format: 'uuid' }, nullable: true },
+                                                    severity: { type: 'string', enum: ['info', 'warning', 'critical'] },
+                                                    reason: { type: 'string', nullable: true },
+                                                    before: {},
+                                                    after: {},
+                                                    createdAt: { type: 'string', format: 'date-time' },
+                                                },
+                                            },
+                                        },
+                                        page: { type: 'integer' },
+                                        pageSize: { type: 'integer' },
+                                        total: { type: 'integer' },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: { $ref: '#/components/responses/Error' },
+                    401: { $ref: '#/components/responses/Error' },
+                    403: { $ref: '#/components/responses/Error' },
                 },
             },
         },
