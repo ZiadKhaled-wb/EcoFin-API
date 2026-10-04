@@ -9,6 +9,7 @@
 --      reason, owner and self targets refused; each successful call writes exactly one audit row
 --   3. public.my_permissions()
 --   4. grants
+--   5. grant limits (D29 option 3, migration 20261003105000_f06_grant_limits.sql)
 \set ON_ERROR_STOP 1
 SET client_min_messages = warning;
 
@@ -320,6 +321,72 @@ SELECT t.expect('my_permissions: lawyer = exactly the role defaults',
 SELECT t.as_user('f6000000-0000-0000-0000-0000000000a1', 'f6100000-0000-0000-0000-00000000000b');
 SELECT t.expect_error('my_permissions: not an employee of the requested shop -> NOT_AN_EMPLOYEE',
     $q$SELECT * FROM public.my_permissions()$q$, '^NOT_AN_EMPLOYEE');
+SELECT t.as_user(NULL);
+RESET ROLE;
+
+-- ---------------------------------------------------------------- 5. grant limits (D29 option 3)
+-- Manager g (BRANCH_MANAGER + an employee.manage override) works in branch A1 only. Target t is
+-- the CASHIER r_CASHIER (no branches, no overrides). The owner can do everything below.
+INSERT INTO employee_branches (organization_id, employee_id, branch_id) VALUES
+  ('f6100000-0000-0000-0000-00000000000a', 'f6300000-0000-0000-0000-0000000000c2', 'f6200000-0000-0000-0000-0000000000a1');
+SELECT t.expect('setup: BRANCH_MANAGER holds cash.adjust and lacks export.data',
+    EXISTS (SELECT 1 FROM public.role_permissions WHERE role = 'BRANCH_MANAGER' AND permission_key = 'cash.adjust')
+    AND NOT EXISTS (SELECT 1 FROM public.role_permissions WHERE role = 'BRANCH_MANAGER' AND permission_key = 'export.data'));
+
+SET ROLE authenticated;
+SELECT t.as_user('f6000000-0000-0000-0000-0000000000c2');   -- manager g
+SELECT t.expect('limits: a manager grants a key they hold',
+    (SELECT granted FROM public.set_employee_permission('f6300000-0000-0000-0000-000000000012', 'cash.adjust', true, 'till duty')) = true);
+SELECT t.expect_error('limits: a manager can''t grant a key they don''t hold -> FORBIDDEN',
+    $q$SELECT public.set_employee_permission('f6300000-0000-0000-0000-000000000012', 'export.data', true, 'x')$q$,
+    '^FORBIDDEN: you can only grant or remove a permission you hold');
+SELECT t.expect_error('limits: ... nor remove one they don''t hold',
+    $q$SELECT public.set_employee_permission('f6300000-0000-0000-0000-000000000012', 'export.data', false, 'x')$q$,
+    '^FORBIDDEN: you can only grant or remove a permission you hold');
+SELECT t.expect_error('limits: a manager can''t grant employee.manage (they hold it, but it''s owner-only)',
+    $q$SELECT public.set_employee_permission('f6300000-0000-0000-0000-000000000012', 'employee.manage', true, 'x')$q$,
+    '^FORBIDDEN: only the owner can grant or remove employee.manage');
+SELECT t.expect_error('limits: ... nor take employee.manage away from someone',
+    $q$SELECT public.set_employee_permission('f6300000-0000-0000-0000-000000000011', 'employee.manage', false, 'x')$q$,
+    '^FORBIDDEN: only the owner can grant or remove employee.manage');
+
+SELECT t.expect('limits: a manager adds a branch they work in',
+    (SELECT branch_ids FROM public.set_employee_branches('f6300000-0000-0000-0000-000000000012',
+        ARRAY['f6200000-0000-0000-0000-0000000000a1']::uuid[], 'opens BR1'))
+    = ARRAY['f6200000-0000-0000-0000-0000000000a1']::uuid[]);
+SELECT t.expect_error('limits: a manager can''t add a branch they don''t work in -> FORBIDDEN',
+    $q$SELECT public.set_employee_branches('f6300000-0000-0000-0000-000000000012', ARRAY['f6200000-0000-0000-0000-0000000000a1', 'f6200000-0000-0000-0000-0000000000a2']::uuid[], 'x')$q$,
+    '^FORBIDDEN: you can only add or remove branches you work in');
+
+SELECT t.as_user('f6000000-0000-0000-0000-0000000000a1');   -- owner
+SELECT t.expect('limits: the owner grants a key the manager lacks, and employee.manage',
+    (SELECT granted FROM public.set_employee_permission('f6300000-0000-0000-0000-000000000012', 'export.data', true, 'month-end')) = true
+    AND (SELECT granted FROM public.set_employee_permission('f6300000-0000-0000-0000-000000000012', 'employee.manage', true, 'deputy')) = true);
+SELECT t.expect('limits: the owner adds a branch the manager doesn''t work in',
+    (SELECT cardinality(branch_ids) FROM public.set_employee_branches('f6300000-0000-0000-0000-000000000012',
+        ARRAY['f6200000-0000-0000-0000-0000000000a1', 'f6200000-0000-0000-0000-0000000000a2']::uuid[], 'covers BR2')) = 2);
+
+SELECT t.as_user('f6000000-0000-0000-0000-0000000000c2');   -- manager g again
+SELECT t.expect('limits: a manager may resend a list whose foreign branch is unchanged',
+    (SELECT cardinality(branch_ids) FROM public.set_employee_branches('f6300000-0000-0000-0000-000000000012',
+        ARRAY['f6200000-0000-0000-0000-0000000000a1', 'f6200000-0000-0000-0000-0000000000a2']::uuid[], 'no change')) = 2);
+SELECT t.expect('limits: ... and remove a branch they work in while the foreign one stays',
+    (SELECT branch_ids FROM public.set_employee_branches('f6300000-0000-0000-0000-000000000012',
+        ARRAY['f6200000-0000-0000-0000-0000000000a2']::uuid[], 'leaves BR1'))
+    = ARRAY['f6200000-0000-0000-0000-0000000000a2']::uuid[]);
+SELECT t.expect_error('limits: a manager can''t remove a branch they don''t work in -> FORBIDDEN',
+    $q$SELECT public.set_employee_branches('f6300000-0000-0000-0000-000000000012', ARRAY[]::uuid[], 'x')$q$,
+    '^FORBIDDEN: you can only add or remove branches you work in');
+SELECT t.expect_error('limits: the employee.manage the owner gave t is still not g''s to remove',
+    $q$SELECT public.set_employee_permission('f6300000-0000-0000-0000-000000000012', 'employee.manage', false, 'x')$q$,
+    '^FORBIDDEN: only the owner');
+
+SELECT t.expect('limits: one audit row per successful call (3 permission, 4 branch), none for the refusals',
+    t.audit_rows('f6300000-0000-0000-0000-000000000012', 'employee.permission_set') = 3
+    AND t.audit_rows('f6300000-0000-0000-0000-000000000012', 'employee.branches_set') = 4,
+    format('permission_set=%s branches_set=%s',
+           t.audit_rows('f6300000-0000-0000-0000-000000000012', 'employee.permission_set'),
+           t.audit_rows('f6300000-0000-0000-0000-000000000012', 'employee.branches_set')));
 SELECT t.as_user(NULL);
 RESET ROLE;
 

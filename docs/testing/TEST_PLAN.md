@@ -32,7 +32,7 @@ npm run db:smoke -- supabase/tests/f05_tenant_test.sql
 # Expected: "passed 41, failed 0" (F05 tenant isolation)
 
 npm run db:smoke -- supabase/tests/f06_permissions_test.sql
-# Expected: "passed 52, failed 0" (F06 permissions)
+# Expected: "passed 67, failed 0" (F06 permissions + grant limits)
 ```
 
 ### Contracts
