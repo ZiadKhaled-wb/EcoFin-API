@@ -54,9 +54,8 @@ jobs:
       - name: Build
         run: npm run build
 
-  # F02: the baseline builds an empty database, a second run changes nothing,
-  # the seeded super admin works, and the smoke test passes. F04/F05 SQL tests and the
-  # RUN_INTEGRATION=1 suites (auth, cross-shop) run against the same local stack.
+  # F02: the baseline builds an empty database, a second run changes nothing, the seeded super
+  # admin works, and every SQL test in supabase/tests passes (TEST-1: found by a glob).
   # Local Supabase only: this job never links to or pushes to a real project.
   db:
     runs-on: ubuntu-latest
@@ -71,7 +70,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
-      # For the integration tests (the app runs in-process against the local stack).
+      # scripts/db-smoke.mjs and the concurrency proofs run on Node.
       - name: Install dependencies
         run: npm ci
 
@@ -79,7 +78,6 @@ jobs:
         with:
           version: 2.119.0
 
-      # The integration tests need Auth, PostgREST, Kong, Storage and Mailpit, not just Postgres.
       - name: Start local Supabase (applies migrations and seeds)
         run: supabase start -x studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor,realtime
 
@@ -116,40 +114,68 @@ jobs:
           grep -qx 'password_ok=true' <<< "$result"
           grep -qx 'is_super_admin=true' <<< "$result"
 
-      - name: Smoke test
-        run: node scripts/db-smoke.mjs
-
-      - name: F04 auth SQL test
-        run: node scripts/db-smoke.mjs supabase/tests/f04_auth_test.sql
-
-      - name: F05 tenant SQL test
-        run: node scripts/db-smoke.mjs supabase/tests/f05_tenant_test.sql
-
-      - name: F06 permissions SQL test
-        run: node scripts/db-smoke.mjs supabase/tests/f06_permissions_test.sql
-
-      - name: F07 audit SQL test
-        run: node scripts/db-smoke.mjs supabase/tests/f07_audit_test.sql
-
-      - name: F10 ledger SQL test
-        run: node scripts/db-smoke.mjs supabase/tests/f10_ledger_test.sql
+      # TEST-1 (EC-128): EVERY file in supabase/tests/ runs, found by a glob, so a new SQL test can't be
+      # left out (this also makes f14_files_test.sql run, EC-141). Each file runs inside
+      # BEGIN ... ROLLBACK; all files run even if one fails, and the step fails if any did.
+      - name: SQL tests (every file in supabase/tests)
+        run: |
+          shopt -s nullglob
+          files=(supabase/tests/*.sql)
+          test ${#files[@]} -gt 0
+          failed=()
+          for f in "${files[@]}"; do
+            echo "::group::$f"
+            if node scripts/db-smoke.mjs "$f"; then echo "ok: $f"; else failed+=("$f"); fi
+            echo "::endgroup::"
+          done
+          echo "SQL test files: ${#files[@]}, failed: ${#failed[@]}"
+          if [ ${#failed[@]} -gt 0 ]; then printf 'FAILED: %s\n' "${failed[@]}"; exit 1; fi
 
       # 100 parallel sales of the last 10 units, and 50 parallel requests with one idempotency key.
       - name: F10 ledger concurrency proof
         run: node scripts/db-ledger-proof.mjs
 
-      - name: F13 jobs SQL test
-        run: node scripts/db-smoke.mjs supabase/tests/f13_jobs_test.sql
-
-      - name: F11 numbering SQL test
-        run: node scripts/db-smoke.mjs supabase/tests/f11_numbering_test.sql
-
       # 1,000 concurrent document creations (pgbench from the db image) with rollbacks mixed in.
       - name: F11 numbering concurrency proof
         run: node scripts/db-numbering-proof.mjs
 
-      # Local demo keys printed by the CLI for this throwaway stack, not secrets.
-      - name: Integration tests (RUN_INTEGRATION=1, auth + cross-shop)
+      # F10: after everything above wrote to the database, every cache must still equal its ledger.
+      - name: Ledger reconciliation after the SQL tests
+        run: node scripts/db-reconcile.mjs
+
+      - name: Stop database
+        if: always()
+        run: supabase stop --no-backup
+
+  # TEST-1 (EC-128): the RUN_INTEGRATION=1 suites (auth, sessions, cross-shop, audit, files, ...)
+  # on a fresh local stack. The tests start the app themselves, in-process (supertest), so no
+  # separate API server is needed. Local demo keys printed by the CLI for this stack, not secrets.
+  integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.119.0
+
+      # The integration tests need Auth, PostgREST, Kong, Storage and Mailpit, not just Postgres.
+      - name: Start local Supabase (applies migrations and seeds)
+        run: supabase start -x studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor,realtime
+
+      - name: Fresh database (migrations + dev seed)
+        run: supabase db reset
+
+      - name: Integration tests (RUN_INTEGRATION=1 npm test)
         run: |
           status=$(supabase status -o json)
           field() { node -e 'console.log(JSON.parse(process.argv[1])[process.argv[2]])' "$status" "$1"; }
@@ -157,10 +183,10 @@ jobs:
           export SUPABASE_ANON_KEY="$(field ANON_KEY)"
           export SUPABASE_SERVICE_ROLE_KEY="$(field SERVICE_ROLE_KEY)"
           export FRONTEND_URL=http://localhost:5173 RUN_INTEGRATION=1 LOG_LEVEL=error
-          npm run test:api
+          npm test
 
-      # F10: after everything above wrote to the database, every cache must still equal its ledger.
-      - name: Ledger reconciliation after the full test suite
+      # F10: after the integration suites wrote to the database, every cache must still equal its ledger.
+      - name: Ledger reconciliation after the integration tests
         run: node scripts/db-reconcile.mjs
 
       - name: Stop database

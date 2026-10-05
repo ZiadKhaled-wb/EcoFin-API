@@ -1,0 +1,166 @@
+-- TEST-1 security guards (EC-128). LOCAL / DEV ONLY. Catalog checks only: no fixtures.
+-- Run after `npm run db:reset`:  npm run db:smoke -- supabase/tests/security_guards_test.sql
+-- db:smoke wraps the file in BEGIN ... ROLLBACK, so it leaves nothing behind.
+-- Expected last line: failed 0.
+-- GENERIC: every check loops over the catalog, so a future migration is checked automatically.
+--   1. anon has no privilege on any table, view or sequence in public
+--   2. authenticated has no INSERT / UPDATE / DELETE / TRUNCATE on any table in public
+--   3. every table with organization_id has RLS on and at least one SELECT policy
+--   4. every SECURITY DEFINER function in public and app pins search_path = ''
+--   5. every public function authenticated can EXECUTE calls app.require_permission
+--   6. anon can EXECUTE nothing in public or app
+-- Exceptions live in the two allowlists below, each with a one-line reason. An entry that no
+-- longer matches anything fails too, so the lists can't go stale.
+\set ON_ERROR_STOP 1
+SET client_min_messages = warning;
+
+CREATE SCHEMA t;
+CREATE TABLE t.results (name text, ok boolean, detail text);
+
+CREATE FUNCTION t.expect(p_name text, p_ok boolean, p_detail text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO t.results VALUES (p_name, p_ok, p_detail);
+$$;
+
+-- ---------------------------------------------------------------- allowlists
+-- 3. tables with organization_id that have RLS on but deliberately no SELECT policy (no app access).
+CREATE TABLE t.no_select_policy_ok (table_name text PRIMARY KEY, reason text NOT NULL);
+INSERT INTO t.no_select_policy_ok VALUES
+  ('jobs', 'platform job queue (D34): service role only; no policy = app users see nothing');
+
+-- 5. public functions authenticated may EXECUTE without app.require_permission.
+CREATE TABLE t.no_permission_ok (function_name text PRIMARY KEY, reason text NOT NULL);
+INSERT INTO t.no_permission_ok VALUES
+  ('session_context',             'session helper: resolves the caller''s own shop/role, writes nothing'),
+  ('my_shops',                    'session helper: lists the caller''s own shops (shop picker), writes nothing'),
+  ('my_permissions',              'session helper: the caller''s own permission keys, writes nothing'),
+  ('auth_record_login',           'login helper: audits the caller''s own login (any employee may log in)'),
+  ('auth_record_logout',          'login helper: audits the caller''s own logout'),
+  ('auth_record_password_change', 'login helper: audits the caller''s own password change');
+
+-- ---------------------------------------------------------------- catalog helpers (plpgsql, so a
+-- privilege function never runs on rows of another kind or schema before the filter)
+CREATE FUNCTION t.public_relations() RETURNS TABLE (rel oid, name text, kind "char") LANGUAGE plpgsql STABLE AS $$
+BEGIN
+    RETURN QUERY SELECT c.oid, c.relname::text, c.relkind FROM pg_class c
+    WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
+    ORDER BY c.relname;
+END $$;
+
+CREATE FUNCTION t.anon_privileged_relations() RETURNS text LANGUAGE plpgsql STABLE AS $$
+DECLARE r record; v_out text := '';
+BEGIN
+    FOR r IN SELECT * FROM t.public_relations() LOOP
+        IF r.kind = 'S' THEN
+            IF has_sequence_privilege('anon', r.rel, 'USAGE,SELECT,UPDATE') THEN v_out := v_out || r.name || ' '; END IF;
+        ELSIF has_table_privilege('anon', r.rel, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+           OR has_any_column_privilege('anon', r.rel, 'SELECT,INSERT,UPDATE,REFERENCES') THEN
+            v_out := v_out || r.name || ' ';
+        END IF;
+    END LOOP;
+    RETURN v_out;
+END $$;
+
+CREATE FUNCTION t.authenticated_writable_tables() RETURNS text LANGUAGE plpgsql STABLE AS $$
+DECLARE r record; v_out text := '';
+BEGIN
+    FOR r IN SELECT * FROM t.public_relations() WHERE kind IN ('r', 'p') LOOP
+        IF has_table_privilege('authenticated', r.rel, 'INSERT,UPDATE,DELETE,TRUNCATE')
+           OR has_any_column_privilege('authenticated', r.rel, 'INSERT,UPDATE') THEN
+            v_out := v_out || r.name || ' ';
+        END IF;
+    END LOOP;
+    RETURN v_out;
+END $$;
+
+-- Functions in public/app that belong to us (not to an extension).
+CREATE FUNCTION t.own_functions() RETURNS TABLE (fn oid, schema_name text, name text, sig text, secdef boolean, config text[], body text)
+LANGUAGE plpgsql STABLE AS $$
+BEGIN
+    RETURN QUERY
+    SELECT p.oid, n.nspname::text, p.proname::text, format('%s.%s(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)),
+           p.prosecdef, p.proconfig, p.prosrc
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname IN ('public', 'app') AND p.prokind IN ('f', 'p')
+      AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')
+    ORDER BY 2, 3;
+END $$;
+
+CREATE FUNCTION t.functions_executable_by(p_role text, p_schema text) RETURNS TABLE (name text, sig text, body text)
+LANGUAGE plpgsql STABLE AS $$
+DECLARE r record;
+BEGIN
+    FOR r IN SELECT * FROM t.own_functions() f WHERE p_schema IS NULL OR f.schema_name = p_schema LOOP
+        IF has_function_privilege(p_role, r.fn, 'EXECUTE') THEN
+            name := r.name; sig := r.sig; body := r.body; RETURN NEXT;
+        END IF;
+    END LOOP;
+END $$;
+
+-- ---------------------------------------------------------------- 1. anon: no privilege on any relation
+SELECT t.expect('1.1 there are relations to check (tables, views, sequences)',
+    (SELECT count(*) FROM t.public_relations()) >= 50, (SELECT count(*)::text FROM t.public_relations()));
+SELECT t.expect('1.2 anon has no privilege on any table, view or sequence in public',
+    t.anon_privileged_relations() = '', t.anon_privileged_relations());
+
+-- ---------------------------------------------------------------- 2. authenticated: no table writes
+SELECT t.expect('2.1 authenticated has no INSERT/UPDATE/DELETE/TRUNCATE on any table in public',
+    t.authenticated_writable_tables() = '', t.authenticated_writable_tables());
+
+-- ---------------------------------------------------------------- 3. RLS on every tenant table
+CREATE TABLE t.tenant_tables AS
+SELECT c.relname::text AS name, c.relrowsecurity AS rls,
+       (SELECT count(*) FROM pg_policy p WHERE p.polrelid = c.oid AND p.polcmd IN ('r', '*')) AS select_policies
+FROM pg_class c
+JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'organization_id' AND NOT a.attisdropped
+WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p');
+
+SELECT t.expect('3.1 there are tenant tables to check', (SELECT count(*) FROM t.tenant_tables) >= 20,
+    (SELECT count(*)::text FROM t.tenant_tables));
+SELECT t.expect('3.2 every table with organization_id has RLS enabled',
+    NOT EXISTS (SELECT 1 FROM t.tenant_tables WHERE NOT rls),
+    (SELECT string_agg(name, ', ') FROM t.tenant_tables WHERE NOT rls));
+SELECT t.expect('3.3 every table with organization_id has a SELECT policy (or is allowlisted)',
+    NOT EXISTS (SELECT 1 FROM t.tenant_tables tt WHERE tt.select_policies = 0
+                AND tt.name NOT IN (SELECT table_name FROM t.no_select_policy_ok)),
+    (SELECT string_agg(name, ', ') FROM t.tenant_tables tt WHERE tt.select_policies = 0
+     AND tt.name NOT IN (SELECT table_name FROM t.no_select_policy_ok)));
+SELECT t.expect('3.4 every no-policy allowlist entry is a tenant table with RLS on and still no policy',
+    NOT EXISTS (SELECT 1 FROM t.no_select_policy_ok o
+                WHERE NOT EXISTS (SELECT 1 FROM t.tenant_tables tt
+                                  WHERE tt.name = o.table_name AND tt.rls AND tt.select_policies = 0)),
+    (SELECT string_agg(table_name, ', ') FROM t.no_select_policy_ok o
+     WHERE NOT EXISTS (SELECT 1 FROM t.tenant_tables tt WHERE tt.name = o.table_name AND tt.rls AND tt.select_policies = 0)));
+
+-- ---------------------------------------------------------------- 4. definer functions pin search_path
+SELECT t.expect('4.1 there are SECURITY DEFINER functions to check',
+    (SELECT count(*) FROM t.own_functions() WHERE secdef) >= 20);
+SELECT t.expect('4.2 every SECURITY DEFINER function in public and app has SET search_path = ''''',
+    NOT EXISTS (SELECT 1 FROM t.own_functions() WHERE secdef AND NOT coalesce(config @> ARRAY['search_path=""'], false)),
+    (SELECT string_agg(sig, ', ') FROM t.own_functions()
+     WHERE secdef AND NOT coalesce(config @> ARRAY['search_path=""'], false)));
+
+-- ---------------------------------------------------------------- 5. callable = permission-checked
+CREATE TABLE t.callable AS SELECT * FROM t.functions_executable_by('authenticated', 'public');
+SELECT t.expect('5.1 authenticated can execute some public functions (the check is not empty)',
+    (SELECT count(*) FROM t.callable) >= 3, (SELECT string_agg(name, ', ') FROM t.callable));
+SELECT t.expect('5.2 every public function authenticated can execute calls app.require_permission (or is allowlisted)',
+    NOT EXISTS (SELECT 1 FROM t.callable c WHERE c.body !~* 'app\.require_permission\s*\('
+                AND c.name NOT IN (SELECT function_name FROM t.no_permission_ok)),
+    (SELECT string_agg(sig, ', ') FROM t.callable c WHERE c.body !~* 'app\.require_permission\s*\('
+     AND c.name NOT IN (SELECT function_name FROM t.no_permission_ok)));
+SELECT t.expect('5.3 every permission allowlist entry is still a public function authenticated can execute',
+    NOT EXISTS (SELECT 1 FROM t.no_permission_ok o WHERE o.function_name NOT IN (SELECT name FROM t.callable)),
+    (SELECT string_agg(function_name, ', ') FROM t.no_permission_ok o WHERE o.function_name NOT IN (SELECT name FROM t.callable)));
+
+-- ---------------------------------------------------------------- 6. anon executes nothing
+SELECT t.expect('6.1 anon can execute no function in public',
+    NOT EXISTS (SELECT 1 FROM t.functions_executable_by('anon', 'public')),
+    (SELECT string_agg(sig, ', ') FROM t.functions_executable_by('anon', 'public')));
+SELECT t.expect('6.2 anon can execute no function in app',
+    NOT EXISTS (SELECT 1 FROM t.functions_executable_by('anon', 'app')),
+    (SELECT string_agg(sig, ', ') FROM t.functions_executable_by('anon', 'app')));
+
+-- ---------------------------------------------------------------- report
+SELECT CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result, name, CASE WHEN ok THEN '' ELSE detail END AS detail
+FROM t.results ORDER BY ok, name;
+SELECT count(*) FILTER (WHERE ok) AS passed, count(*) FILTER (WHERE NOT ok) AS failed FROM t.results;

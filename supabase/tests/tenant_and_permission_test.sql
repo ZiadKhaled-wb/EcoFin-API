@@ -1,0 +1,344 @@
+-- TEST-1 cross-tenant and permission tests (EC-128). LOCAL / DEV ONLY.
+-- Run after `npm run db:reset` (needs the dev seed shops):
+--   npm run db:smoke -- supabase/tests/tenant_and_permission_test.sql
+-- db:smoke wraps the file in BEGIN ... ROLLBACK, so it leaves nothing behind.
+-- Expected last line: failed 0.
+--   1. setup: the two dev seed shops (A = dev-shop-one, B = dev-shop-two) get the same rows in as
+--      many tenant tables as plain inserts can fill (count reported in 1.1)
+--   2. cross-tenant read (GENERIC): acting as A, then as B, every public table AND view with
+--      organization_id shows zero rows of another shop; also when the header aims at the other shop
+--   3. cross-tenant write: every write function that takes a record id, called by A with B's id,
+--      fails and changes nothing
+--   4. permission denial (GENERIC): every public function authenticated can execute (except the
+--      session helpers allowlisted in security_guards_test.sql) has a denial case here; a role
+--      without the permission gets PERMISSION_DENIED. A new function without a case fails 4.0.
+-- Known bugs are recorded with t.known_bug(): they PASS while the bug is still there and FAIL once
+-- it is fixed, so the marker is removed then (like vitest's .fails).
+\set ON_ERROR_STOP 1
+SET client_min_messages = warning;
+
+CREATE SCHEMA t;
+CREATE TABLE t.results (name text, ok boolean, detail text);
+
+CREATE FUNCTION t.expect(p_name text, p_ok boolean, p_detail text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO t.results VALUES (p_name, p_ok, p_detail);
+$$;
+
+CREATE FUNCTION t.expect_error(p_name text, p_sql text, p_pattern text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+    BEGIN
+        EXECUTE p_sql;
+        INSERT INTO t.results VALUES (p_name, false, 'no error raised');
+    EXCEPTION WHEN others THEN
+        INSERT INTO t.results VALUES (p_name, SQLERRM ~* p_pattern, SQLERRM);
+    END;
+END $$;
+
+-- A known bug: the check is expected to FAIL today. Recorded as a pass while it still fails; once
+-- the app is fixed the check passes and this row fails, telling you to remove the marker.
+CREATE FUNCTION t.known_bug(p_name text, p_ok boolean, p_bug text) RETURNS void LANGUAGE sql AS $$
+    INSERT INTO t.results VALUES ('KNOWN BUG ' || p_name, NOT p_ok,
+        CASE WHEN p_ok THEN 'fixed now: turn this known_bug() back into expect()' ELSE p_bug END);
+$$;
+
+CREATE FUNCTION t.as_user(p_sub text, p_org text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$
+    SELECT set_config('request.jwt.claim.sub', COALESCE(p_sub, ''), false),
+           set_config('request.headers',
+                      CASE WHEN p_org IS NULL THEN '{}' ELSE json_build_object('x-org-id', p_org)::text END,
+                      false);
+$$;
+
+-- Runs p_sql, returns the error text ('' when it worked). For "fails AND changes nothing" checks.
+CREATE FUNCTION t.try(p_sql text) RETURNS text LANGUAGE plpgsql AS $$
+BEGIN
+    EXECUTE p_sql;
+    RETURN '';
+EXCEPTION WHEN others THEN
+    RETURN SQLERRM;
+END $$;
+
+GRANT USAGE ON SCHEMA t TO authenticated;
+GRANT INSERT ON t.results TO authenticated;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA t TO authenticated;
+
+-- ---------------------------------------------------------------- 1. setup (dev seed shops)
+--   A d1000000-...-01: owner auth d0..11 / emp d3..11, cashier auth d0..12 / emp d3..12, branch d2..11
+--   B d1000000-...-02: owner auth d0..21 / emp d3..21, cashier auth d0..22 / emp d3..22, branch d2..21
+CREATE TABLE t.shop (tag text PRIMARY KEY, org uuid, branch uuid, owner_sub text, owner_emp uuid, cashier_sub text, cashier_emp uuid);
+INSERT INTO t.shop VALUES
+  ('a', 'd1000000-0000-0000-0000-000000000001', 'd2000000-0000-0000-0000-000000000011',
+        'd0000000-0000-0000-0000-000000000011', 'd3000000-0000-0000-0000-000000000011',
+        'd0000000-0000-0000-0000-000000000012', 'd3000000-0000-0000-0000-000000000012'),
+  ('b', 'd1000000-0000-0000-0000-000000000002', 'd2000000-0000-0000-0000-000000000021',
+        'd0000000-0000-0000-0000-000000000021', 'd3000000-0000-0000-0000-000000000021',
+        'd0000000-0000-0000-0000-000000000022', 'd3000000-0000-0000-0000-000000000022');
+SELECT t.expect('1.0 the dev seed shops are there (run after db reset)',
+    (SELECT count(*) FROM public.organizations WHERE id IN (SELECT org FROM t.shop)) = 2
+    AND (SELECT count(*) FROM public.employees WHERE id IN (SELECT owner_emp FROM t.shop UNION SELECT cashier_emp FROM t.shop)) = 4);
+
+-- Fixed ids per shop: e1<nn>0000-...-00000000000<tag>, so tests can name B's rows.
+CREATE FUNCTION t.id(p_kind text, p_tag text) RETURNS uuid LANGUAGE sql IMMUTABLE AS $$
+    SELECT ('e1' || p_kind || '0000-0000-0000-0000-00000000000' || CASE p_tag WHEN 'a' THEN 'a' ELSE 'b' END)::uuid
+$$;
+
+CREATE FUNCTION t.fill(p_tag text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE
+    s t.shop;
+    up text := upper(p_tag);
+BEGIN
+    SELECT * INTO s FROM t.shop WHERE tag = p_tag;
+    INSERT INTO public.tax_classes (id, organization_id, name, rate) VALUES (t.id('01', p_tag), s.org, 'VAT 14', 14);
+    INSERT INTO public.categories (id, organization_id, name) VALUES (t.id('02', p_tag), s.org, 'Cat ' || up);
+    INSERT INTO public.products (id, organization_id, name_ar, sku, cash_price, tax_class_id, is_serialized)
+    VALUES (t.id('03', p_tag), s.org, 'Sofa ' || up, 'T1-' || up, 100, t.id('01', p_tag), false);
+    INSERT INTO public.customers (id, organization_id, full_name) VALUES (t.id('04', p_tag), s.org, 'Customer ' || up);
+    INSERT INTO public.suppliers (id, organization_id, name) VALUES (t.id('05', p_tag), s.org, 'Supplier ' || up);
+    INSERT INTO public.guarantors (id, organization_id, full_name) VALUES (t.id('06', p_tag), s.org, 'Guarantor ' || up);
+    INSERT INTO public.customer_guarantors (organization_id, customer_id, guarantor_id) VALUES (s.org, t.id('04', p_tag), t.id('06', p_tag));
+    INSERT INTO public.cash_accounts (id, organization_id, branch_id, name, kind) VALUES (t.id('07', p_tag), s.org, s.branch, 'Drawer ' || up, 'drawer');
+    INSERT INTO public.expense_categories (id, organization_id, name) VALUES (t.id('08', p_tag), s.org, 'Rent ' || up);
+    INSERT INTO public.devices (id, organization_id, branch_id, name) VALUES (t.id('09', p_tag), s.org, s.branch, 'POS ' || up);
+    INSERT INTO public.employee_permission_overrides (organization_id, employee_id, permission_key, granted)
+    VALUES (s.org, s.cashier_emp, 'stock.view', true)
+    ON CONFLICT DO NOTHING;
+    -- ledgers (their triggers fill stock_levels, cash_balances and store_credit_balances)
+    INSERT INTO public.stock_movements (organization_id, product_id, branch_id, quantity, type, source_type, source_id)
+    VALUES (s.org, t.id('03', p_tag), s.branch, 10, 'purchase_in', 'purchase_invoice', gen_random_uuid());
+    INSERT INTO public.cash_movements (organization_id, cash_account_id, amount, type, source_type, source_id)
+    VALUES (s.org, t.id('07', p_tag), 500, 'sale', 'sale', gen_random_uuid());
+    INSERT INTO public.store_credit_movements (organization_id, customer_id, branch_id, amount, source_type, source_id)
+    VALUES (s.org, t.id('04', p_tag), s.branch, 50, 'sales_return', gen_random_uuid());
+    -- documents
+    INSERT INTO public.sales (id, organization_id, number, branch_id, customer_id, prices_include_vat, subtotal, total, idempotency_key)
+    VALUES (t.id('10', p_tag), s.org, 'BR1-SL-26-9000' || CASE p_tag WHEN 'a' THEN '01' ELSE '02' END, s.branch,
+            t.id('04', p_tag), true, 100, 100, 'test1-sale-' || p_tag);
+    INSERT INTO public.sale_lines (organization_id, sale_id, line_no, product_id, quantity, unit_price, tax_class_id, tax_rate, line_total)
+    VALUES (s.org, t.id('10', p_tag), 1, t.id('03', p_tag), 1, 100, t.id('01', p_tag), 14, 100);
+    INSERT INTO public.payments (id, organization_id, number, branch_id, direction, method, amount, customer_id, cash_account_id, idempotency_key)
+    VALUES (t.id('11', p_tag), s.org, 'BR1-PY-26-9000' || CASE p_tag WHEN 'a' THEN '01' ELSE '02' END, s.branch,
+            'in', 'cash', 100, t.id('04', p_tag), t.id('07', p_tag), 'test1-pay-' || p_tag);
+    INSERT INTO public.payment_allocations (organization_id, payment_id, amount, sale_id) VALUES (s.org, t.id('11', p_tag), 100, t.id('10', p_tag));
+    INSERT INTO public.quotations (id, organization_id, number, branch_id, idempotency_key)
+    VALUES (t.id('12', p_tag), s.org, 'BR1-QT-26-9000' || CASE p_tag WHEN 'a' THEN '01' ELSE '02' END, s.branch, 'test1-quote-' || p_tag);
+    INSERT INTO public.files (id, organization_id, path, mime, size_bytes, purpose, entity_type, entity_id)
+    VALUES (t.id('13', p_tag), s.org, s.org || '/customer_id/2026/10/' || t.id('13', p_tag) || '.png', 'image/png', 10,
+            'customer_id', 'customer', t.id('04', p_tag));
+    PERFORM app.write_audit('test1.fixture', 'customer', t.id('04', p_tag), NULL, NULL, NULL, NULL, 'info', s.org);
+END $$;
+
+SELECT t.fill('a');
+SELECT t.fill('b');
+
+-- Every public table AND view with organization_id (by OID; plpgsql so privilege checks only run
+-- on these rows).
+CREATE FUNCTION t.tenant_relations() RETURNS TABLE (rel regclass, name text, kind "char") LANGUAGE plpgsql STABLE AS $$
+BEGIN
+    RETURN QUERY
+    SELECT c.oid::regclass, c.relname::text, c.relkind
+    FROM pg_class c
+    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'organization_id' AND NOT a.attisdropped
+    WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm')
+    ORDER BY c.relname;
+END $$;
+
+-- As postgres: how many tenant tables / views hold a row of each shop.
+CREATE TABLE t.coverage AS
+SELECT 0::int AS tables_with_b, 0::int AS relations_with_b, 0::int AS total WHERE false;
+DO $$
+DECLARE r record; v integer; v_t integer := 0; v_r integer := 0; v_total integer := 0;
+BEGIN
+    FOR r IN SELECT * FROM t.tenant_relations() LOOP
+        v_total := v_total + 1;
+        EXECUTE format('SELECT count(*) FROM %s WHERE organization_id = %L', r.rel, 'd1000000-0000-0000-0000-000000000002') INTO v;
+        IF v > 0 THEN
+            v_r := v_r + 1;
+            IF r.kind IN ('r', 'p') THEN v_t := v_t + 1; END IF;
+        END IF;
+    END LOOP;
+    INSERT INTO t.coverage VALUES (v_t, v_r, v_total);
+END $$;
+SELECT t.expect('1.1 shop B has rows in at least 25 tenant tables and views (reported: with rows / all)',
+    (SELECT relations_with_b FROM t.coverage) >= 25,
+    (SELECT format('%s tables, %s tables+views of %s', tables_with_b, relations_with_b, total) FROM t.coverage));
+
+-- ---------------------------------------------------------------- 2. cross-tenant read (generic)
+-- Counts rows of any other shop in every readable tenant table and view, as the current session.
+CREATE FUNCTION t.foreign_rows(p_own uuid) RETURNS TABLE (checked integer, own_rows integer, leaks text) LANGUAGE plpgsql AS $$
+DECLARE r record; v integer; v_own integer;
+BEGIN
+    checked := 0; own_rows := 0; leaks := '';
+    FOR r IN SELECT * FROM t.tenant_relations() LOOP
+        CONTINUE WHEN NOT has_column_privilege(r.rel, 'organization_id', 'SELECT');
+        EXECUTE format('SELECT count(*) FILTER (WHERE organization_id IS DISTINCT FROM %L), count(*) FILTER (WHERE organization_id = %L) FROM %s',
+                       p_own, p_own, r.rel) INTO v, v_own;
+        checked := checked + 1;
+        own_rows := own_rows + v_own;
+        IF v > 0 THEN leaks := leaks || r.name || '=' || v || ' '; END IF;
+    END LOOP;
+    RETURN NEXT;
+END $$;
+
+CREATE FUNCTION t.read_check(p_label text, p_tag text, p_header_tag text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE s t.shop; h t.shop; r record;
+BEGIN
+    SELECT * INTO s FROM t.shop WHERE tag = p_tag;
+    SELECT * INTO h FROM t.shop WHERE tag = p_header_tag;
+    PERFORM t.as_user(s.owner_sub, h.org::text);
+    SET LOCAL ROLE authenticated;
+    SELECT * INTO r FROM t.foreign_rows(s.org);
+    RESET ROLE;
+    PERFORM t.as_user(NULL);
+    IF p_tag = p_header_tag THEN
+        PERFORM t.expect(p_label || ': zero rows of another shop in every readable tenant table and view',
+            r.leaks = '' AND r.checked >= 60, format('checked %s, leaks: %s', r.checked, r.leaks));
+        PERFORM t.expect(p_label || ': and the own shop''s rows are visible (the loop is not vacuous)',
+            r.own_rows >= 20, format('own rows seen: %s', r.own_rows));
+    ELSE
+        PERFORM t.expect(p_label || ': aimed at the other shop, still zero foreign rows anywhere',
+            r.leaks = '' AND r.checked >= 60, format('checked %s, leaks: %s', r.checked, r.leaks));
+    END IF;
+END $$;
+
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA t TO authenticated;
+
+SELECT t.read_check('2.1 owner A', 'a', 'a');
+SELECT t.read_check('2.2 owner B', 'b', 'b');
+SELECT t.read_check('2.3 owner A with x-org-id = B', 'a', 'b');
+SELECT t.read_check('2.4 owner B with x-org-id = A', 'b', 'a');
+
+-- ---------------------------------------------------------------- 3. cross-tenant write
+-- Owner A holds every permission, so only the shop check can stop these calls.
+CREATE TABLE t.w (name text PRIMARY KEY, err text);
+GRANT INSERT, SELECT ON t.w TO authenticated;
+
+SELECT t.as_user('d0000000-0000-0000-0000-000000000011', 'd1000000-0000-0000-0000-000000000001');
+SET ROLE authenticated;
+INSERT INTO t.w VALUES ('perm_b_emp', t.try($$SELECT public.set_employee_permission(
+    'd3000000-0000-0000-0000-000000000022', 'sale.void', true, 'TEST-1 cross-shop')$$));
+INSERT INTO t.w VALUES ('branches_b_emp', t.try($$SELECT public.set_employee_branches(
+    'd3000000-0000-0000-0000-000000000022', ARRAY['d2000000-0000-0000-0000-000000000021']::uuid[], 'TEST-1 cross-shop')$$));
+INSERT INTO t.w VALUES ('branches_b_branch', t.try($$SELECT public.set_employee_branches(
+    'd3000000-0000-0000-0000-000000000012', ARRAY['d2000000-0000-0000-0000-000000000021']::uuid[], 'TEST-1 cross-shop')$$));
+INSERT INTO t.w VALUES ('file_b_path', t.try($$SELECT public.register_file(
+    'e1990000-0000-0000-0000-000000000001', 'd1000000-0000-0000-0000-000000000002/logo/2026/10/x.png', 'x.png',
+    'image/png', 10, NULL, 'logo', NULL, NULL)$$));
+INSERT INTO t.w VALUES ('file_b_id', t.try($$SELECT public.register_file(
+    'e1130000-0000-0000-0000-00000000000b', 'd1000000-0000-0000-0000-000000000001/logo/2026/10/y.png', 'y.png',
+    'image/png', 10, NULL, 'logo', NULL, NULL)$$));
+INSERT INTO t.w VALUES ('file_b_entity', t.try($$SELECT public.register_file(
+    'e1990000-0000-0000-0000-000000000002', 'd1000000-0000-0000-0000-000000000001/customer_id/2026/10/z.png', 'z.png',
+    'image/png', 10, NULL, 'customer_id', 'customer', 'e1040000-0000-0000-0000-00000000000b')$$));
+RESET ROLE;
+SELECT t.as_user(NULL);
+
+SELECT t.expect('3.1 set_employee_permission on a shop B employee fails and writes no override',
+    (SELECT err FROM t.w WHERE name = 'perm_b_emp') <> ''
+    AND NOT EXISTS (SELECT 1 FROM employee_permission_overrides
+                    WHERE employee_id = 'd3000000-0000-0000-0000-000000000022' AND permission_key = 'sale.void'),
+    (SELECT err FROM t.w WHERE name = 'perm_b_emp'));
+SELECT t.expect('3.2 set_employee_branches on a shop B employee fails and changes nothing',
+    (SELECT err FROM t.w WHERE name = 'branches_b_emp') <> ''
+    AND (SELECT array_agg(branch_id) FROM employee_branches WHERE employee_id = 'd3000000-0000-0000-0000-000000000022')
+        = ARRAY['d2000000-0000-0000-0000-000000000021']::uuid[],
+    (SELECT err FROM t.w WHERE name = 'branches_b_emp'));
+SELECT t.expect('3.3 set_employee_branches giving an own employee a shop B branch fails and changes nothing',
+    (SELECT err FROM t.w WHERE name = 'branches_b_branch') <> ''
+    AND (SELECT array_agg(branch_id) FROM employee_branches WHERE employee_id = 'd3000000-0000-0000-0000-000000000012')
+        = ARRAY['d2000000-0000-0000-0000-000000000011']::uuid[],
+    (SELECT err FROM t.w WHERE name = 'branches_b_branch'));
+SELECT t.expect('3.4 register_file with a path in shop B''s folder fails and writes no row',
+    (SELECT err FROM t.w WHERE name = 'file_b_path') ~ 'FILE_PATH_INVALID'
+    AND NOT EXISTS (SELECT 1 FROM files WHERE id = 'e1990000-0000-0000-0000-000000000001'),
+    (SELECT err FROM t.w WHERE name = 'file_b_path'));
+SELECT t.expect('3.5 register_file reusing shop B''s file id fails and leaves B''s file as it was',
+    (SELECT err FROM t.w WHERE name = 'file_b_id') <> ''
+    AND (SELECT organization_id = 'd1000000-0000-0000-0000-000000000002' AND path LIKE 'd1000000-0000-0000-0000-000000000002/%'
+         FROM files WHERE id = 'e1130000-0000-0000-0000-00000000000b'),
+    (SELECT err FROM t.w WHERE name = 'file_b_id'));
+SELECT t.known_bug('3.6 register_file pointing at a shop B customer (entity_id) fails and writes no row',
+    (SELECT err FROM t.w WHERE name = 'file_b_entity') <> ''
+    AND NOT EXISTS (SELECT 1 FROM files WHERE id = 'e1990000-0000-0000-0000-000000000002'),
+    'register_file does not check that p_entity_id belongs to the caller''s shop '
+    || '(supabase/migrations/20261005120000_f14_register_file.sql:53-56); the API checks it, a direct call does not');
+
+-- ---------------------------------------------------------------- 4. permission denial (generic)
+-- One employee per non-owner role in shop A, so every permission key has a role without it.
+CREATE TABLE t.role_user (role public.employee_role PRIMARY KEY, sub uuid, emp uuid);
+INSERT INTO t.role_user
+SELECT r, ('e1f0' || lpad(ord::text, 4, '0') || '-0000-0000-0000-000000000001')::uuid,
+          ('e1f1' || lpad(ord::text, 4, '0') || '-0000-0000-0000-000000000001')::uuid
+FROM unnest(enum_range(NULL::public.employee_role)) WITH ORDINALITY AS e(r, ord) WHERE r <> 'OWNER';
+INSERT INTO auth.users (id, email) SELECT sub, lower(role::text) || '.test1@x' FROM t.role_user;
+INSERT INTO public.employees (id, organization_id, auth_user_id, full_name, role, default_branch_id)
+SELECT emp, 'd1000000-0000-0000-0000-000000000001', sub, 'TEST-1 ' || role, role, 'd2000000-0000-0000-0000-000000000011' FROM t.role_user;
+INSERT INTO public.employee_branches (organization_id, employee_id, branch_id)
+SELECT 'd1000000-0000-0000-0000-000000000001', emp, 'd2000000-0000-0000-0000-000000000011' FROM t.role_user;
+
+-- A role (not OWNER) whose defaults lack p_key.
+CREATE FUNCTION t.role_without(p_key text) RETURNS public.employee_role LANGUAGE sql STABLE AS $$
+    SELECT ru.role FROM t.role_user ru
+    WHERE NOT EXISTS (SELECT 1 FROM public.role_permissions rp WHERE rp.role = ru.role AND rp.permission_key = p_key)
+    ORDER BY ru.role LIMIT 1
+$$;
+
+-- The denial cases: function, case name, the key it needs, the call (valid arguments).
+CREATE TABLE t.denial (fn text, case_name text, key text, call text);
+INSERT INTO t.denial VALUES
+  ('set_employee_permission', 'set_employee_permission', 'employee.manage',
+   $$SELECT public.set_employee_permission('d3000000-0000-0000-0000-000000000019', 'sale.void', true, 'TEST-1 denial')$$),
+  ('set_employee_branches', 'set_employee_branches', 'employee.manage',
+   $$SELECT public.set_employee_branches('d3000000-0000-0000-0000-000000000019', ARRAY['d2000000-0000-0000-0000-000000000011']::uuid[], 'TEST-1 denial')$$);
+-- register_file: one case per purpose, with the key the function's own CASE asks for.
+INSERT INTO t.denial
+SELECT 'register_file', 'register_file(' || p || ')', k,
+       format($f$SELECT public.register_file(gen_random_uuid(), 'd1000000-0000-0000-0000-000000000001/%s/2026/10/' || gen_random_uuid() || '.png', 'd.png', 'image/png', 10, NULL, %L, NULL, NULL)$f$, p, p)
+FROM (VALUES ('logo', 'org.settings_manage'), ('product_image', 'catalog.manage'), ('customer_id', 'customer.edit'),
+             ('survey_photo', 'survey.submit'), ('signature', 'installment.create'), ('contract_pdf', 'installment.create'),
+             ('promissory_note', 'installment.create'), ('delivery_proof', 'delivery.manage'), ('expense_receipt', 'expense.create'),
+             ('legal_document', 'legal.manage'), ('import', 'import.data'), ('export', 'export.data'), ('other', 'org.settings_manage')) v(p, k);
+
+-- The functions that need a case: callable by authenticated, minus the session helpers.
+CREATE TABLE t.write_functions AS
+SELECT p.proname::text AS fn FROM pg_proc p
+WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
+  AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
+  AND p.proname NOT IN ('session_context', 'my_shops', 'my_permissions',
+                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change');
+
+SELECT t.expect('4.0 every callable write function has a permission-denial case here',
+    NOT EXISTS (SELECT 1 FROM t.write_functions w WHERE w.fn NOT IN (SELECT fn FROM t.denial)),
+    (SELECT 'no case for: ' || string_agg(fn, ', ') FROM t.write_functions w WHERE w.fn NOT IN (SELECT fn FROM t.denial)));
+SELECT t.expect('4.0b every register_file purpose has a case',
+    (SELECT count(*) FROM t.denial WHERE fn = 'register_file') = (SELECT count(*) FROM unnest(enum_range(NULL::public.file_purpose))));
+
+CREATE FUNCTION t.run_denials() RETURNS void LANGUAGE plpgsql AS $$
+DECLARE d record; v_role public.employee_role; v_sub uuid; v_err text; v_owner_err text;
+BEGIN
+    FOR d IN SELECT * FROM t.denial ORDER BY case_name LOOP
+        v_role := t.role_without(d.key);
+        SELECT sub INTO v_sub FROM t.role_user WHERE role = v_role;
+        PERFORM t.as_user(v_sub::text, 'd1000000-0000-0000-0000-000000000001');
+        SET LOCAL ROLE authenticated;
+        v_err := t.try(d.call);
+        RESET ROLE;
+        PERFORM t.expect(format('4.1 %s: %s (lacks %s) gets PERMISSION_DENIED', d.case_name, v_role, d.key),
+                         v_role IS NOT NULL AND v_err ~ 'PERMISSION_DENIED', coalesce(v_err, '') || ' role=' || coalesce(v_role::text, 'none'));
+        -- Same call as the owner works, so the arguments were valid and only the permission was missing.
+        PERFORM t.as_user('d0000000-0000-0000-0000-000000000011', 'd1000000-0000-0000-0000-000000000001');
+        SET LOCAL ROLE authenticated;
+        v_owner_err := t.try(d.call);
+        RESET ROLE;
+        PERFORM t.expect(format('4.2 %s: the same call works for the owner (valid arguments)', d.case_name),
+                         v_owner_err = '', v_owner_err);
+    END LOOP;
+    PERFORM t.as_user(NULL);
+END $$;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA t TO authenticated;
+SELECT t.run_denials();
+
+-- ---------------------------------------------------------------- report
+SELECT CASE WHEN ok THEN 'PASS' ELSE 'FAIL' END AS result, name, CASE WHEN ok THEN '' ELSE detail END AS detail
+FROM t.results ORDER BY ok, name;
+SELECT tables_with_b, relations_with_b, total AS tenant_relations FROM t.coverage;
+SELECT name, detail AS known_bug FROM t.results WHERE name LIKE 'KNOWN BUG%';
+SELECT count(*) FILTER (WHERE ok) AS passed, count(*) FILTER (WHERE NOT ok) AS failed FROM t.results;
