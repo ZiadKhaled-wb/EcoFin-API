@@ -24,6 +24,7 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/auth/change-password': { action: 'auth.password_change' },
   'PUT /api/employees/:employeeId/permissions': { action: 'employee.permission_set' },
   'PUT /api/employees/:employeeId/branches': { action: 'employee.branches_set' },
+  'POST /api/files': { action: 'file.upload' },
   'POST /api/monitoring/test-error': {
     none: 'Monitoring test (Q02): writes nothing, only raises an error on purpose.',
   },

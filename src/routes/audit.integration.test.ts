@@ -18,6 +18,7 @@ const BR1 = 'd2000000-0000-0000-0000-000000000011';
 const OWNER_ONE = 'd3000000-0000-0000-0000-000000000011';
 const STAMP = Date.now();
 const TEMP_PASSWORD = `F07-${STAMP}!`;
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...Array(64).fill(7)]);
 
 // 198.18.2.0/24; the other integration files use other ranges.
 let ipCounter = 0;
@@ -109,9 +110,9 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       .in('email', [`f07.target.${STAMP}@ecotech.test`, pwEmail]);
   });
 
-  // One driver per registry entry that has an action: performs the call, returns what was sent
-  // and the shop the row must land in.
-  const drivers: Record<string, () => Promise<{ sent: Sent; org: string }>> = {
+  // One driver per registry entry that has an action: performs the call, returns what was sent,
+  // the shop the row must land in and the success status (200 unless the route creates: 201).
+  const drivers: Record<string, () => Promise<{ sent: Sent; org: string; status?: number }>> = {
     'POST /api/auth/login': async () => ({
       sent: await send('post', '/api/auth/login', {
         body: { identifier: 'owner.one@ecotech.test', password: SEED_PASSWORD },
@@ -165,6 +166,20 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
+    'POST /api/files': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      // Multipart, so not through send(): same headers, one small PNG as a shop logo.
+      const ip = nextIp();
+      const requestId = `f07-${STAMP}-${ipCounter}`;
+      const res = await request(app)
+        .post('/api/files')
+        .set('X-Forwarded-For', ip)
+        .set('x-request-id', requestId)
+        .set('Authorization', `Bearer ${owner.accessToken}`)
+        .field('purpose', 'logo')
+        .attach('file', PNG, 'logo.png');
+      return { sent: { res, ip, requestId }, org: SHOP_ONE, status: 201 };
+    },
   };
 
   const withAction = Object.entries(AUDIT_REGISTRY).flatMap(([route, e]) =>
@@ -180,8 +195,8 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     async ({ route, action }) => {
       const driver = drivers[route];
       if (!driver) throw new Error(`no driver for ${route}`);
-      const { sent, org } = await driver();
-      expect(sent.res.status, JSON.stringify(sent.res.body)).toBe(200);
+      const { sent, org, status = 200 } = await driver();
+      expect(sent.res.status, JSON.stringify(sent.res.body)).toBe(status);
       expect(sent.res.headers['x-request-id']).toBe(sent.requestId);
       const rows = await rowsFor(sent.requestId);
       expect(rows).toHaveLength(1);

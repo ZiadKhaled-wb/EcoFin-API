@@ -31,6 +31,10 @@ describe('route access check (F06 / D19)', () => {
       kind: 'permission',
       key: 'employee.manage',
     });
+    // F14: the permission depends on the file's purpose, so the service checks it per request.
+    expect(byRoute['POST /api/files']).toEqual({ kind: 'authenticated' });
+    expect(byRoute['GET /api/files']).toEqual({ kind: 'authenticated' });
+    expect(byRoute['GET /api/files/:id/url']).toEqual({ kind: 'authenticated' });
   });
 
   it('a new route without a marker fails (exit 1) and is named', () => {

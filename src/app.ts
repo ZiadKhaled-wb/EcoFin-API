@@ -5,6 +5,7 @@ import auditRoutes from './routes/audit.js';
 import monitoringRoutes from './routes/monitoring.js';
 import authRoutes from './routes/auth.js';
 import employeesRoutes from './routes/employees.js';
+import filesRoutes from './routes/files.js';
 import healthRoutes from './routes/health.js';
 import meRoutes from './routes/me.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -45,6 +46,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/auth', authRoutes);
   mountRouter(app, '/api/me', meRoutes);
   mountRouter(app, '/api/employees', employeesRoutes);
+  mountRouter(app, '/api/files', filesRoutes);
   mountRouter(app, '/api/audit', auditRoutes);
   mountRouter(app, '/api/monitoring', monitoringRoutes);
 

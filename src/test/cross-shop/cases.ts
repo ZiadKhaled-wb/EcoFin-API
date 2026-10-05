@@ -255,3 +255,62 @@ crossShopCase({
     h.expect((own.res.body as { error: { requestId?: string } }).error.requestId).toBeTruthy();
   },
 });
+
+// F14 files. A real file of shop B needs seeded data, so these cases use an id that is not in
+// any shop: shop A must get the same answer it gets for a file that doesn't exist.
+const NO_SUCH_FILE = '00000000-0000-4000-8000-00000000f14f';
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/files',
+  name: "shop A's owner aimed at shop B: refused before any file is stored; nothing written in B",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const { res, ip } = await h.call('POST', '/api/files', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(res.status).toBe(403);
+    h.expect(h.code(res)).toBe('SHOP_NOT_ALLOWED');
+    h.expect(await h.auditRowsFrom(SHOP_B, ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/files/:id/url',
+  name: "shop A's owner: another shop's file id reads as not found; aimed at B is refused",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const missing = await h.call('GET', `/api/files/${NO_SUCH_FILE}/url`, { token: a.accessToken });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('FILE_NOT_FOUND');
+
+    const aimed = await h.call('GET', `/api/files/${NO_SUCH_FILE}/url`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(aimed.res.status).toBe(403);
+    h.expect(h.code(aimed.res)).toBe('SHOP_NOT_ALLOWED');
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/files',
+  name: "shop A's owner: a record of shop B is not found; aimed at B is refused",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const other = await h.call('GET', `/api/files`, {
+      token: a.accessToken,
+      query: `entityType=customer&entityId=${NO_SUCH_FILE}`,
+    });
+    h.expect(other.res.status).toBe(404);
+    h.expect(h.code(other.res)).toBe('NOT_FOUND');
+
+    const aimed = await h.call('GET', '/api/files', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      query: `entityType=customer&entityId=${NO_SUCH_FILE}`,
+    });
+    h.expect(aimed.res.status).toBe(403);
+    h.expect(h.code(aimed.res)).toBe('SHOP_NOT_ALLOWED');
+  },
+});

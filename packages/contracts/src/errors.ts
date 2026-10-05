@@ -59,6 +59,11 @@ export const errorCodeHttpStatus = {
   UNIT_PRODUCT_MISMATCH: 422,
   UNIT_REQUIRED: 422,
   UNKNOWN_PERMISSION: 500,
+  // F14 files
+  FILE_NOT_FOUND: 404,
+  FILE_PATH_INVALID: 422,
+  FILE_TOO_LARGE: 413,
+  FILE_TYPE_NOT_ALLOWED: 415,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;
