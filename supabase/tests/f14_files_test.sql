@@ -2,7 +2,7 @@
 -- Run after `npm run db:reset`:  npm run db:smoke -- supabase/tests/f14_files_test.sql
 -- db:smoke wraps the file in BEGIN ... ROLLBACK, so it leaves nothing behind.
 -- Expected last line: failed 0.
--- NOT RUN YET: written without a local Supabase stack (Docker was not running). Run it before merge.
+-- Run on 5 Oct 2026 against local Supabase: passed 10, failed 0.
 --   1. register_file for an own-shop path: one files row, one audit row, purpose check passes
 --   2. refusals: another shop's path, '..' in the path, no permission for the purpose, no session
 --   3. authenticated can't INSERT into files directly (no grant, no write policy)
