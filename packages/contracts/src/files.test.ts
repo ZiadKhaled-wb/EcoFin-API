@@ -9,7 +9,7 @@ import {
   ListFilesQuery,
   UploadFileRequest,
   errorCodeHttpStatus,
-} from './index';
+} from './index.js';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 

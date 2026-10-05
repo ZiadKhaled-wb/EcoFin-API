@@ -32,6 +32,8 @@ describe('roundMoney: one rule, half-up to 2 decimals', () => {
     ['2.344', '2.34'],
     ['-2.345', '-2.35'], // a half rounds away from zero
     ['0.005', '0.01'],
+    ['-0.005', '-0.01'], // TEST-1 (EC-128)
+    ['2.675', '2.68'], // TEST-1: as a float, 2.675 is 2.67499... and would round down
     ['1.995', '2.00'],
     ['12', '12.00'],
     ['12.5', '12.50'],
@@ -224,6 +226,57 @@ describe('line-level rounding is the rule (defined once)', () => {
 
   it('an empty document totals zero', () => {
     expect(sumTaxLines([])).toEqual({ net: '0.00', tax: '0.00', gross: '0.00' });
+  });
+
+  it('TEST-1: 100.00 inclusive split in 3 lines at 14%: the lines add back to exactly 100.00', () => {
+    const lines = splitMoney('100.00', 3).map((amount) => taxForLine(amount, '14', true));
+    for (const line of lines) expect(addMoney(line.net, line.tax)).toBe(line.gross);
+    const total = sumTaxLines(lines);
+    expect(total.gross).toBe('100.00');
+    expect(addMoney(total.net, total.tax)).toBe('100.00');
+  });
+});
+
+describe('TEST-1: the helpers work in decimals, never JS numbers', () => {
+  const MONEY = /^-?\d{1,16}\.\d{2}$/;
+  const results: [string, unknown][] = [
+    ['roundMoney', roundMoney('2.675')],
+    ['addMoney', addMoney('0.1', '0.2')],
+    ['subtractMoney', subtractMoney('1.00', '0.90')],
+    ['sumMoney', sumMoney(['0.10', '0.20'])],
+    ['multiplyMoney', multiplyMoney('19.99', '3')],
+    ['percentOf', percentOf('100.00', '14')],
+    ...splitMoney('1000', 3).map((p, i): [string, unknown] => [`splitMoney[${i}]`, p]),
+    ...allocateMoney('100', ['1', '2']).map((p, i): [string, unknown] => [
+      `allocateMoney[${i}]`,
+      p,
+    ]),
+    ...Object.entries(taxFromNet('100', '14')).map(([k, v]): [string, unknown] => [
+      `taxFromNet.${k}`,
+      v,
+    ]),
+    ...Object.entries(taxFromGross('100', '14')).map(([k, v]): [string, unknown] => [
+      `taxFromGross.${k}`,
+      v,
+    ]),
+  ];
+
+  it.each(results)('%s returns a 2-decimal string, not a number', (_name, value) => {
+    expect(typeof value).toBe('string');
+    expect(value).toMatch(MONEY);
+  });
+
+  it('every helper refuses a JS number for an amount', () => {
+    const asMoney = 0.1 as unknown as string;
+    expect(() => addMoney(asMoney, '0.20')).toThrow(RangeError);
+    expect(() => subtractMoney('1.00', asMoney)).toThrow(RangeError);
+    expect(() => sumMoney([asMoney])).toThrow(RangeError);
+    expect(() => multiplyMoney(asMoney, '2')).toThrow(RangeError);
+    expect(() => percentOf(asMoney, '14')).toThrow(RangeError);
+    expect(() => splitMoney(asMoney, 3)).toThrow(RangeError);
+    expect(() => allocateMoney(asMoney, ['1'])).toThrow(RangeError);
+    expect(() => taxFromNet(asMoney, '14')).toThrow(RangeError);
+    expect(() => taxFromGross(asMoney, '14')).toThrow(RangeError);
   });
 });
 
