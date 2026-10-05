@@ -77,6 +77,13 @@ const envSchema = z.object({
     .default('true')
     .transform((v) => v === 'true'),
   JOBS_POLL_SECONDS: z.coerce.number().int().min(5).max(3600).default(30),
+
+  // Q02 error tracking (D35). Without a DSN nothing is sent anywhere.
+  SENTRY_DSN: z.string().url().optional(),
+  // Shown in Sentry; the dev VM runs NODE_ENV=production, so set this to `development` there.
+  SENTRY_ENVIRONMENT: z.string().min(1).max(64).optional(),
+  // The deployed build (image tag `sha-<commit>`), set by the Dockerfile.
+  APP_RELEASE: z.string().min(1).max(100).optional(),
 });
 
 type ParsedEnv = z.infer<typeof envSchema>;

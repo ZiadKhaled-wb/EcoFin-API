@@ -4,6 +4,7 @@ import { docsRouter } from './docs/router.js';
 import { createJobWorker } from './jobs/registry.js';
 import { getEnv } from './utils/env.js';
 import { logger } from './utils/logger.js';
+import { flushMonitoring, initMonitoring } from './utils/monitoring.js';
 import { supabaseAdmin } from './utils/supabase.js';
 
 // Validate the environment first: a missing or bad variable stops the server with one clear message.
@@ -14,6 +15,10 @@ try {
   logger.fatal(err instanceof Error ? err.message : 'Invalid environment configuration');
   process.exit(1);
 }
+
+// Q02 (D35): error tracking first, so a crash during startup is reported too.
+if (initMonitoring(env))
+  logger.info({ environment: env.SENTRY_ENVIRONMENT ?? env.NODE_ENV }, 'Error tracking on');
 
 const app = createApp({ docsRouter, env });
 
@@ -32,14 +37,16 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
     logger.info({ signal }, 'Shutting down');
     // A job in progress finishes first; an unfinished one would be retried after 15 minutes anyway.
-    void (jobs?.stop() ?? Promise.resolve()).finally(() =>
-      server.close((err) => {
-        if (err) {
-          logger.error({ err }, 'Shutdown error');
-          process.exit(1);
-        }
-        process.exit(0);
-      }),
-    );
+    void (jobs?.stop() ?? Promise.resolve())
+      .then(() => flushMonitoring())
+      .finally(() =>
+        server.close((err) => {
+          if (err) {
+            logger.error({ err }, 'Shutdown error');
+            process.exit(1);
+          }
+          process.exit(0);
+        }),
+      );
   });
 }

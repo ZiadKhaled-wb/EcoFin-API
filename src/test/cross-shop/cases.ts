@@ -227,3 +227,31 @@ crossShopCase({
     h.expect(orgInQuery.res.status).toBe(400);
   },
 });
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/monitoring/test-error',
+  name: "shop A's owner can't raise the monitoring test error in shop B; a cashier can't at all",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const aimed = await h.call('POST', '/api/monitoring/test-error', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(aimed.res.status).toBe(403);
+    h.expect(h.code(aimed.res)).toBe('SHOP_NOT_ALLOWED');
+
+    const cashier = await h.login('cashier.one@ecotech.test');
+    const denied = await h.call('POST', '/api/monitoring/test-error', {
+      token: cashier.accessToken,
+    });
+    h.expect(denied.res.status).toBe(403);
+    h.expect(h.code(denied.res)).toBe('PERMISSION_DENIED');
+
+    // The owner in their own shop gets the deliberate 500, with a request id to look up.
+    const own = await h.call('POST', '/api/monitoring/test-error', { token: a.accessToken });
+    h.expect(own.res.status).toBe(500);
+    h.expect(h.code(own.res)).toBe('INTERNAL');
+    h.expect((own.res.body as { error: { requestId?: string } }).error.requestId).toBeTruthy();
+  },
+});

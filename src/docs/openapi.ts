@@ -621,6 +621,20 @@ export const openApiSpec = {
                 },
             },
         },
+        '/api/monitoring/test-error': {
+            post: {
+                tags: ['Monitoring (Q02)'],
+                summary: 'Raise a deliberate server error (org.settings_manage)',
+                description:
+                    'Always 500 INTERNAL with a request id; the same id is on the error in Sentry when error tracking is on. Writes nothing. Takes no body.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: {
+                    '403': { description: 'No org.settings_manage, or a shop you are not in' },
+                    '500': { description: 'The deliberate test error (contract error shape with requestId)' },
+                },
+            },
+        },
         '/api/audit': {
             get: {
                 tags: ['Audit (F07)'],
