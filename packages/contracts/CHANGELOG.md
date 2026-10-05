@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- Files (F14): `FilePurpose` (the 13 purposes of the `file_purpose` enum), `UploadFileRequest` (multipart text fields `purpose`, `entityType`, `entityId`), `FileResponse` (metadata only), `FileUrlResponse` (signed link and its expiry), `ListFilesQuery` (`entityType` + `entityId`), `FileListResponse`, and the path schema `FileIdParams`. Error codes `FILE_NOT_FOUND`, `FILE_PATH_INVALID`, `FILE_TOO_LARGE` (413) and `FILE_TYPE_NOT_ALLOWED` (415). Additive.
+
 ## 0.4.0
 
 - Money (F12): `roundMoney` (one rule: half-up to 2 decimals), `addMoney`, `subtractMoney`, `sumMoney`, `compareMoney`, `multiplyMoney`, `percentOf`, `splitMoney` / `allocateMoney` (parts add back exactly, largest remainder), VAT `taxFromNet` / `taxFromGross` / `taxForLine` / `sumTaxLines` (tax rounded per line, totals are sums of lines) and `formatEgp` (Arabic and English). Inputs and outputs are decimal strings; the maths runs on `big.js` 7.0.1, the package's first runtime dependency besides zod (D31). Additive.

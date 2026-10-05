@@ -7865,6 +7865,20 @@ export type Database = {
           permission_key: string;
         }[];
       };
+      register_file: {
+        Args: {
+          p_entity_id: string | null;
+          p_entity_type: string | null;
+          p_id: string;
+          p_mime: string;
+          p_original_name: string | null;
+          p_path: string;
+          p_purpose: Database['public']['Enums']['file_purpose'];
+          p_sha256: string | null;
+          p_size_bytes: number;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       adjustment_reason: 'damage' | 'loss' | 'found' | 'correction' | 'count' | 'other';

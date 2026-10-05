@@ -78,6 +78,11 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   JOBS_POLL_SECONDS: z.coerce.number().int().min(5).max(3600).default(30),
 
+  // F14 file storage. The bucket refuses more than 10 MB, so the cap is the bucket's limit.
+  FILE_MAX_BYTES: z.coerce.number().int().min(1).max(10485760).default(10485760),
+  // Lifetime of a signed download link, in seconds.
+  FILE_URL_TTL_SECONDS: z.coerce.number().int().min(1).max(3600).default(60),
+
   // Q02 error tracking (D35). Without a DSN nothing is sent anywhere.
   SENTRY_DSN: z.string().url().optional(),
   // Shown in Sentry; the dev VM runs NODE_ENV=production, so set this to `development` there.

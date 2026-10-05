@@ -19,8 +19,10 @@
 //
 //   * supabaseAdmin (service role, bypasses RLS)
 //       - Only in src/services/auth.admin.ts (D14: pre-session auth steps), the health
-//         check (D20) and the background job worker in src/jobs/ (D34: platform jobs through
-//         the service-role-only jobs_* functions). Never for tenant data in a user request.
+//         check (D20), the background job worker in src/jobs/ (D34: platform jobs through
+//         the service-role-only jobs_* functions), src/services/storage.service.ts (D36: the
+//         private file bucket, after the session, shop and permission checks) and
+//         scripts/files-orphan-report.ts (D36: report only). Never for tenant data in a user request.
 //
 // ============================================================================
 
