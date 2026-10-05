@@ -140,6 +140,13 @@ describe('scrubbing', () => {
     ).toBe('user [email] id [national-id] phone [phone] / [phone] Bearer [token] token [jwt]');
   });
 
+  it('masks tokens and codes in URLs', async () => {
+    const { maskText } = await load();
+    expect(maskText('GET /verify?token=abc123&type=recovery#access_token=x&refresh_token=y')).toBe(
+      'GET /verify?token=[redacted]&type=recovery#access_token=[redacted]&refresh_token=[redacted]',
+    );
+  });
+
   it('leaves ids, amounts and request ids alone', async () => {
     const { maskText } = await load();
     const text = 'shop d1000000-0000-0000-0000-000000000001 total 1250.50 request 1f3a9c2e';

@@ -32,6 +32,8 @@ const MASKS: [RegExp, string][] = [
   [/(?<!\d)(\+?20|0)1[0125]\d{8}(?!\d)/g, '[phone]'],
   [/Bearer\s+[\w.~+/=-]+/gi, 'Bearer [token]'],
   [/eyJ[\w-]+\.[\w-]+\.[\w-]+/g, '[jwt]'],
+  // Tokens and codes in URLs (e.g. a reset link: ?token=... or #access_token=...).
+  [/\b(access_token|refresh_token|token|code|password)=[^&\s#"']+/gi, '$1=[redacted]'],
 ];
 
 export function maskText(text: string): string {
