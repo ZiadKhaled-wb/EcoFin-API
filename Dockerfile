@@ -20,8 +20,11 @@ RUN npm run build
 
 # --- runtime: production dependencies + the bundle, running as `node` --------
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
+# The image tag (sha-<commit>), so error reports name the deployed build (Q02, D35).
+ARG APP_RELEASE=unknown
 ENV NODE_ENV=production \
-    PORT=3001
+    PORT=3001 \
+    APP_RELEASE=${APP_RELEASE}
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/contracts/package.json packages/contracts/

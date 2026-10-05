@@ -3,6 +3,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import pino from 'pino';
 import { describe, expect, it, vi } from 'vitest';
 import type { Job } from '../types';
+const captureProblem = vi.hoisted(() => vi.fn());
+vi.mock('../../utils/monitoring', () => ({ captureProblem }));
+
 import { ledgerReconcile } from './ledgerReconcile';
 
 const ORG = '22222222-2222-4222-8222-222222222222';
@@ -53,6 +56,16 @@ describe('ledger.reconcile job', () => {
     const { handler, lines, log } = setup({ data: [mismatch, mismatch], error: null });
     await expect(handler(job(), log)).resolves.toBeUndefined();
     expect(lines[0]).toMatchObject({ level: 50, count: 2 });
+    expect(captureProblem).toHaveBeenCalledWith(
+      'ledger.reconcile: cached balances do not match their ledger',
+      expect.objectContaining({ problem: 'ledger.mismatch', orgId: ORG, count: 2 }),
+      {
+        mismatches: [
+          expect.objectContaining({ ledger: 'cash', cached: 100.01 }),
+          expect.anything(),
+        ],
+      },
+    );
   });
 
   it('a database error fails the attempt (so it is retried)', async () => {

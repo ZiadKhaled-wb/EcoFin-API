@@ -2,6 +2,9 @@ import { Writable } from 'node:stream';
 import pino from 'pino';
 import { describe, expect, it, vi } from 'vitest';
 import type { FailedStatus, Job, JobHandler, JobStore } from './types';
+const captureProblem = vi.hoisted(() => vi.fn());
+vi.mock('../utils/monitoring', () => ({ captureProblem }));
+
 import { JobWorker, defaultRetryDelay } from './worker';
 
 interface Line {
@@ -92,6 +95,15 @@ describe('JobWorker.tick', () => {
     expect(lines.find((l) => l.msg.includes('moved to the failed list'))).toMatchObject({
       level: 50,
       jobId: job().id,
+    });
+    // Q02: and alerts through the error tracker.
+    expect(captureProblem).toHaveBeenCalledWith(expect.any(Error), {
+      problem: 'job.dead',
+      jobId: job().id,
+      jobType: 'test.work',
+      orgId: job().organizationId,
+      attempts: 3,
+      worker: 'w-test',
     });
   });
 

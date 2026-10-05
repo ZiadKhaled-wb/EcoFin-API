@@ -2,6 +2,7 @@
 import express from 'express';
 import type { Router } from 'express';
 import auditRoutes from './routes/audit.js';
+import monitoringRoutes from './routes/monitoring.js';
 import authRoutes from './routes/auth.js';
 import employeesRoutes from './routes/employees.js';
 import healthRoutes from './routes/health.js';
@@ -45,6 +46,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/me', meRoutes);
   mountRouter(app, '/api/employees', employeesRoutes);
   mountRouter(app, '/api/audit', auditRoutes);
+  mountRouter(app, '/api/monitoring', monitoringRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

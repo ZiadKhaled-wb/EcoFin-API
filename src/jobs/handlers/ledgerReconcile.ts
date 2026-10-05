@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
+import { captureProblem } from '../../utils/monitoring';
 import type { JobHandler } from '../types';
 
 const Mismatch = z.object({
@@ -33,6 +34,17 @@ export function ledgerReconcile(db: SupabaseClient): JobHandler {
       log.error(
         { count: mismatches.length, mismatches: mismatches.slice(0, LOGGED) },
         'ledger.reconcile: cached balances do not match their ledger',
+      );
+      // Q02 (D35): alert through the error tracker (ids and numbers only).
+      captureProblem(
+        'ledger.reconcile: cached balances do not match their ledger',
+        {
+          problem: 'ledger.mismatch',
+          jobId: job.id,
+          orgId: job.organizationId,
+          count: mismatches.length,
+        },
+        { mismatches: mismatches.slice(0, LOGGED) },
       );
     } else {
       log.info('ledger.reconcile: every cached balance matches its ledger');

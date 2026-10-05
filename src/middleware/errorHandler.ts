@@ -11,6 +11,7 @@ import { ZodError } from 'zod';
 import { errorCodeHttpStatus, type ErrorCode, type ErrorResponse } from '@ziadkhaled-wb/contracts';
 import { AppError, mapDbError, safeMessage } from '../utils/errors';
 import { SENSITIVE_KEYS, logger } from '../utils/logger';
+import { captureServerError } from '../utils/monitoring';
 
 // Fields we never want to echo back to a client, no matter what a service
 // attached to err.details.
@@ -102,8 +103,23 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
     return;
   }
 
+  // Q02: server errors (5xx) go to the error tracker with the request id (D35).
+  const report = (code: string) =>
+    captureServerError(err, {
+      requestId: req.requestId,
+      orgId: req.ctx?.orgId,
+      userId: req.user?.id,
+      method: req.method,
+      // Express has already left the router here, so the mount path is gone: send both the
+      // matched pattern and the URL path (query cut off: it can carry personal data).
+      route: typeof req.route?.path === 'string' ? req.route.path : undefined,
+      path: req.originalUrl.split('?')[0],
+      code,
+    });
+
   if (err instanceof AppError) {
     if (err.statusCode >= 500) {
+      report(err.code);
       log.error({ ...logFields, code: err.code, err }, 'Request failed (server)');
       send(req, res, err.statusCode, err.code, safeMessage(err.code));
       return;
@@ -146,12 +162,14 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
   const mapped = mapDbError(err);
   if (mapped) {
     const level = mapped.statusCode >= 500 ? 'error' : 'warn';
+    if (mapped.statusCode >= 500) report(mapped.code);
     log[level]({ ...logFields, code: mapped.code, err }, 'Request failed (database rule)');
     send(req, res, mapped.statusCode, mapped.code, mapped.message);
     return;
   }
 
   // Anything else: log the real error, return a generic one.
+  report('INTERNAL');
   log.error({ ...logFields, err }, 'Unhandled server error');
   send(req, res, errorCodeHttpStatus.INTERNAL, 'INTERNAL', 'Internal server error.');
 }

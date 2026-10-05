@@ -12,6 +12,7 @@
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import type { Logger } from 'pino';
+import { captureProblem } from '../utils/monitoring';
 import type { DailyJob, Job, JobHandler, JobStore } from './types';
 
 /** Wait before retry n (n = the attempt that just failed): 1, 2, 4, 8 ... minutes, at most 1 hour. */
@@ -172,6 +173,15 @@ export class JobWorker {
     }
     if (status === 'dead') {
       log.error({ err, ms }, 'job failed for the last time: moved to the failed list');
+      // Q02 (D35): a dead job alerts through the error tracker.
+      captureProblem(err, {
+        problem: 'job.dead',
+        jobId: job.id,
+        jobType: job.type,
+        orgId: job.organizationId,
+        attempts: job.attempt,
+        worker: this.workerId,
+      });
       return 'dead';
     }
     if (status === null) log.warn({ err, ms }, 'job failed, but another worker had taken it over');
