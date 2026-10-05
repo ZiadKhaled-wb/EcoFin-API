@@ -64,3 +64,44 @@ The Supabase stack uses ports 54321–54329. Only one local Supabase project can
 ## Not possible yet
 - Starting the API server, and so every HTTP-level integration and e2e test. Those are written and skipped unless `RUN_INTEGRATION=1` / `RUN_E2E=1`. See `docs/testing/TEST_PLAN.md`.
 - Live browser walkthroughs (no Playwright MCP this session).
+
+## INT-1 update (5 Oct 2026)
+
+What changed since the 3 Oct check, and the environment fixes used for INT-1 (no code or script changes):
+
+| Item | Status |
+|---|---|
+| Docker Desktop | ✅ 29.1.3, had to be started by hand again |
+| `supabase start` + `db reset` (twice in a row) | ✅ every migration and both seeds apply; second reset also clean |
+| SQL tests | ✅ smoke 79/0, f04 48/0, f05 41/0, f06 67/0, f07 20/0, f10 30/0, f11 16/0, f13 32/0, f14 10/0 |
+| Start the API server | ✅ **now works** with local env vars (below). The local `.env` points to a remote project and is not used: shell variables override it (dotenv never overwrites). |
+| Start the Web app | ✅ `npx vite` with local `VITE_*` vars in the shell (they override `.env`) |
+| Web `npm ci` | ❌ without a GitHub Packages token: `401 Unauthorized` on `@ziadkhaled-wb/contracts`. Needs `NPM_TOKEN` (classic token, `read:packages`) as a **user environment variable**, never written into `.npmrc`. Note: `npm ci` deletes `node_modules` before it fails. |
+| Playwright browsers | ⚠️ Playwright 1.63 needs `chromium_headless_shell-1243`: run `npx playwright install chromium` once |
+| Playwright MCP | ✅ connected this session. It writes logs to `.playwright-mcp/` in the folder it was started from; delete that folder after a walkthrough. |
+
+### Local env for the API (server and integration tests)
+```bash
+export NODE_OPTIONS=--no-network-family-autoselection
+export NODE_ENV=development PORT=3001            # NODE_ENV=test for vitest
+export SUPABASE_URL=http://127.0.0.1:54321
+export SUPABASE_ANON_KEY=<ANON_KEY from: npx -y supabase@2.119.0 status -o json>
+export SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY from the same command>
+export FRONTEND_URL=http://localhost:5173 MAILPIT_URL=http://127.0.0.1:54324
+npx tsx src/server.ts                 # GET http://localhost:3001/health -> {"status":"ok","db":"ok"}
+RUN_INTEGRATION=1 npx vitest run      # with NODE_ENV=test: 526/526 on 5 Oct
+```
+
+### Local env for the Web app and its e2e suite
+```bash
+export VITE_API_URL= VITE_DEV_API_TARGET=http://localhost:3001
+export VITE_SUPABASE_URL=http://127.0.0.1:54321 VITE_SUPABASE_ANON_KEY=<local ANON_KEY> VITE_SENTRY_DSN=
+npx vite --port 5173 --strictPort
+# e2e (both apps up): E2E_BASE_URL=http://localhost:5173 E2E_API_URL=http://localhost:3001 plus the
+# E2E_* logins from docs/testing/int-1/LOGINS.md (E2E_MULTI_SHOP_NAME='Dev Shop Two', E2E_RESET_EMAIL=owner.two@...)
+RUN_E2E=1 npx playwright test         # 21/21 on 5 Oct
+```
+
+### Workaround used when no `NPM_TOKEN` was available (local only, nothing committed)
+Build the same contracts version from its release tag and install it without saving:
+`git archive contracts-v0.4.0 packages/contracts` into a scratch folder, `tsc -p tsconfig.build.json` there (copy `zod`, `big.js`, `@types/node`, `@types/big.js` in as real copies, not links), `npm pack`, then in EcoFin-Web `npm install --no-save <tgz>`. `package.json` and the lockfile stay untouched. Replace with a normal `npm ci` once a token is set.
