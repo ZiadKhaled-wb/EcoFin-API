@@ -138,6 +138,9 @@ jobs:
       - name: F10 ledger concurrency proof
         run: node scripts/db-ledger-proof.mjs
 
+      - name: F13 jobs SQL test
+        run: node scripts/db-smoke.mjs supabase/tests/f13_jobs_test.sql
+
       - name: F11 numbering SQL test
         run: node scripts/db-smoke.mjs supabase/tests/f11_numbering_test.sql
 

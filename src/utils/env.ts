@@ -70,6 +70,13 @@ const envSchema = z.object({
     .min(1)
     .max(24 * 60)
     .default(15),
+
+  // F13 background jobs (D34): the worker runs inside the API process. Safe on several instances.
+  JOBS_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  JOBS_POLL_SECONDS: z.coerce.number().int().min(5).max(3600).default(30),
 });
 
 type ParsedEnv = z.infer<typeof envSchema>;

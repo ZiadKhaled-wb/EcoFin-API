@@ -18,8 +18,9 @@
 //         Never keep the returned client beyond the call.
 //
 //   * supabaseAdmin (service role, bypasses RLS)
-//       - Only in src/services/auth.admin.ts (D14: pre-session auth steps) and the health
-//         check (D20). Never for tenant data after login.
+//       - Only in src/services/auth.admin.ts (D14: pre-session auth steps), the health
+//         check (D20) and the background job worker in src/jobs/ (D34: platform jobs through
+//         the service-role-only jobs_* functions). Never for tenant data in a user request.
 //
 // ============================================================================
 
@@ -136,7 +137,7 @@ export async function updatePasswordWithToken(
   return { ok: false, status: res.status, code };
 }
 
-/** Service role. Only for src/services/auth.admin.ts (D14) and the health check (D20). */
+/** Service role. Only for src/services/auth.admin.ts (D14), the health check (D20) and src/jobs (D34). */
 export const supabaseAdmin: SupabaseClient = lazyClient(() => {
   const env = getEnv();
   return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: baseAuthOptions });
