@@ -24,9 +24,37 @@ describe('cross-shop route check (D19)', () => {
         'GET /api/auth/me',
         'POST /api/auth/login',
         'POST /api/auth/select-shop',
+        'POST /api/auth/invites/lookup',
+        'POST /api/auth/invites/accept',
+        'GET /api/admin/plans',
+        'GET /api/admin/shops',
+        'POST /api/admin/shops',
+        'POST /api/admin/shops/:id/status',
+        'POST /api/admin/shops/:id/owner-invite',
       ]),
     );
-    expect(keys).toHaveLength(18);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'GET /api/subscription',
+        'GET /api/admin/shops/:id/subscription',
+        'POST /api/admin/shops/:id/plan',
+        'POST /api/admin/shops/:id/subscription-dates',
+        'POST /api/admin/shops/:id/payments',
+      ]),
+    );
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'GET /api/branches',
+        'GET /api/branches/manage',
+        'GET /api/branches/:id',
+        'POST /api/branches',
+        'PATCH /api/branches/:id',
+        'GET /api/branches/:id/deactivation-check',
+        'POST /api/branches/:id/deactivate',
+        'POST /api/branches/:id/reactivate',
+      ]),
+    );
+    expect(keys).toHaveLength(45);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

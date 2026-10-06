@@ -7,6 +7,9 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['src/test/setup-env.ts'],
     include: ['src/**/*.test.ts'],
+    // Integration files share one seeded database; provisioning races global job assertions.
+    // Keep unit files parallel and retain the concurrency exercised inside integration tests.
+    fileParallelism: process.env['RUN_INTEGRATION'] !== '1',
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.1
+
+- Merge EC-143 activation contracts with the shop task contracts; activation returns both naming conventions for existing callers.
+
+## 0.8.0
+
+- O02 staff management and password reset schemas/codes; invitation lookup includes the display login. BRANCH_REQUIRED maps to 400 for staff validation.
+
+## 0.7.0
+
+- O01 branch management, default safes, deactivation counts and branch error codes.
+
+## 0.6.0
+
+- P05 subscription states, usage, billing schemas, module keys, warning constant and structured limit errors. Shop-list rows include subscription end/state.
+
+## 0.5.0
+
+- P01 shop provisioning, platform shop administration, single-use invitations and the optional super-admin login flag.
 ## 0.4.2
 
 - Access (EC-143): `EmployeeActiveSetBody` (`active`, `reason`), `EmployeeActiveSetResponse` and `EmployeeActiveSet` for `PUT /employees/:employeeId/active` (deactivate or reactivate an employee). Additive.

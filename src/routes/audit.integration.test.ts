@@ -9,6 +9,7 @@ import { AuditSearchResponse, AuthLoginResponse, ErrorResponse } from '@ziadkhal
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
 import { AUDIT_REGISTRY } from '../test/audit-registry/registry';
+import { readInviteToken } from '../test/inviteMail';
 
 const RUN = process.env['RUN_INTEGRATION'] === '1';
 const SEED_PASSWORD = 'LocalDev-Only-2026!';
@@ -39,15 +40,16 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
 
   /** One request with its own IP and request id, so its audit row can be found exactly. */
   async function send(
-    method: 'get' | 'post' | 'put',
+    method: 'get' | 'post' | 'put' | 'patch',
     path: string,
-    opts: { token?: string; orgId?: string; body?: object } = {},
+    opts: { token?: string; orgId?: string; body?: object; key?: string } = {},
   ): Promise<Sent> {
     const ip = nextIp();
     const requestId = `f07-${STAMP}-${ipCounter}`;
     let r = request(app)[method](path).set('X-Forwarded-For', ip).set('x-request-id', requestId);
     if (opts.token) r = r.set('Authorization', `Bearer ${opts.token}`);
     if (opts.orgId) r = r.set('x-org-id', opts.orgId);
+    if (opts.key) r = r.set('Idempotency-Key', opts.key);
     const res = opts.body ? await r.send(opts.body) : await r;
     return { res, ip, requestId };
   }
@@ -113,6 +115,130 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
   // One driver per registry entry that has an action: performs the call, returns what was sent,
   // the shop the row must land in and the success status (200 unless the route creates: 201).
   const drivers: Record<string, () => Promise<{ sent: Sent; org: string; status?: number }>> = {
+    'POST /api/employees': () => staffAudit('create'),
+    'PATCH /api/employees/:employeeId': () => staffAudit('update'),
+    'PUT /api/employees/:employeeId/active': () => staffAudit('active'),
+    'POST /api/employees/:employeeId/invite': () => staffAudit('invite'),
+    'POST /api/employees/:employeeId/password-reset': () => staffAudit('reset'),
+    'POST /api/auth/password-reset/complete': () => staffAudit('complete'),
+    'POST /api/branches': async () => {
+      const f = await branchShop('create');
+      return {
+        sent: await send('post', '/api/branches', {
+          token: f.owner,
+          orgId: f.org,
+          body: { name: 'Audit branch', code: 'B2' },
+        }),
+        org: f.org,
+        status: 201,
+      };
+    },
+    'PATCH /api/branches/:id': async () => {
+      const f = await branchShop('update');
+      return {
+        sent: await send('patch', `/api/branches/${f.branch}`, {
+          token: f.owner,
+          orgId: f.org,
+          body: { name: 'Updated' },
+        }),
+        org: f.org,
+      };
+    },
+    'POST /api/branches/:id/deactivate': async () => {
+      const f = await branchShop('deactivate');
+      return {
+        sent: await send('post', `/api/branches/${f.branch}/deactivate`, {
+          token: f.owner,
+          orgId: f.org,
+          body: { reason: 'Audit' },
+        }),
+        org: f.org,
+      };
+    },
+    'POST /api/branches/:id/reactivate': async () => {
+      const f = await branchShop('reactivate');
+      expect(
+        (
+          await send('post', `/api/branches/${f.branch}/deactivate`, {
+            token: f.owner,
+            orgId: f.org,
+            body: { reason: 'Setup' },
+          })
+        ).res.status,
+      ).toBe(200);
+      return {
+        sent: await send('post', `/api/branches/${f.branch}/reactivate`, {
+          token: f.owner,
+          orgId: f.org,
+        }),
+        org: f.org,
+      };
+    },
+    'POST /api/admin/shops/:id/plan': async () => {
+      const f = await platformShop('plan');
+      return {
+        sent: await send('post', `/api/admin/shops/${f.org}/plan`, {
+          token: f.admin,
+          body: { plan_key: 'retail', reason: 'audit' },
+        }),
+        org: f.org,
+      };
+    },
+    'POST /api/admin/shops/:id/subscription-dates': async () => {
+      const f = await platformShop('dates');
+      return {
+        sent: await send('post', `/api/admin/shops/${f.org}/subscription-dates`, {
+          token: f.admin,
+          body: { start: '2026-10-01', end: '2027-10-01', reason: 'audit' },
+        }),
+        org: f.org,
+      };
+    },
+    'POST /api/admin/shops/:id/payments': async () => {
+      const f = await platformShop('payment');
+      return {
+        sent: await send('post', `/api/admin/shops/${f.org}/payments`, {
+          token: f.admin,
+          key: 'a0500000-0000-4000-8000-000000000003',
+          body: { amount: '500.25', period_start: '2026-10-01', period_end: '2027-10-01' },
+        }),
+        org: f.org,
+        status: 201,
+      };
+    },
+    'POST /api/admin/shops': async () => {
+      const fixture = await platformShop('create');
+      return { sent: fixture.sent, org: fixture.org, status: 201 };
+    },
+    'POST /api/admin/shops/:id/status': async () => {
+      const fixture = await platformShop('status');
+      return {
+        sent: await send('post', `/api/admin/shops/${fixture.org}/status`, {
+          token: fixture.admin,
+          body: { status: 'suspended', reason: 'audit test' },
+        }),
+        org: fixture.org,
+      };
+    },
+    'POST /api/admin/shops/:id/owner-invite': async () => {
+      const fixture = await platformShop('resend');
+      return {
+        sent: await send('post', `/api/admin/shops/${fixture.org}/owner-invite`, {
+          token: fixture.admin,
+        }),
+        org: fixture.org,
+      };
+    },
+    'POST /api/auth/invites/accept': async () => {
+      const fixture = await platformShop('accept');
+      const token = await readInviteToken(fixture.email);
+      return {
+        sent: await send('post', '/api/auth/invites/accept', {
+          body: { token, password: TEMP_PASSWORD },
+        }),
+        org: fixture.org,
+      };
+    },
     'POST /api/auth/login': async () => ({
       sent: await send('post', '/api/auth/login', {
         body: { identifier: 'owner.one@ecotech.test', password: SEED_PASSWORD },
@@ -166,17 +292,6 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
-    // EC-143. `active: true` on an active employee: still one row, and nobody is locked out.
-    'PUT /api/employees/:employeeId/active': async () => {
-      const owner = await login('owner.one@ecotech.test');
-      return {
-        sent: await send('put', `/api/employees/${targetId}/active`, {
-          token: owner.accessToken,
-          body: { active: true, reason: 'audit test' },
-        }),
-        org: SHOP_ONE,
-      };
-    },
     'POST /api/files': async () => {
       const owner = await login('owner.one@ecotech.test');
       // Multipart, so not through send(): same headers, one small PNG as a shop logo.
@@ -192,6 +307,116 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       return { sent: { res, ip, requestId }, org: SHOP_ONE, status: 201 };
     },
   };
+
+  async function staffAudit(action: string) {
+    const f = await platformShop('staff-' + action);
+    const accepted = await send('post', '/api/auth/invites/accept', {
+      body: { token: await readInviteToken(f.email), password: SEED_PASSWORD },
+    });
+    expect(accepted.res.status).toBe(200);
+    const owner = (await login(f.email)).accessToken;
+    const branches = await send('get', '/api/branches', { token: owner, orgId: f.org });
+    expect(branches.res.status).toBe(200);
+    const opts = { token: owner, orgId: f.org };
+    const made = await send('post', '/api/employees', {
+      ...opts,
+      body: {
+        full_name: 'Audit staff',
+        username: 'audit.' + action,
+        role: 'CASHIER',
+        branch_ids: [branches.res.body[0].id],
+      },
+    });
+    if (action === 'create') return { sent: made, org: f.org, status: 201 };
+    expect(made.res.status, JSON.stringify(made.res.body)).toBe(201);
+    const id = made.res.body.employee_id as string;
+    if (action === 'update')
+      return {
+        sent: await send('patch', `/api/employees/${id}`, {
+          ...opts,
+          body: { full_name: 'Edited' },
+        }),
+        org: f.org,
+      };
+    if (action === 'active')
+      return {
+        sent: await send('put', `/api/employees/${id}/active`, {
+          ...opts,
+          body: { active: false, reason: 'Disabled' },
+        }),
+        org: f.org,
+      };
+    if (action === 'invite')
+      return { sent: await send('post', `/api/employees/${id}/invite`, opts), org: f.org };
+    expect(
+      (
+        await send('post', '/api/auth/invites/accept', {
+          body: {
+            token: new URL(made.res.body.invite_link).hash.slice(7),
+            password: SEED_PASSWORD,
+          },
+        })
+      ).res.status,
+    ).toBe(200);
+    const reset = await send('post', `/api/employees/${id}/password-reset`, opts);
+    if (action === 'reset') return { sent: reset, org: f.org };
+    expect(reset.res.status).toBe(200);
+    return {
+      sent: await send('post', '/api/auth/password-reset/complete', {
+        body: {
+          token: new URL(reset.res.body.reset_link).hash.slice(7),
+          password: 'Reset-Audit-2026!',
+        },
+      }),
+      org: f.org,
+    };
+  }
+  async function platformShop(suffix: string) {
+    const admin = (await login('superadmin@ecotech.test')).accessToken;
+    const email = `f07.p01.${suffix}.${STAMP}@ecotech.test`;
+    const sent = await send('post', '/api/admin/shops', {
+      token: admin,
+      body: {
+        name: `F07 ${suffix}`,
+        tenant_slug: `f07-${STAMP}-${suffix}`,
+        plan_key: 'starter',
+        owner: { full_name: 'Audit owner', email },
+      },
+    });
+    expect(sent.res.status, JSON.stringify(sent.res.body)).toBe(201);
+    const org = sent.res.body.organization_id as string;
+    return { sent, org, email, admin };
+  }
+  async function branchShop(suffix: string) {
+    const f = await platformShop('branch-' + suffix);
+    expect(
+      (
+        await send('post', `/api/admin/shops/${f.org}/plan`, {
+          token: f.admin,
+          body: { plan_key: 'retail', reason: 'Branch fixture' },
+        })
+      ).res.status,
+    ).toBe(200);
+    expect(
+      (
+        await send('post', '/api/auth/invites/accept', {
+          body: { token: await readInviteToken(f.email), password: SEED_PASSWORD },
+        })
+      ).res.status,
+    ).toBe(200);
+    const owner = (await login(f.email)).accessToken;
+    let branch = '';
+    if (suffix !== 'create') {
+      const made = await send('post', '/api/branches', {
+        token: owner,
+        orgId: f.org,
+        body: { name: 'Branch', code: 'B2' },
+      });
+      expect(made.res.status).toBe(201);
+      branch = made.res.body.id as string;
+    }
+    return { ...f, owner, branch };
+  }
 
   const withAction = Object.entries(AUDIT_REGISTRY).flatMap(([route, e]) =>
     'action' in e ? [{ route, action: e.action }] : [],

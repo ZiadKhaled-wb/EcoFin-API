@@ -4,7 +4,13 @@
 // alongside the human-readable `message`. The controller/errorHandler layer
 // never has to parse strings to decide how to react. Codes come from the shared contracts.
 
-import { errorCodeHttpStatus, type ErrorCode } from '@ziadkhaled-wb/contracts';
+import {
+  errorCodeHttpStatus,
+  PlanLimitDetail,
+  PlanDowngradeDetail,
+  BranchDeactivationCheck,
+  type ErrorCode,
+} from '@ziadkhaled-wb/contracts';
 
 export type { ErrorCode };
 
@@ -65,8 +71,8 @@ export function safeMessage(code: ErrorCode): string {
 /**
  * Turns a database error into an AppError when its message starts with a contract error code
  * (`OUT_OF_STOCK: product ...`, `PERMISSION_DENIED`, `DAY_CLOSED: ...`). Returns undefined for
- * anything else. The raw message, hint and detail are never copied: the AppError carries a
- * safe, generic message and the contract status for that code.
+ * anything else. Raw messages and hints are never copied. Only subscription limit details
+ * validated by the shared contracts are exposed alongside the safe generic message.
  */
 export function mapDbError(err: unknown): AppError | undefined {
   if (typeof err !== 'object' || err === null) return undefined;
@@ -75,5 +81,27 @@ export function mapDbError(err: unknown): AppError | undefined {
   const token = /^([A-Z][A-Z0-9_]*)(?![A-Za-z0-9_])/.exec(message)?.[1];
   if (token === undefined || !Object.hasOwn(errorCodeHttpStatus, token)) return undefined;
   const code = token as ErrorCode;
-  return new AppError(safeMessage(code), code, errorCodeHttpStatus[code]);
+  let details: unknown;
+  if (
+    code === 'PLAN_LIMIT_REACHED' ||
+    code === 'PLAN_DOWNGRADE_BLOCKED' ||
+    code === 'BRANCH_DEACTIVATE_NEEDS_CONFIRM'
+  ) {
+    try {
+      const raw = (err as { details?: unknown }).details;
+      if (typeof raw === 'string') {
+        const parsed = (
+          code === 'PLAN_LIMIT_REACHED'
+            ? PlanLimitDetail
+            : code === 'PLAN_DOWNGRADE_BLOCKED'
+              ? PlanDowngradeDetail
+              : BranchDeactivationCheck
+        ).safeParse(JSON.parse(raw));
+        if (parsed.success) details = parsed.data;
+      }
+    } catch {
+      /* Invalid DB detail is omitted. */
+    }
+  }
+  return new AppError(safeMessage(code), code, errorCodeHttpStatus[code], details);
 }

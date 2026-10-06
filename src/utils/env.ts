@@ -50,6 +50,13 @@ const envSchema = z.object({
   SUPABASE_JWT_SECRET: z.string().min(1).optional(),
 
   FRONTEND_URL: z.string().url(),
+  INVITE_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(72),
+  SMTP_URL: z
+    .string()
+    .url()
+    .refine((v) => /^smtps?:\/\//.test(v))
+    .optional(),
+  MAIL_FROM: z.string().min(1).optional(),
   // Comma-separated CORS allow-list. Required in production; elsewhere it defaults to FRONTEND_URL.
   CORS_ALLOWED_ORIGINS: z.string().transform(parseOrigins).optional(),
   // Number of reverse-proxy hops to trust for the client IP, or `false`.
@@ -117,6 +124,8 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   } else {
     const data = parsed.data;
     if (data.NODE_ENV === 'production') {
+      if (!data.SMTP_URL) problems.set('SMTP_URL', 'missing (required in production)');
+      if (!data.MAIL_FROM) problems.set('MAIL_FROM', 'missing (required in production)');
       if (!data.CORS_ALLOWED_ORIGINS || data.CORS_ALLOWED_ORIGINS.length === 0) {
         problems.set('CORS_ALLOWED_ORIGINS', 'missing (required in production)');
       }

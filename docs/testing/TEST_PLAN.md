@@ -59,9 +59,13 @@ RUN_INTEGRATION=1 SUPABASE_URL=http://127.0.0.1:54321 \
   SUPABASE_ANON_KEY=$(echo "$S" | node -pe 'JSON.parse(require("fs").readFileSync(0)).ANON_KEY') \
   SUPABASE_SERVICE_ROLE_KEY=$(echo "$S" | node -pe 'JSON.parse(require("fs").readFileSync(0)).SERVICE_ROLE_KEY') \
   FRONTEND_URL=http://localhost:5173 \
+  SMTP_URL=smtp://127.0.0.1:54325 MAIL_FROM="EcoFin CI <ci@ecotech.test>" \
+  MAILPIT_URL=http://127.0.0.1:54324 \
   npx vitest run
 # Expected: B5 health integration (1) and B6 auth integration (12) tests pass
 ```
+
+Integration files run sequentially when `RUN_INTEGRATION=1` because they share the seeded database. Concurrency checks inside each file still run in parallel. SMTP is required for application invitations and password resets; without `SMTP_URL`, the app reports that email was not sent. Mailpit HTTP polling cannot receive mail that was never sent.
 
 ### Web unit tests
 ```bash
@@ -208,3 +212,18 @@ E2E_OWNER_EMAIL=owner.one@ecotech.test \
 ## Deferred stories
 
 **F05 (B8):** `docs/testing/plans/B8.md`. **F06 (B10):** `docs/testing/plans/B10.md` + EcoFin-Web `B10-web.md`. **F07 (B11):** `docs/testing/plans/B11.md` + EcoFin-Web `B11-web.md`. **F10:** `docs/testing/plans/F10.md`. **F13:** `docs/testing/plans/F13.md`. **Q02:** `docs/testing/plans/Q02.md` + EcoFin-Web `Q02-web.md`. **F11:** `docs/testing/plans/F11.md`. **F12:** `docs/testing/plans/F12.md`. **F14:** `docs/testing/plans/F14.md`.
+## P01 shop provisioning
+
+See [P01 plan](plans/P01.md) for SQL, unit, integration and Web coverage; final results in [P01 report](reports/P01_report.md).
+
+## P05 subscription plans and limits
+
+See [P05 plan](plans/P05.md) and [P05 report](reports/P05_report.md).
+
+## O01 — branches
+
+See [O01 plan](plans/O01.md).
+
+## O02 — employees (EC-41 / EC-143 part 2)
+
+See [O02 plan](plans/O02.md) and [O02 report](reports/O02_report.md). Covers immediate session refusal after deactivation and permission changes on the next request.

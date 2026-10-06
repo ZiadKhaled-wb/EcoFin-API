@@ -316,8 +316,6 @@ CREATE TABLE t.denial (fn text, case_name text, key text, call text);
 INSERT INTO t.denial VALUES
   ('set_employee_permission', 'set_employee_permission', 'employee.manage',
    $$SELECT public.set_employee_permission('d3000000-0000-0000-0000-000000000019', 'sale.void', true, 'TEST-1 denial')$$),
-  ('set_employee_active', 'set_employee_active', 'employee.manage',
-   $$SELECT public.set_employee_active('d3000000-0000-0000-0000-000000000019', true, 'TEST-1 denial')$$),
   ('set_employee_branches', 'set_employee_branches', 'employee.manage',
    $$SELECT public.set_employee_branches('d3000000-0000-0000-0000-000000000019', ARRAY['d2000000-0000-0000-0000-000000000011']::uuid[], 'TEST-1 denial')$$);
 -- register_file: one case per purpose, with the key the function's own CASE asks for.
@@ -330,12 +328,45 @@ FROM (VALUES ('logo', 'org.settings_manage'), ('product_image', 'catalog.manage'
              ('legal_document', 'legal.manage'), ('import', 'import.data'), ('export', 'export.data'), ('other', 'org.settings_manage')) v(p, k);
 
 -- The functions that need a case: callable by authenticated, minus the session helpers.
+-- P01 platform functions require a super admin rather than a tenant permission.
+INSERT INTO t.denial VALUES
+  ('admin_list_organizations','admin_list_organizations','org.settings_manage',
+   $$SELECT public.admin_list_organizations(NULL,NULL,10,0)$$),
+  ('admin_provision_organization','admin_provision_organization','org.settings_manage',
+   $$SELECT public.admin_provision_organization('Denied','test1-denied','starter','Owner','denied@example.com',NULL,'Main',repeat('a',64),now()+interval '1 day')$$),
+  ('admin_set_organization_status','admin_set_organization_status','org.settings_manage',
+   $$SELECT public.admin_set_organization_status('d1000000-0000-0000-0000-000000000001','suspended','denial')$$),
+  ('admin_resend_owner_invite','admin_resend_owner_invite','org.settings_manage',
+   $$SELECT public.admin_resend_owner_invite('d1000000-0000-0000-0000-000000000001',repeat('b',64),now()+interval '1 day')$$);
+-- P05 platform operations use SUPER_ADMIN_REQUIRED; read-only functions are excluded below.
+INSERT INTO t.denial VALUES
+ ('admin_change_plan','admin_change_plan','org.settings_manage',$$SELECT public.admin_change_plan('d1000000-0000-0000-0000-000000000001','retail','denial')$$),
+ ('admin_set_subscription_dates','admin_set_subscription_dates','org.settings_manage',$$SELECT public.admin_set_subscription_dates('d1000000-0000-0000-0000-000000000001',CURRENT_DATE,NULL,'denial')$$),
+ ('admin_record_subscription_payment','admin_record_subscription_payment','org.settings_manage',$$SELECT public.admin_record_subscription_payment('d1000000-0000-0000-0000-000000000001',500,CURRENT_DATE,CURRENT_DATE,NULL,true,gen_random_uuid())$$),
+ ('admin_get_subscription','admin_get_subscription','org.settings_manage',$$SELECT public.admin_get_subscription('d1000000-0000-0000-0000-000000000001')$$);
+INSERT INTO t.denial VALUES
+ ('create_branch','create_branch','branch.manage',$$SELECT public.create_branch('Denial branch','DEN',NULL,NULL,NULL,NULL,NULL)$$),
+ ('update_branch','update_branch','branch.manage',$$SELECT public.update_branch('d2000000-0000-0000-0000-000000000011','Updated',NULL,NULL,NULL,NULL,NULL,NULL)$$),
+ ('branch_deactivation_check','branch_deactivation_check','branch.manage',$$SELECT public.branch_deactivation_check('d2000000-0000-0000-0000-000000000012')$$),
+ ('set_branch_active','set_branch_active','branch.manage',$$SELECT public.set_branch_active('d2000000-0000-0000-0000-000000000012',false,'denial',true)$$);
+INSERT INTO auth.users(id,email) VALUES ('a0200000-0000-4000-8000-000000000012','o02-reset@test.local');
+INSERT INTO public.employees(id,organization_id,full_name,email,role,default_branch_id,auth_user_id) VALUES
+ ('a0200000-0000-4000-8000-000000000010','d1000000-0000-0000-0000-000000000001','Reset target','o02-reset@test.local','CASHIER','d2000000-0000-0000-0000-000000000011','a0200000-0000-4000-8000-000000000012'),
+ ('a0200000-0000-4000-8000-000000000011','d1000000-0000-0000-0000-000000000001','Pending target','o02-pending@test.local','CASHIER','d2000000-0000-0000-0000-000000000011',NULL);
+INSERT INTO public.employee_branches(organization_id,employee_id,branch_id) VALUES ('d1000000-0000-0000-0000-000000000001','a0200000-0000-4000-8000-000000000011','d2000000-0000-0000-0000-000000000011');
+INSERT INTO t.denial VALUES
+ ('create_employee','create_employee','employee.manage',$$SELECT public.create_employee('Denial staff',NULL,'o02-create@test.local',NULL,'CASHIER',ARRAY['d2000000-0000-0000-0000-000000000011']::uuid[],NULL,'[]',repeat('c',64),now()+interval '1 day')$$),
+ ('update_employee','update_employee','employee.manage',$$SELECT public.update_employee('a0200000-0000-4000-8000-000000000011','Edited',NULL,'o02-pending@test.local',NULL,'CASHIER','d2000000-0000-0000-0000-000000000011')$$),
+ ('set_employee_active','set_employee_active','employee.manage',$$SELECT public.set_employee_active('a0200000-0000-4000-8000-000000000011',false,'Denial')$$),
+ ('resend_employee_invite','resend_employee_invite','employee.manage',$$SELECT public.resend_employee_invite('a0200000-0000-4000-8000-000000000011',repeat('d',64),now()+interval '1 day')$$),
+ ('create_password_reset','create_password_reset','employee.manage',$$SELECT public.create_password_reset('a0200000-0000-4000-8000-000000000010',repeat('e',64),now()+interval '1 hour')$$),
+ ('list_employees','list_employees','employee.manage',$$SELECT public.list_employees(NULL,NULL,NULL,10,0)$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
   AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
   AND p.proname NOT IN ('session_context', 'my_shops', 'my_permissions',
-                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change');
+                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change', 'get_subscription_status','require_module');
 
 SELECT t.expect('4.0 every callable write function has a permission-denial case here',
     NOT EXISTS (SELECT 1 FROM t.write_functions w WHERE w.fn NOT IN (SELECT fn FROM t.denial)),
@@ -353,15 +384,20 @@ BEGIN
         SET LOCAL ROLE authenticated;
         v_err := t.try(d.call);
         RESET ROLE;
-        PERFORM t.expect(format('4.1 %s: %s (lacks %s) gets PERMISSION_DENIED', d.case_name, v_role, d.key),
-                         v_role IS NOT NULL AND v_err ~ 'PERMISSION_DENIED', coalesce(v_err, '') || ' role=' || coalesce(v_role::text, 'none'));
+        PERFORM t.expect(format('4.1 %s: %s (lacks %s) gets required denial', d.case_name, v_role, d.key),
+                         v_role IS NOT NULL AND v_err ~ CASE WHEN d.fn LIKE 'admin_%' THEN '^SUPER_ADMIN_REQUIRED$' ELSE 'PERMISSION_DENIED' END, coalesce(v_err, '') || ' role=' || coalesce(v_role::text, 'none'));
         -- Same call as the owner works, so the arguments were valid and only the permission was missing.
         PERFORM t.as_user('d0000000-0000-0000-0000-000000000011', 'd1000000-0000-0000-0000-000000000001');
         SET LOCAL ROLE authenticated;
         v_owner_err := t.try(d.call);
         RESET ROLE;
-        PERFORM t.expect(format('4.2 %s: the same call works for the owner (valid arguments)', d.case_name),
-                         v_owner_err = '', v_owner_err);
+        IF d.fn LIKE 'admin_%' THEN
+            PERFORM t.expect(format('4.2 %s: tenant OWNER also cannot act as platform admin', d.case_name),
+                             v_owner_err = 'SUPER_ADMIN_REQUIRED', v_owner_err);
+        ELSE
+            PERFORM t.expect(format('4.2 %s: the same call works for the owner (valid arguments)', d.case_name),
+                             v_owner_err = '', v_owner_err);
+        END IF;
     END LOOP;
     PERFORM t.as_user(NULL);
 END $$;

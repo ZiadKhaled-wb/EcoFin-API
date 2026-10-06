@@ -296,7 +296,12 @@ describe.skipIf(!RUN)('F06 permissions over HTTP (local Supabase)', () => {
 
     const off = await active(targetId, owner, { active: false, reason: 'left the company' });
     expect(off.status, JSON.stringify(off.body)).toBe(200);
-    expect(off.body).toEqual({ employeeId: targetId, active: false });
+    expect(off.body).toEqual({
+      employeeId: targetId,
+      active: false,
+      id: targetId,
+      is_active: false,
+    });
     expect(await auditRows('employee.active_set')).toBe(1);
     const liveToken = await call('get', '/api/auth/me', target);
     expect(liveToken.status).toBe(403);
@@ -309,7 +314,7 @@ describe.skipIf(!RUN)('F06 permissions over HTTP (local Supabase)', () => {
 
     const on = await active(targetId, owner, { active: true, reason: 'came back' });
     expect(on.status).toBe(200);
-    expect(on.body).toEqual({ employeeId: targetId, active: true });
+    expect(on.body).toEqual({ employeeId: targetId, active: true, id: targetId, is_active: true });
     expect(await auditRows('employee.active_set')).toBe(2);
     const back = await login(targetEmail, TARGET_PASSWORD);
     expect((await call('get', '/api/auth/me', back)).status).toBe(200);

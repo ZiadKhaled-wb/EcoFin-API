@@ -9,6 +9,24 @@ export type AuditExpectation = { action: string } | { none: string };
 
 /** Keyed `METHOD /path` as mounted (same keys as the cross-shop and permission checks). */
 export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
+  'POST /api/employees': { action: 'employee.created' },
+  'PATCH /api/employees/:employeeId': { action: 'employee.updated' },
+  'POST /api/employees/:employeeId/invite': { action: 'invite.resent' },
+  'POST /api/employees/:employeeId/password-reset': { action: 'employee.password_reset_requested' },
+  'POST /api/auth/password-reset/lookup': { none: 'Pre-session read-only reset lookup.' },
+  'POST /api/auth/password-reset/complete': { action: 'employee.password_reset_completed' },
+  'POST /api/branches': { action: 'branch.created' },
+  'PATCH /api/branches/:id': { action: 'branch.updated' },
+  'POST /api/branches/:id/deactivate': { action: 'branch.deactivated' },
+  'POST /api/branches/:id/reactivate': { action: 'branch.reactivated' },
+  'POST /api/admin/shops/:id/plan': { action: 'subscription.plan_changed' },
+  'POST /api/admin/shops/:id/subscription-dates': { action: 'subscription.dates_changed' },
+  'POST /api/admin/shops/:id/payments': { action: 'subscription.payment_recorded' },
+  'POST /api/admin/shops': { action: 'org.provisioned' },
+  'POST /api/admin/shops/:id/status': { action: 'org.suspended' },
+  'POST /api/admin/shops/:id/owner-invite': { action: 'invite.resent' },
+  'POST /api/auth/invites/lookup': { none: 'Pre-session read-only invitation lookup; no changes.' },
+  'POST /api/auth/invites/accept': { action: 'invite.accepted' },
   'POST /api/auth/login': { action: 'auth.login' },
   'POST /api/auth/refresh': {
     none: 'Token refresh changes no data; the session was audited at login.',

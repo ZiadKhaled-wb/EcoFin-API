@@ -626,7 +626,7 @@ export const openApiSpec = {
                 tags: ['Access (F06)'],
                 summary: 'Deactivate or reactivate an employee (employee.manage)',
                 description:
-                    'EC-143. A deactivated employee is refused on their very next request (403 ACCOUNT_DISABLED), even with a live token, and can\'t log in. 404 NOT_FOUND: not an employee of your shop. 403 FORBIDDEN: the owner or yourself as target. One audit row (employee.active_set) per call.',
+                    'EC-143. A deactivated employee is refused on their very next request (403 ACCOUNT_DISABLED), even with a live token, and can\'t log in. 404 NOT_FOUND: not an employee of your shop. 403 FORBIDDEN: the owner or yourself as target. One audit row (employee.active_set) per state change; unchanged state writes none. Deactivation requires a reason; reactivation accepts an omitted reason.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
                 requestBody: {
@@ -636,10 +636,10 @@ export const openApiSpec = {
                             schema: {
                                 type: 'object',
                                 additionalProperties: false,
-                                required: ['active', 'reason'],
+                                required: ['active'],
                                 properties: {
                                     active: { type: 'boolean' },
-                                    reason: { type: 'string', minLength: 1, maxLength: 500, description: 'Stored on the audit row' },
+                                    reason: { type: 'string', minLength: 1, description: 'Required when active is false; stored on the audit row' },
                                 },
                             },
                         },
@@ -653,6 +653,8 @@ export const openApiSpec = {
                                 schema: {
                                     type: 'object',
                                     properties: {
+                                        id: { type: 'string', format: 'uuid' },
+                                        is_active: { type: 'boolean' },
                                         employeeId: { type: 'string', format: 'uuid' },
                                         active: { type: 'boolean' },
                                     },

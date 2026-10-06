@@ -12,6 +12,28 @@ import { crossShopCase, SHOP_A, SHOP_B } from './harness';
 const OWNER_A = 'owner.one@ecotech.test';
 const OWNER_B = 'owner.two@ecotech.test';
 const SEED_PASSWORD = 'LocalDev-Only-2026!';
+crossShopCase({
+  method: 'GET',
+  path: '/api/subscription',
+  name: 'subscription status is scoped to caller shop',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/subscription', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    h.expect(h.code(foreign.res)).toBe('SHOP_NOT_ALLOWED');
+    const injected = await h.call('GET', '/api/subscription', {
+      token: a.accessToken,
+      query: 'orgId=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const own = await h.call('GET', '/api/subscription', { token: a.accessToken });
+    h.expect(own.res.status).toBe(200);
+    h.expect(own.res.body.plan_key).toBe('retail_pro');
+  },
+});
 // Seed ids (supabase/seeds/02_dev_data.sql).
 const SHOP_A_BR1 = 'd2000000-0000-0000-0000-000000000011';
 const SHOP_A_BR2 = 'd2000000-0000-0000-0000-000000000012';
@@ -343,3 +365,118 @@ crossShopCase({
     h.expect(h.code(aimed.res)).toBe('SHOP_NOT_ALLOWED');
   },
 });
+
+// O01 branch reads and writes cannot target a foreign tenant.
+for (const path of ['/api/branches', '/api/branches/manage'])
+  crossShopCase({
+    method: 'GET',
+    path,
+    name: path + ' rejects foreign shop header',
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call('GET', path, { token: a.accessToken, orgId: SHOP_B });
+      h.expect(foreign.res.status).toBe(403);
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+      const own = await h.call('GET', path, { token: a.accessToken });
+      h.expect(own.res.status).toBe(200);
+      h.expect(own.res.body.every((b: { id: string }) => b.id !== SHOP_B_BR1)).toBe(true);
+    },
+  });
+crossShopCase({
+  method: 'POST',
+  path: '/api/branches',
+  name: 'branch create rejects foreign shop header and injected tenant',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('POST', '/api/branches', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: { name: 'Foreign', code: 'FORE' },
+    });
+    h.expect(foreign.res.status).toBe(403);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    const injected = await h.call('POST', '/api/branches', {
+      token: a.accessToken,
+      body: { name: 'Foreign', code: 'FORE', organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+  },
+});
+for (const [method, suffix, body] of [
+  ['GET', '', undefined],
+  ['PATCH', '', { name: 'Hijack' }],
+  ['GET', '/deactivation-check', undefined],
+  ['POST', '/deactivate', { reason: 'Hijack', confirm: true }],
+  ['POST', '/reactivate', undefined],
+] as const)
+  crossShopCase({
+    method,
+    path: '/api/branches/:id' + suffix,
+    name: method + ' branch ' + suffix + ' refuses foreign id',
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call(method, '/api/branches/' + SHOP_B_BR1 + suffix, {
+        token: a.accessToken,
+        ...(body === undefined ? {} : { body }),
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('BRANCH_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    },
+  });
+
+for (const [method, suffix, body] of [
+  ['PATCH', '', { full_name: 'Hijack' }],
+  ['POST', '/invite', undefined],
+  ['POST', '/password-reset', undefined],
+] as const)
+  crossShopCase({
+    method,
+    path: '/api/employees/:employeeId' + suffix,
+    name: method + ' staff ' + suffix + ' refuses foreign id',
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const f = await h.call(
+        method,
+        '/api/employees/d3000000-0000-0000-0000-000000000022' + suffix,
+        { token: a.accessToken, ...(body ? { body } : {}) },
+      );
+      h.expect(f.res.status).toBe(404);
+      h.expect(h.code(f.res)).toBe('EMPLOYEE_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, f.ip)).toBe(0);
+    },
+  });
+for (const method of ['GET', 'POST'] as const)
+  crossShopCase({
+    method,
+    path: '/api/employees',
+    name: method + ' staff refuses foreign tenant header',
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const f = await h.call(method, '/api/employees', {
+        token: a.accessToken,
+        orgId: SHOP_B,
+        ...(method === 'POST'
+          ? {
+              body: {
+                full_name: 'Hijack',
+                email: 'hijack@example.com',
+                role: 'CASHIER',
+                branch_ids: [SHOP_B_BR1],
+              },
+            }
+          : {}),
+      });
+      h.expect(f.res.status).toBe(403);
+      h.expect(await h.auditRowsFrom(SHOP_B, f.ip)).toBe(0);
+      if (method === 'GET') {
+        const own = await h.call('GET', '/api/employees', { token: a.accessToken });
+        h.expect(own.res.status).toBe(200);
+        h.expect(
+          own.res.body.items.some(
+            (e: { id: string }) => e.id === 'd3000000-0000-0000-0000-000000000022',
+          ),
+        ).toBe(false);
+      }
+    },
+  });

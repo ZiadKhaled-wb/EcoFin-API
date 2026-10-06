@@ -1,4 +1,4 @@
--- F04 auth functions (migration 20261003060000_f04_auth.sql). LOCAL / DEV ONLY.
+﻿-- F04 auth functions (migration 20261003060000_f04_auth.sql). LOCAL / DEV ONLY.
 -- Run after `npm run db:reset`:  npm run db:smoke -- supabase/tests/f04_auth_test.sql
 -- db:smoke wraps the file in BEGIN ... ROLLBACK, so it leaves nothing behind.
 -- Expected last line: failed 0.
@@ -114,7 +114,7 @@ SELECT t.expect('my_shops: a disabled employee gets nothing', (SELECT count(*) =
 SELECT set_config('request.jwt.claim.sub', 'f4000000-0000-0000-0000-0000000000e1', false);
 SELECT t.expect('my_shops: a suspended shop is not listed', (SELECT count(*) = 0 FROM public.my_shops()));
 SELECT set_config('request.jwt.claim.sub', 'f4000000-0000-0000-0000-0000000000f1', false);
-SELECT t.expect('my_shops: a shop with an ended subscription is not listed', (SELECT count(*) = 0 FROM public.my_shops()));
+SELECT t.expect('my_shops: an ended subscription remains available for read-only access', (SELECT count(*) = 1 FROM public.my_shops()));
 SELECT set_config('request.jwt.claim.sub', 'f4000000-0000-0000-0000-000000000001', false);
 SELECT t.expect('my_shops: a login without employee rows gets nothing', (SELECT count(*) = 0 FROM public.my_shops()));
 
@@ -169,13 +169,15 @@ SELECT t.expect_error('login: a login without employee rows is refused', 'SELECT
 SELECT set_config('request.jwt.claim.sub', '', false);
 SELECT t.expect_error('login: no session is refused', 'SELECT public.auth_record_login()', '^NOT_AN_EMPLOYEE');
 SELECT set_config('request.jwt.claim.sub', 'f4000000-0000-0000-0000-0000000000e1', false);
-SELECT t.expect_error('login: a suspended shop is refused', 'SELECT public.auth_record_login()', '^SHOP_INACTIVE');
+SELECT t.expect_error('login: a suspended shop is refused', 'SELECT public.auth_record_login()', '^ORG_SUSPENDED');
 SELECT set_config('request.jwt.claim.sub', 'f4000000-0000-0000-0000-0000000000f1', false);
-SELECT t.expect_error('login: an ended subscription is refused', 'SELECT public.auth_record_login()', '^SUBSCRIPTION_EXPIRED');
+SELECT public.auth_record_login();
 RESET ROLE;
 SELECT t.expect('login: refused calls write no audit rows',
     (SELECT count(*) = 0 FROM audit_log WHERE organization_id IN
-       ('f4100000-0000-0000-0000-00000000000c', 'f4100000-0000-0000-0000-00000000000d')));
+       ('f4100000-0000-0000-0000-00000000000c')));
+SELECT t.expect('login: expired shop still audits the login',
+    (SELECT count(*)=1 FROM audit_log WHERE organization_id='f4100000-0000-0000-0000-00000000000d' AND action='auth.login'));
 SELECT t.expect('login: user a has two auth.login rows (normal + malformed header)',
     (SELECT count(*) = 2 FROM audit_log WHERE action = 'auth.login' AND employee_id = 'f4300000-0000-0000-0000-0000000000a1'));
 

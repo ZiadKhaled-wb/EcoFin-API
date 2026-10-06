@@ -25,6 +25,7 @@ $$;
 -- 3. tables with organization_id that have RLS on but deliberately no SELECT policy (no app access).
 CREATE TABLE t.no_select_policy_ok (table_name text PRIMARY KEY, reason text NOT NULL);
 INSERT INTO t.no_select_policy_ok VALUES
+  ('password_resets','O02: service-only pre-session reset tokens; no app table access'),
   ('jobs', 'platform job queue (D34): service role only; no policy = app users see nothing');
 
 -- 5. public functions authenticated may EXECUTE without app.require_permission.
@@ -35,7 +36,17 @@ INSERT INTO t.no_permission_ok VALUES
   ('my_permissions',              'session helper: the caller''s own permission keys, writes nothing'),
   ('auth_record_login',           'login helper: audits the caller''s own login (any employee may log in)'),
   ('auth_record_logout',          'login helper: audits the caller''s own logout'),
-  ('auth_record_password_change', 'login helper: audits the caller''s own password change');
+  ('auth_record_password_change', 'login helper: audits the caller''s own password change'),
+  ('admin_provision_organization', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_list_organizations', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_set_organization_status', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_resend_owner_invite', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_change_plan', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_set_subscription_dates', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_record_subscription_payment', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_get_subscription', 'platform super admin; checks app.is_super_admin()'),
+  ('get_subscription_status', 'read-only status for the session''s own shop'),
+  ('require_module', 'read-only module check for the session''s own shop');
 
 -- ---------------------------------------------------------------- catalog helpers (plpgsql, so a
 -- privilege function never runs on rows of another kind or schema before the filter)

@@ -20,11 +20,26 @@ export const SHOP_B = 'd1000000-0000-0000-0000-000000000002';
 
 /** Routes nobody needs a session for, so there is no shop to cross. Keyed `METHOD /path`. */
 export const PUBLIC_ROUTES: readonly string[] = [
+  'POST /api/auth/password-reset/lookup',
+  'POST /api/auth/password-reset/complete',
   'GET /health',
   'POST /api/auth/login',
   'POST /api/auth/refresh',
   'POST /api/auth/forgot-password',
   'POST /api/auth/reset-password',
+  'POST /api/auth/invites/lookup',
+  'POST /api/auth/invites/accept',
+  // Platform level, no shop context. P01 covers super-admin-only access and caller JWTs.
+  'GET /api/admin/plans',
+  'GET /api/admin/shops',
+  'POST /api/admin/shops',
+  'POST /api/admin/shops/:id/status',
+  'POST /api/admin/shops/:id/owner-invite',
+  // P05 platform level, no shop context; tested with non-admin callers.
+  'GET /api/admin/shops/:id/subscription',
+  'POST /api/admin/shops/:id/plan',
+  'POST /api/admin/shops/:id/subscription-dates',
+  'POST /api/admin/shops/:id/payments',
 ];
 
 export interface CallOptions {

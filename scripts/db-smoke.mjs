@@ -19,7 +19,8 @@ function dbContainer() {
 }
 
 const container = dbContainer();
-const sql = readFileSync(sqlFile, 'utf8');
+// A Windows UTF-8 BOM is not SQL whitespace after the BEGIN wrapper.
+const sql = readFileSync(sqlFile, 'utf8').replace(/^\uFEFF/, '');
 const run = spawnSync(
   'docker',
   [

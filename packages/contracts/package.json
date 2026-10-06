@@ -1,6 +1,6 @@
 {
   "name": "@ziadkhaled-wb/contracts",
-  "version": "0.4.2",
+  "version": "0.8.1",
   "description": "Shared zod schemas and types for EcoTech Pro (API and Web).",
   "type": "module",
   "sideEffects": false,
