@@ -1,5 +1,8 @@
 -- Combine EC-143's returned activation state and audit action with O02's locking,
 -- token revocation, subscription limits, optional reactivation reason and no-op handling.
+-- O02 (20261006110400) leaves its RETURNS void version; a return type can't be changed by
+-- CREATE OR REPLACE, so drop it first (D39).
+DROP FUNCTION IF EXISTS public.set_employee_active(uuid, boolean, text);
 CREATE OR REPLACE FUNCTION public.set_employee_active(
     p_employee_id uuid, p_active boolean, p_reason text)
 RETURNS TABLE (employee_id uuid, is_active boolean)

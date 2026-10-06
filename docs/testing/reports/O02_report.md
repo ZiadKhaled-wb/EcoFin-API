@@ -71,5 +71,5 @@ Browser screenshots were inspected without capturing token/link dialogs. Verific
 - src/services/passwordResets.service.ts
 - src/services/staff.service.test.ts
 - src/services/staff.service.ts
-- supabase/migrations/20261006040000_o02_employees.sql
+- supabase/migrations/20261006110400_o02_employees.sql
 - supabase/tests/o02_employees_test.sql

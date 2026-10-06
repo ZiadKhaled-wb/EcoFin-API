@@ -82,7 +82,7 @@ See the commit diff; the file inventory is appended below.
 - src/utils/inviteToken.ts
 - src/utils/supabase.ts
 - supabase/config.toml
-- supabase/migrations/20261006010000_p01_shop_provisioning.sql
+- supabase/migrations/20261006110100_p01_shop_provisioning.sql
 - supabase/tests/f04_auth_test.sql
 - supabase/tests/f05_tenant_test.sql
 - supabase/tests/p01_provisioning_test.sql
