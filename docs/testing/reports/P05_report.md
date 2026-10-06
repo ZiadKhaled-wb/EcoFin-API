@@ -65,7 +65,7 @@ Done-when: expiry/read/export, limits and concurrency, module helper, downgrade 
 - src/types/database.types.ts
 - src/utils/errors.ts
 - src/utils/subscriptionErrors.test.ts
-- supabase/migrations/20261006020000_p05_subscriptions.sql
+- supabase/migrations/20261006110200_p05_subscriptions.sql
 - supabase/tests/f04_auth_test.sql
 - supabase/tests/f05_tenant_test.sql
 - supabase/tests/ledger_invariants_test.sql

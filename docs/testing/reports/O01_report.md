@@ -61,6 +61,6 @@ Full sequential API suite with integration enabled: 619 passed, one existing exp
 - src/test/cross-shop/check.test.ts
 - src/types/database.types.ts
 - src/utils/errors.ts
-- supabase/migrations/20261006030000_o01_branches.sql
+- supabase/migrations/20261006110300_o01_branches.sql
 - supabase/tests/o01_branches_test.sql
 - supabase/tests/tenant_and_permission_test.sql

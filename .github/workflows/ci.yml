@@ -11,6 +11,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the migration order check compares with the base branch
+
+      # D39: new migrations must be numbered after the newest one on main (a hosted db push
+      # refuses older-numbered ones). PR: against the target branch; push: against the previous commit.
+      - name: Migration order check
+        run: node scripts/check-migration-order.mjs "${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}"
 
       - uses: actions/setup-node@v4
         with:
