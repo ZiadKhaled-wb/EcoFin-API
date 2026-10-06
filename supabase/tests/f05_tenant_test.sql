@@ -276,7 +276,7 @@ SELECT t.as_user('f5000000-0000-0000-0000-0000000000e1');
 SELECT t.expect('ctx: suspended shop -> ORG_SUSPENDED', t.ctx() = 'refusal=ORG_SUSPENDED', t.ctx());
 
 SELECT t.as_user('f5000000-0000-0000-0000-0000000000f1');
-SELECT t.expect('ctx: subscription ended -> SUBSCRIPTION_EXPIRED', t.ctx() = 'refusal=SUBSCRIPTION_EXPIRED', t.ctx());
+SELECT t.expect('ctx: subscription ended remains available for read-only access', t.ctx() LIKE 'org=f5100000-0000-0000-0000-00000000000d role=OWNER %', t.ctx());
 
 SELECT t.as_user('f5000000-0000-0000-0000-0000000000b1');
 SELECT t.expect('ctx: subscription ending in the future is fine',

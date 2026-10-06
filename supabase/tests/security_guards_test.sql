@@ -39,7 +39,13 @@ INSERT INTO t.no_permission_ok VALUES
   ('admin_provision_organization', 'platform super admin; checks app.is_super_admin()'),
   ('admin_list_organizations', 'platform super admin; checks app.is_super_admin()'),
   ('admin_set_organization_status', 'platform super admin; checks app.is_super_admin()'),
-  ('admin_resend_owner_invite', 'platform super admin; checks app.is_super_admin()');
+  ('admin_resend_owner_invite', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_change_plan', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_set_subscription_dates', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_record_subscription_payment', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_get_subscription', 'platform super admin; checks app.is_super_admin()'),
+  ('get_subscription_status', 'read-only status for the session''s own shop'),
+  ('require_module', 'read-only module check for the session''s own shop');
 
 -- ---------------------------------------------------------------- catalog helpers (plpgsql, so a
 -- privilege function never runs on rows of another kind or schema before the filter)

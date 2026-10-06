@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.0
+
+- P05 subscription states, usage, billing schemas, module keys, warning constant and structured limit errors. Shop-list rows include subscription end/state.
+
 ## 0.5.0
 
 - P01 shop provisioning, platform shop administration, single-use invitations and the optional super-admin login flag.

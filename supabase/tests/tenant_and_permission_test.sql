@@ -308,12 +308,18 @@ INSERT INTO t.denial VALUES
    $$SELECT public.admin_set_organization_status('d1000000-0000-0000-0000-000000000001','suspended','denial')$$),
   ('admin_resend_owner_invite','admin_resend_owner_invite','org.settings_manage',
    $$SELECT public.admin_resend_owner_invite('d1000000-0000-0000-0000-000000000001',repeat('b',64),now()+interval '1 day')$$);
+-- P05 platform operations use SUPER_ADMIN_REQUIRED; read-only functions are excluded below.
+INSERT INTO t.denial VALUES
+ ('admin_change_plan','admin_change_plan','org.settings_manage',$$SELECT public.admin_change_plan('d1000000-0000-0000-0000-000000000001','retail','denial')$$),
+ ('admin_set_subscription_dates','admin_set_subscription_dates','org.settings_manage',$$SELECT public.admin_set_subscription_dates('d1000000-0000-0000-0000-000000000001',CURRENT_DATE,NULL,'denial')$$),
+ ('admin_record_subscription_payment','admin_record_subscription_payment','org.settings_manage',$$SELECT public.admin_record_subscription_payment('d1000000-0000-0000-0000-000000000001',500,CURRENT_DATE,CURRENT_DATE,NULL,true,gen_random_uuid())$$),
+ ('admin_get_subscription','admin_get_subscription','org.settings_manage',$$SELECT public.admin_get_subscription('d1000000-0000-0000-0000-000000000001')$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
   AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
   AND p.proname NOT IN ('session_context', 'my_shops', 'my_permissions',
-                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change');
+                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change', 'get_subscription_status','require_module');
 
 SELECT t.expect('4.0 every callable write function has a permission-denial case here',
     NOT EXISTS (SELECT 1 FROM t.write_functions w WHERE w.fn NOT IN (SELECT fn FROM t.denial)),

@@ -6496,6 +6496,7 @@ export type Database = {
           amount: number;
           created_at: string;
           id: string;
+          idempotency_key: string | null;
           organization_id: string;
           paid_at: string;
           period_end: string;
@@ -6508,6 +6509,7 @@ export type Database = {
           amount: number;
           created_at?: string;
           id?: string;
+          idempotency_key?: string | null;
           organization_id: string;
           paid_at?: string;
           period_end: string;
@@ -6520,6 +6522,7 @@ export type Database = {
           amount?: number;
           created_at?: string;
           id?: string;
+          idempotency_key?: string | null;
           organization_id?: string;
           paid_at?: string;
           period_end?: string;
@@ -7813,6 +7816,11 @@ export type Database = {
     };
     Functions: {
       accept_invite: { Args: { p_auth_user_id: string; p_token_hash: string }; Returns: Json };
+      admin_change_plan: {
+        Args: { p_organization_id: string; p_plan_key: string; p_reason: string };
+        Returns: undefined;
+      };
+      admin_get_subscription: { Args: { p_organization_id: string }; Returns: Json };
       admin_list_organizations: {
         Args: {
           p_limit?: number;
@@ -7829,6 +7837,8 @@ export type Database = {
           owner_invite_status: string;
           plan_key: string;
           status: Database['public']['Enums']['org_status'];
+          subscription_end: string;
+          subscription_state: string;
           tenant_slug: string;
           total_count: number;
         }[];
@@ -7847,6 +7857,18 @@ export type Database = {
         };
         Returns: Json;
       };
+      admin_record_subscription_payment: {
+        Args: {
+          p_amount: string;
+          p_extend?: boolean;
+          p_idempotency_key?: string;
+          p_organization_id: string;
+          p_period_end: string;
+          p_period_start: string;
+          p_reference: string | null;
+        };
+        Returns: string;
+      };
       admin_resend_owner_invite: {
         Args: { p_expires_at: string; p_organization_id: string; p_token_hash: string };
         Returns: Json;
@@ -7859,10 +7881,20 @@ export type Database = {
         };
         Returns: undefined;
       };
+      admin_set_subscription_dates: {
+        Args: {
+          p_end: string | null;
+          p_organization_id: string;
+          p_reason: string;
+          p_start: string;
+        };
+        Returns: undefined;
+      };
       auth_clear_must_change_password: { Args: { p_auth_user_id: string }; Returns: number };
       auth_record_login: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_password_change: { Args: Record<PropertyKey, never>; Returns: undefined };
+      get_subscription_status: { Args: Record<PropertyKey, never>; Returns: Json };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
       jobs_claim: {
         Args: { p_limit?: number; p_types: string[]; p_worker: string };
@@ -7941,6 +7973,7 @@ export type Database = {
         };
         Returns: string;
       };
+      require_module: { Args: { p_module: string }; Returns: undefined };
       session_context: {
         Args: Record<PropertyKey, never>;
         Returns: {

@@ -42,7 +42,6 @@ import {
   loadMemberships,
   recordLoginAttempt,
   clearMustChangePassword,
-  type MembershipRow,
 } from './auth.admin';
 import type { RequestAuth } from '../types/express';
 
@@ -70,11 +69,6 @@ export function todayIn(timezone: string, now: Date = new Date()): string {
   } catch {
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(now);
   }
-}
-
-/** P05: expired = subscription_end < org_today. No end date = not expired. */
-function subscriptionExpired(row: MembershipRow, now: Date): boolean {
-  return row.subscriptionEnd !== null && row.subscriptionEnd < todayIn(row.timezone, now);
 }
 
 /** Revokes one session (scope local) or all of the user's sessions. Never throws. */
@@ -169,7 +163,6 @@ interface ShopDecision {
  * Picks the shops this login may use and refuses the login when none is usable:
  *   ACCOUNT_DISABLED      every candidate employee row is inactive or archived
  *   SHOP_INACTIVE         the shop status is anything but 'active' (suspended, expired, closed)
- *   SUBSCRIPTION_EXPIRED  subscription_end is before today in the shop's timezone (P05)
  * `targetSlug` (username login, or email + tenantSlug) limits the decision to that shop.
  */
 async function decideShops(
@@ -201,9 +194,7 @@ async function decideShops(
   if (active.length === 0) throw new AppError('Account disabled.', 'ACCOUNT_DISABLED');
   const open = active.filter((r) => r.orgStatus === 'active');
   if (open.length === 0) throw new AppError('Shop suspended.', 'ORG_SUSPENDED');
-  const now = new Date();
-  const usable = open.filter((r) => !subscriptionExpired(r, now));
-  if (usable.length === 0) throw new AppError('Subscription expired.', 'SUBSCRIPTION_EXPIRED');
+  const usable = open;
 
   // D14: the list itself comes from my_shops() with the user's JWT.
   const listed = await myShops(supabaseForRequest(accessToken, undefined, meta));

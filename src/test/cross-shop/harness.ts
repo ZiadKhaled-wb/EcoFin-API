@@ -33,6 +33,11 @@ export const PUBLIC_ROUTES: readonly string[] = [
   'POST /api/admin/shops',
   'POST /api/admin/shops/:id/status',
   'POST /api/admin/shops/:id/owner-invite',
+  // P05 platform level, no shop context; tested with non-admin callers.
+  'GET /api/admin/shops/:id/subscription',
+  'POST /api/admin/shops/:id/plan',
+  'POST /api/admin/shops/:id/subscription-dates',
+  'POST /api/admin/shops/:id/payments',
 ];
 
 export interface CallOptions {

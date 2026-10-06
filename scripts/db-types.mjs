@@ -28,6 +28,19 @@ generated = generated.replace(/"?register_file"?:\s*\{[\s\S]*?Returns:/, (signat
   ),
 );
 const config = (await prettier.resolveConfig(target)) ?? {};
+generated = generated.replace(
+  /"?admin_set_subscription_dates"?:\s*\{[\s\S]*?Returns:/,
+  (signature) => signature.replace(/("?p_end"?:\s*string)(?! \| null)/g, '$1 | null'),
+);
+generated = generated.replace(
+  /"?admin_record_subscription_payment"?:\s*\{[\s\S]*?Returns:/,
+  (signature) => signature.replace(/("?p_reference"?:\s*string)(?! \| null)/g, '$1 | null'),
+);
+// numeric accepts a decimal string over PostgREST; billing never uses JS float money.
+generated = generated.replace(
+  /"?admin_record_subscription_payment"?:\s*\{[\s\S]*?Returns:/,
+  (signature) => signature.replace(/("?p_amount"?:\s*)number/g, '$1string'),
+);
 const formatted = await prettier.format(`${HEADER}\n${generated}`, { ...config, filepath: target });
 writeFileSync(target, formatted);
 console.log(`db:types: wrote ${target}`);

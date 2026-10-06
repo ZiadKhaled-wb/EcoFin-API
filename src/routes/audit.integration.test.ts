@@ -42,13 +42,14 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
   async function send(
     method: 'get' | 'post' | 'put',
     path: string,
-    opts: { token?: string; orgId?: string; body?: object } = {},
+    opts: { token?: string; orgId?: string; body?: object; key?: string } = {},
   ): Promise<Sent> {
     const ip = nextIp();
     const requestId = `f07-${STAMP}-${ipCounter}`;
     let r = request(app)[method](path).set('X-Forwarded-For', ip).set('x-request-id', requestId);
     if (opts.token) r = r.set('Authorization', `Bearer ${opts.token}`);
     if (opts.orgId) r = r.set('x-org-id', opts.orgId);
+    if (opts.key) r = r.set('Idempotency-Key', opts.key);
     const res = opts.body ? await r.send(opts.body) : await r;
     return { res, ip, requestId };
   }
@@ -114,6 +115,38 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
   // One driver per registry entry that has an action: performs the call, returns what was sent,
   // the shop the row must land in and the success status (200 unless the route creates: 201).
   const drivers: Record<string, () => Promise<{ sent: Sent; org: string; status?: number }>> = {
+    'POST /api/admin/shops/:id/plan': async () => {
+      const f = await platformShop('plan');
+      return {
+        sent: await send('post', `/api/admin/shops/${f.org}/plan`, {
+          token: f.admin,
+          body: { plan_key: 'retail', reason: 'audit' },
+        }),
+        org: f.org,
+      };
+    },
+    'POST /api/admin/shops/:id/subscription-dates': async () => {
+      const f = await platformShop('dates');
+      return {
+        sent: await send('post', `/api/admin/shops/${f.org}/subscription-dates`, {
+          token: f.admin,
+          body: { start: '2026-10-01', end: '2027-10-01', reason: 'audit' },
+        }),
+        org: f.org,
+      };
+    },
+    'POST /api/admin/shops/:id/payments': async () => {
+      const f = await platformShop('payment');
+      return {
+        sent: await send('post', `/api/admin/shops/${f.org}/payments`, {
+          token: f.admin,
+          key: 'a0500000-0000-4000-8000-000000000003',
+          body: { amount: '500.25', period_start: '2026-10-01', period_end: '2027-10-01' },
+        }),
+        org: f.org,
+        status: 201,
+      };
+    },
     'POST /api/admin/shops': async () => {
       const fixture = await platformShop('create');
       return { sent: fixture.sent, org: fixture.org, status: 201 };

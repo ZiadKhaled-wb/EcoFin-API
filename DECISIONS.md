@@ -187,3 +187,5 @@ Supabase tokens carry no shop. The active shop is chosen per request by the `x-o
 - **Orphans**: `scripts/files-orphan-report.ts` lists objects at least 24 h old with no `files` row. Report only. Wiring it to the job runner is a follow-up (F13 is merged).
 
 - P01: invite token = 32 random bytes in the URL fragment, only its SHA-256 stored, 72 h TTL, single use; super-admin functions check app.is_super_admin() instead of require_permission; service role only for pre-session lookup and accept.
+
+- P05: expiry is by date, never status; read-only writes enforced through require_permission with export.data allowed; org-locking triggers enforce limits and pending invitations count as users; warning starts 14 days before the end date.

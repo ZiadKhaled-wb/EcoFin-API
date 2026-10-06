@@ -210,3 +210,7 @@ E2E_OWNER_EMAIL=owner.one@ecotech.test \
 ## P01 shop provisioning
 
 See [P01 plan](plans/P01.md) for SQL, unit, integration and Web coverage; final results in [P01 report](reports/P01_report.md).
+
+## P05 subscription plans and limits
+
+See [P05 plan](plans/P05.md) and [P05 report](reports/P05_report.md).

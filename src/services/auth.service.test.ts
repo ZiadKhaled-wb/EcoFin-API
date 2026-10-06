@@ -253,11 +253,6 @@ describe('login', () => {
     ['suspended shop', membership({ orgStatus: 'suspended' }), 'ORG_SUSPENDED'],
     ['closed shop', membership({ orgStatus: 'closed' }), 'ORG_SUSPENDED'],
     ['shop with status expired', membership({ orgStatus: 'expired' }), 'ORG_SUSPENDED'],
-    [
-      'subscription ended yesterday',
-      membership({ subscriptionEnd: '2000-01-01' }),
-      'SUBSCRIPTION_EXPIRED',
-    ],
   ])('%s -> 403 %s and the new session is revoked', async (_name, row, code) => {
     signInOk();
     admin.loadMemberships.mockResolvedValue([row]);
@@ -279,6 +274,14 @@ describe('login', () => {
     ]);
     const res = await auth.login({ identifier: 'owner.one@ecotech.test', password: 'pw' }, META);
     expect(res.shops).toHaveLength(1);
+  });
+  it('an expired subscription still permits login and is audited', async () => {
+    signInOk();
+    admin.loadMemberships.mockResolvedValue([membership({ subscriptionEnd: '2000-01-01' })]);
+    const res = await auth.login({ identifier: 'owner.one@ecotech.test', password: 'pw' }, META);
+    expect(res.shops).toHaveLength(1);
+    expect(db.clients.some((c) => c.rpcCalls.includes('auth_record_login'))).toBe(true);
+    expect(authApi.admin.signOut).not.toHaveBeenCalled();
   });
 
   it('multi-shop login: requiresShopSelection with both shops, and no login audit yet', async () => {

@@ -33,7 +33,16 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/admin/shops/:id/owner-invite',
       ]),
     );
-    expect(keys).toHaveLength(24);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'GET /api/subscription',
+        'GET /api/admin/shops/:id/subscription',
+        'POST /api/admin/shops/:id/plan',
+        'POST /api/admin/shops/:id/subscription-dates',
+        'POST /api/admin/shops/:id/payments',
+      ]),
+    );
+    expect(keys).toHaveLength(29);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

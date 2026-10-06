@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { IsoTimestamp, Money, Uuid } from './common.js';
+import { BusinessDate, IsoTimestamp, Money, Uuid } from './common.js';
+import { SubscriptionState } from './subscriptions.js';
 import { OrgStatus, TenantSlug } from './auth.js';
 
 const name = z.string().trim().min(1).max(200);
@@ -49,6 +50,8 @@ export const AdminShop = z.object({
   owner_full_name: z.string().nullable(),
   owner_email: z.string().nullable(),
   owner_invite_status: z.enum(['accepted', 'pending', 'expired', 'none']),
+  subscription_end: BusinessDate.nullable(),
+  subscription_state: SubscriptionState,
 });
 export type AdminShop = z.infer<typeof AdminShop>;
 export const AdminShopsResponse = z.object({
