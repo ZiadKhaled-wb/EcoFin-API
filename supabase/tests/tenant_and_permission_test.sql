@@ -228,6 +228,8 @@ INSERT INTO t.w VALUES ('file_b_id', t.try($$SELECT public.register_file(
 INSERT INTO t.w VALUES ('file_b_entity', t.try($$SELECT public.register_file(
     'e1990000-0000-0000-0000-000000000002', 'd1000000-0000-0000-0000-000000000001/customer_id/2026/10/z.png', 'z.png',
     'image/png', 10, NULL, 'customer_id', 'customer', 'e1040000-0000-0000-0000-00000000000b')$$));
+INSERT INTO t.w VALUES ('active_b_emp', t.try($$SELECT public.set_employee_active(
+    'd3000000-0000-0000-0000-000000000022', false, 'TEST-1 cross-shop')$$));
 -- EC-142: the other entity rules, and the own shop's customer still works.
 INSERT INTO t.w VALUES ('file_bad_type', t.try($$SELECT public.register_file(
     'e1990000-0000-0000-0000-000000000003', 'd1000000-0000-0000-0000-000000000001/other/2026/10/t.png', 't.png',
@@ -284,6 +286,11 @@ SELECT t.expect('3.9 register_file pointing at the own shop''s customer still wo
                 AND entity_id = 'e1040000-0000-0000-0000-00000000000a'),
     (SELECT err FROM t.w WHERE name = 'file_own_entity'));
 
+SELECT t.expect('3.10 set_employee_active on a shop B employee fails (NOT_FOUND) and B''s employee stays active',
+    (SELECT err FROM t.w WHERE name = 'active_b_emp') ~ 'NOT_FOUND'
+    AND (SELECT is_active FROM employees WHERE id = 'd3000000-0000-0000-0000-000000000022'),
+    (SELECT err FROM t.w WHERE name = 'active_b_emp'));
+
 -- ---------------------------------------------------------------- 4. permission denial (generic)
 -- One employee per non-owner role in shop A, so every permission key has a role without it.
 CREATE TABLE t.role_user (role public.employee_role PRIMARY KEY, sub uuid, emp uuid);
@@ -309,6 +316,8 @@ CREATE TABLE t.denial (fn text, case_name text, key text, call text);
 INSERT INTO t.denial VALUES
   ('set_employee_permission', 'set_employee_permission', 'employee.manage',
    $$SELECT public.set_employee_permission('d3000000-0000-0000-0000-000000000019', 'sale.void', true, 'TEST-1 denial')$$),
+  ('set_employee_active', 'set_employee_active', 'employee.manage',
+   $$SELECT public.set_employee_active('d3000000-0000-0000-0000-000000000019', true, 'TEST-1 denial')$$),
   ('set_employee_branches', 'set_employee_branches', 'employee.manage',
    $$SELECT public.set_employee_branches('d3000000-0000-0000-0000-000000000019', ARRAY['d2000000-0000-0000-0000-000000000011']::uuid[], 'TEST-1 denial')$$);
 -- register_file: one case per purpose, with the key the function's own CASE asks for.

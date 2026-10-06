@@ -189,6 +189,35 @@ crossShopCase({
 });
 
 crossShopCase({
+  method: 'PUT',
+  path: '/api/employees/:employeeId/active',
+  name: "shop A's owner: B's employee is 404 and stays active; aimed at B is refused; nothing written in B",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const beforeB = await h.accessOf(CASHIER_B);
+    h.expect(beforeB.active).toBe(true);
+
+    const otherEmployee = await h.call('PUT', `/api/employees/${CASHIER_B}/active`, {
+      token: a.accessToken,
+      body: { active: false, reason: 'cross-shop test' },
+    });
+    h.expect(otherEmployee.res.status).toBe(404);
+    h.expect(h.code(otherEmployee.res)).toBe('NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, otherEmployee.ip)).toBe(0);
+
+    const aimed = await h.call('PUT', `/api/employees/${CASHIER_B}/active`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: { active: false, reason: 'cross-shop test' },
+    });
+    h.expect(aimed.res.status).toBe(403);
+    h.expect(h.code(aimed.res)).toBe('SHOP_NOT_ALLOWED');
+
+    h.expect(await h.accessOf(CASHIER_B)).toEqual(beforeB);
+  },
+});
+
+crossShopCase({
   method: 'GET',
   path: '/api/audit',
   name: "shop A's owner never sees shop B's audit rows, can't aim at B or pass an org",

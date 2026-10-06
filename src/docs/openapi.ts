@@ -621,6 +621,52 @@ export const openApiSpec = {
                 },
             },
         },
+        '/api/employees/{employeeId}/active': {
+            put: {
+                tags: ['Access (F06)'],
+                summary: 'Deactivate or reactivate an employee (employee.manage)',
+                description:
+                    'EC-143. A deactivated employee is refused on their very next request (403 ACCOUNT_DISABLED), even with a live token, and can\'t log in. 404 NOT_FOUND: not an employee of your shop. 403 FORBIDDEN: the owner or yourself as target. One audit row (employee.active_set) per call.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'employeeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                additionalProperties: false,
+                                required: ['active', 'reason'],
+                                properties: {
+                                    active: { type: 'boolean' },
+                                    reason: { type: 'string', minLength: 1, maxLength: 500, description: 'Stored on the audit row' },
+                                },
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    200: {
+                        description: 'The new state',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        employeeId: { type: 'string', format: 'uuid' },
+                                        active: { type: 'boolean' },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    400: { $ref: '#/components/responses/Error' },
+                    401: { $ref: '#/components/responses/Error' },
+                    403: { $ref: '#/components/responses/Error' },
+                    404: { $ref: '#/components/responses/Error' },
+                },
+            },
+        },
         '/api/monitoring/test-error': {
             post: {
                 tags: ['Monitoring (Q02)'],

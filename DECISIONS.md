@@ -185,3 +185,7 @@ Supabase tokens carry no shop. The active shop is chosen per request by the `x-o
 - **Multipart**: `multer` 2.4.0 with memory storage and `limits.fileSize = FILE_MAX_BYTES`, the one allowed new dependency. No `@types/multer` (that would be a second dependency): the parts used are declared in `src/types/multer.d.ts`.
 - **Env**: `FILE_MAX_BYTES` (default 10485760, max = the bucket's limit) and `FILE_URL_TTL_SECONDS` (default 60, 1 to 3600).
 - **Orphans**: `scripts/files-orphan-report.ts` lists objects at least 24 h old with no `files` row. Report only. Wiring it to the job runner is a follow-up (F13 is merged).
+
+### D37. EC-142 / EC-143 bug fixes (6 Oct)
+- **EC-142**: `register_file` now checks the linked record itself (entity type in the API's list, entity id in the caller's shop, else `NOT_FOUND`), in a new migration that replaces the function. The API check stays as the early answer.
+- **EC-143**: `PUT /api/employees/:employeeId/active` (`employee.manage`) through `public.set_employee_active`, with the F06 setter rules (`app.lock_managed_employee`: reason required, other shop = `NOT_FOUND`, not the owner, not yourself). One audit action `employee.active_set` with `is_active` before/after, like `employee.branches_set`. No extra limit for non-owner managers (D29 only limits granting permissions and branches): any holder of `employee.manage` can deactivate anyone but the owner and themself. Contracts 0.4.2 (additive). The Web deactivate action waits for the Employees screen; the Web part of EC-143 is the "Switch shop" menu item.

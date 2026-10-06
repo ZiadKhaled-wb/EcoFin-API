@@ -62,3 +62,23 @@ export const EmployeeBranchesAssign = {
 };
 export type EmployeeBranchesAssignBody = z.infer<typeof EmployeeBranchesAssignBody>;
 export type EmployeeBranchesAssignResponse = z.infer<typeof EmployeeBranchesAssignResponse>;
+
+// EC-143 · PUT /employees/:employeeId/active: deactivate or reactivate an employee
+// (employees.is_active). A deactivated employee is refused on their next request.
+export const EmployeeActiveSetBody = z
+  .object({
+    active: z.boolean(),
+    reason: AuditReason,
+  })
+  .strict();
+export const EmployeeActiveSetResponse = z.object({
+  employeeId: Uuid,
+  active: z.boolean(),
+});
+export const EmployeeActiveSet = {
+  params: EmployeeIdParams,
+  body: EmployeeActiveSetBody,
+  response: EmployeeActiveSetResponse,
+};
+export type EmployeeActiveSetBody = z.infer<typeof EmployeeActiveSetBody>;
+export type EmployeeActiveSetResponse = z.infer<typeof EmployeeActiveSetResponse>;

@@ -166,6 +166,17 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
+    // EC-143. `active: true` on an active employee: still one row, and nobody is locked out.
+    'PUT /api/employees/:employeeId/active': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('put', `/api/employees/${targetId}/active`, {
+          token: owner.accessToken,
+          body: { active: true, reason: 'audit test' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
     'POST /api/files': async () => {
       const owner = await login('owner.one@ecotech.test');
       // Multipart, so not through send(): same headers, one small PNG as a shop logo.

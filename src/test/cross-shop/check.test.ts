@@ -26,7 +26,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/auth/select-shop',
       ]),
     );
-    expect(keys).toHaveLength(17);
+    expect(keys).toHaveLength(18);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

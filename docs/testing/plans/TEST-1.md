@@ -21,6 +21,7 @@ Every `public` function `authenticated` can EXECUTE. `security_guards_test.sql` 
 |---|---|---|---|
 | `set_employee_permission(p_employee_id, p_permission_key, p_granted, p_reason)` | `employee.manage` | BRANCH_MANAGER | 3.1 (B's employee) |
 | `set_employee_branches(p_employee_id, p_branch_ids, p_reason)` | `employee.manage` | BRANCH_MANAGER | 3.2 (B's employee), 3.3 (B's branch) |
+| `set_employee_active(p_employee_id, p_active, p_reason)` (EC-143) | `employee.manage` | BRANCH_MANAGER | 3.10 (B's employee) |
 | `register_file(...)`, one case per purpose (13) | per purpose: logo/other `org.settings_manage`, product_image `catalog.manage`, customer_id `customer.edit`, survey_photo `survey.submit`, signature/contract_pdf/promissory_note `installment.create`, delivery_proof `delivery.manage`, expense_receipt `expense.create`, legal_document `legal.manage`, import `import.data`, export `export.data` | first non-owner role lacking the key (CASHIER, WAREHOUSE or BRANCH_MANAGER) | 3.4 (B's folder), 3.5 (B's file id), 3.6 (B's customer: **known bug**) |
 | allowlisted, no permission: `session_context`, `my_shops`, `my_permissions`, `auth_record_login`, `auth_record_logout`, `auth_record_password_change` | session / login helpers, write nothing but the caller's own audit | n.a. | n.a. |
 
