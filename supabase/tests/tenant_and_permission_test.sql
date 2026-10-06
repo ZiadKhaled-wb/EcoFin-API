@@ -319,6 +319,18 @@ INSERT INTO t.denial VALUES
  ('update_branch','update_branch','branch.manage',$$SELECT public.update_branch('d2000000-0000-0000-0000-000000000011','Updated',NULL,NULL,NULL,NULL,NULL,NULL)$$),
  ('branch_deactivation_check','branch_deactivation_check','branch.manage',$$SELECT public.branch_deactivation_check('d2000000-0000-0000-0000-000000000012')$$),
  ('set_branch_active','set_branch_active','branch.manage',$$SELECT public.set_branch_active('d2000000-0000-0000-0000-000000000012',false,'denial',true)$$);
+INSERT INTO auth.users(id,email) VALUES ('a0200000-0000-4000-8000-000000000012','o02-reset@test.local');
+INSERT INTO public.employees(id,organization_id,full_name,email,role,default_branch_id,auth_user_id) VALUES
+ ('a0200000-0000-4000-8000-000000000010','d1000000-0000-0000-0000-000000000001','Reset target','o02-reset@test.local','CASHIER','d2000000-0000-0000-0000-000000000011','a0200000-0000-4000-8000-000000000012'),
+ ('a0200000-0000-4000-8000-000000000011','d1000000-0000-0000-0000-000000000001','Pending target','o02-pending@test.local','CASHIER','d2000000-0000-0000-0000-000000000011',NULL);
+INSERT INTO public.employee_branches(organization_id,employee_id,branch_id) VALUES ('d1000000-0000-0000-0000-000000000001','a0200000-0000-4000-8000-000000000011','d2000000-0000-0000-0000-000000000011');
+INSERT INTO t.denial VALUES
+ ('create_employee','create_employee','employee.manage',$$SELECT public.create_employee('Denial staff',NULL,'o02-create@test.local',NULL,'CASHIER',ARRAY['d2000000-0000-0000-0000-000000000011']::uuid[],NULL,'[]',repeat('c',64),now()+interval '1 day')$$),
+ ('update_employee','update_employee','employee.manage',$$SELECT public.update_employee('a0200000-0000-4000-8000-000000000011','Edited',NULL,'o02-pending@test.local',NULL,'CASHIER','d2000000-0000-0000-0000-000000000011')$$),
+ ('set_employee_active','set_employee_active','employee.manage',$$SELECT public.set_employee_active('a0200000-0000-4000-8000-000000000011',false,'Denial')$$),
+ ('resend_employee_invite','resend_employee_invite','employee.manage',$$SELECT public.resend_employee_invite('a0200000-0000-4000-8000-000000000011',repeat('d',64),now()+interval '1 day')$$),
+ ('create_password_reset','create_password_reset','employee.manage',$$SELECT public.create_password_reset('a0200000-0000-4000-8000-000000000010',repeat('e',64),now()+interval '1 hour')$$),
+ ('list_employees','list_employees','employee.manage',$$SELECT public.list_employees(NULL,NULL,NULL,10,0)$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

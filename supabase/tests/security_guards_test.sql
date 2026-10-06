@@ -25,6 +25,7 @@ $$;
 -- 3. tables with organization_id that have RLS on but deliberately no SELECT policy (no app access).
 CREATE TABLE t.no_select_policy_ok (table_name text PRIMARY KEY, reason text NOT NULL);
 INSERT INTO t.no_select_policy_ok VALUES
+  ('password_resets','O02: service-only pre-session reset tokens; no app table access'),
   ('jobs', 'platform job queue (D34): service role only; no policy = app users see nothing');
 
 -- 5. public functions authenticated may EXECUTE without app.require_permission.

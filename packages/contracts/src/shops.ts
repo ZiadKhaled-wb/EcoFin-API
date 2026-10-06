@@ -92,6 +92,7 @@ export const InviteAcceptBody = InviteLookupBody.extend({
 }).strict();
 export type InviteAcceptBody = z.infer<typeof InviteAcceptBody>;
 export const InviteLookupResponse = z.object({
+  login: z.string(),
   shop_name: z.string(),
   full_name: z.string(),
   email: z.string().email(),

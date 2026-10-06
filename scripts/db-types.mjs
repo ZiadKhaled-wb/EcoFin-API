@@ -50,6 +50,18 @@ generated = generated.replace(
   /"?admin_record_subscription_payment"?:\s*\{[\s\S]*?Returns:/,
   (signature) => signature.replace(/("?p_amount"?:\s*)number/g, '$1string'),
 );
+// O02: PostgreSQL does not expose nullable input parameters. JSON response nulls are schema-validated.
+generated = generated.replace(
+  /"?(?:create_employee|update_employee|set_employee_active|list_employees)"?:\s*\{[\s\S]*?Returns:/g,
+  (signature) =>
+    signature.replace(
+      /("?p_(?:phone|email|username|default_branch_id|reason|search|status)"?:\s*string)(?! \| null)/g,
+      '$1 | null',
+    ),
+);
+generated = generated.replace(/"?list_employees"?:\s*\{[\s\S]*?Returns:/, (signature) =>
+  signature.replace(/("?p_role"?:\s*Database[^,;\n}]+)/, '$1 | null'),
+);
 const formatted = await prettier.format(`${HEADER}\n${generated}`, { ...config, filepath: target });
 writeFileSync(target, formatted);
 console.log(`db:types: wrote ${target}`);

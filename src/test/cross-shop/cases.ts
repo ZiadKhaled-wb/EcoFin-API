@@ -395,3 +395,60 @@ for (const [method, suffix, body] of [
       h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
     },
   });
+
+for (const [method, suffix, body] of [
+  ['PATCH', '', { full_name: 'Hijack' }],
+  ['PUT', '/active', { active: false, reason: 'Hijack' }],
+  ['POST', '/invite', undefined],
+  ['POST', '/password-reset', undefined],
+] as const)
+  crossShopCase({
+    method,
+    path: '/api/employees/:employeeId' + suffix,
+    name: method + ' staff ' + suffix + ' refuses foreign id',
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const f = await h.call(
+        method,
+        '/api/employees/d3000000-0000-0000-0000-000000000022' + suffix,
+        { token: a.accessToken, ...(body ? { body } : {}) },
+      );
+      h.expect(f.res.status).toBe(404);
+      h.expect(h.code(f.res)).toBe('EMPLOYEE_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, f.ip)).toBe(0);
+    },
+  });
+for (const method of ['GET', 'POST'] as const)
+  crossShopCase({
+    method,
+    path: '/api/employees',
+    name: method + ' staff refuses foreign tenant header',
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const f = await h.call(method, '/api/employees', {
+        token: a.accessToken,
+        orgId: SHOP_B,
+        ...(method === 'POST'
+          ? {
+              body: {
+                full_name: 'Hijack',
+                email: 'hijack@example.com',
+                role: 'CASHIER',
+                branch_ids: [SHOP_B_BR1],
+              },
+            }
+          : {}),
+      });
+      h.expect(f.res.status).toBe(403);
+      h.expect(await h.auditRowsFrom(SHOP_B, f.ip)).toBe(0);
+      if (method === 'GET') {
+        const own = await h.call('GET', '/api/employees', { token: a.accessToken });
+        h.expect(own.res.status).toBe(200);
+        h.expect(
+          own.res.body.items.some(
+            (e: { id: string }) => e.id === 'd3000000-0000-0000-0000-000000000022',
+          ),
+        ).toBe(false);
+      }
+    },
+  });

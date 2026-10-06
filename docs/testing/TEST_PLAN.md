@@ -218,3 +218,7 @@ See [P05 plan](plans/P05.md) and [P05 report](reports/P05_report.md).
 ## O01 — branches
 
 See [O01 plan](plans/O01.md).
+
+## O02 — employees (EC-41 / EC-143 part 2)
+
+See [O02 plan](plans/O02.md) and [O02 report](reports/O02_report.md). Covers immediate session refusal after deactivation and permission changes on the next request.

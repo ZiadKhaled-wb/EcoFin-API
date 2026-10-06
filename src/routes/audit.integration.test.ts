@@ -115,6 +115,12 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
   // One driver per registry entry that has an action: performs the call, returns what was sent,
   // the shop the row must land in and the success status (200 unless the route creates: 201).
   const drivers: Record<string, () => Promise<{ sent: Sent; org: string; status?: number }>> = {
+    'POST /api/employees': () => staffAudit('create'),
+    'PATCH /api/employees/:employeeId': () => staffAudit('update'),
+    'PUT /api/employees/:employeeId/active': () => staffAudit('active'),
+    'POST /api/employees/:employeeId/invite': () => staffAudit('invite'),
+    'POST /api/employees/:employeeId/password-reset': () => staffAudit('reset'),
+    'POST /api/auth/password-reset/complete': () => staffAudit('complete'),
     'POST /api/branches': async () => {
       const f = await branchShop('create');
       return {
@@ -302,6 +308,69 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     },
   };
 
+  async function staffAudit(action: string) {
+    const f = await platformShop('staff-' + action);
+    const accepted = await send('post', '/api/auth/invites/accept', {
+      body: { token: await readInviteToken(f.email), password: SEED_PASSWORD },
+    });
+    expect(accepted.res.status).toBe(200);
+    const owner = (await login(f.email)).accessToken;
+    const branches = await send('get', '/api/branches', { token: owner, orgId: f.org });
+    expect(branches.res.status).toBe(200);
+    const opts = { token: owner, orgId: f.org };
+    const made = await send('post', '/api/employees', {
+      ...opts,
+      body: {
+        full_name: 'Audit staff',
+        username: 'audit.' + action,
+        role: 'CASHIER',
+        branch_ids: [branches.res.body[0].id],
+      },
+    });
+    if (action === 'create') return { sent: made, org: f.org, status: 201 };
+    expect(made.res.status, JSON.stringify(made.res.body)).toBe(201);
+    const id = made.res.body.employee_id as string;
+    if (action === 'update')
+      return {
+        sent: await send('patch', `/api/employees/${id}`, {
+          ...opts,
+          body: { full_name: 'Edited' },
+        }),
+        org: f.org,
+      };
+    if (action === 'active')
+      return {
+        sent: await send('put', `/api/employees/${id}/active`, {
+          ...opts,
+          body: { active: false, reason: 'Disabled' },
+        }),
+        org: f.org,
+      };
+    if (action === 'invite')
+      return { sent: await send('post', `/api/employees/${id}/invite`, opts), org: f.org };
+    expect(
+      (
+        await send('post', '/api/auth/invites/accept', {
+          body: {
+            token: new URL(made.res.body.invite_link).hash.slice(7),
+            password: SEED_PASSWORD,
+          },
+        })
+      ).res.status,
+    ).toBe(200);
+    const reset = await send('post', `/api/employees/${id}/password-reset`, opts);
+    if (action === 'reset') return { sent: reset, org: f.org };
+    expect(reset.res.status).toBe(200);
+    return {
+      sent: await send('post', '/api/auth/password-reset/complete', {
+        body: {
+          token: new URL(reset.res.body.reset_link).hash.slice(7),
+          password: 'Reset-Audit-2026!',
+        },
+      }),
+      org: f.org,
+    };
+  }
   async function platformShop(suffix: string) {
     const admin = (await login('superadmin@ecotech.test')).accessToken;
     const email = `f07.p01.${suffix}.${STAMP}@ecotech.test`;

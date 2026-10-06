@@ -21,6 +21,7 @@ const valid = {
   tenant_slug: 'shop-one',
   full_name: 'Owner',
   email: 'owner@example.com',
+  login: 'owner@example.com',
   account_exists: false,
 };
 beforeEach(() => {

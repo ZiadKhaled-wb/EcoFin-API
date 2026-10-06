@@ -3415,6 +3415,50 @@ export type Database = {
           },
         ];
       };
+      password_resets: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          employee_id: string;
+          expires_at: string;
+          id: string;
+          organization_id: string;
+          revoked_at: string | null;
+          token_hash: string;
+          used_at: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          employee_id: string;
+          expires_at: string;
+          id?: string;
+          organization_id: string;
+          revoked_at?: string | null;
+          token_hash: string;
+          used_at?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          employee_id?: string;
+          expires_at?: string;
+          id?: string;
+          organization_id?: string;
+          revoked_at?: string | null;
+          token_hash?: string;
+          used_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'password_resets_employee_id_organization_id_fkey';
+            columns: ['employee_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id', 'organization_id'];
+          },
+        ];
+      };
       payment_allocations: {
         Row: {
           amount: number;
@@ -7912,6 +7956,7 @@ export type Database = {
       auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_password_change: { Args: Record<PropertyKey, never>; Returns: undefined };
       branch_deactivation_check: { Args: { p_branch_id: string }; Returns: Json };
+      consume_password_reset: { Args: { p_token_hash: string }; Returns: string };
       create_branch: {
         Args: {
           p_address: string | null;
@@ -7923,6 +7968,25 @@ export type Database = {
           p_phone: string | null;
         };
         Returns: string;
+      };
+      create_employee: {
+        Args: {
+          p_branch_ids: string[];
+          p_default_branch_id: string | null;
+          p_email: string | null;
+          p_expires_at: string;
+          p_full_name: string;
+          p_overrides: Json;
+          p_phone: string | null;
+          p_role: Database['public']['Enums']['employee_role'];
+          p_token_hash: string;
+          p_username: string | null;
+        };
+        Returns: Json;
+      };
+      create_password_reset: {
+        Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
+        Returns: Json;
       };
       get_subscription_status: { Args: Record<PropertyKey, never>; Returns: Json };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
@@ -7972,6 +8036,30 @@ export type Database = {
         }[];
       };
       jobs_succeed: { Args: { p_job_id: string; p_worker: string }; Returns: boolean };
+      list_employees: {
+        Args: {
+          p_limit: number;
+          p_offset: number;
+          p_role: Database['public']['Enums']['employee_role'] | null;
+          p_search: string | null;
+          p_status: string | null;
+        };
+        Returns: {
+          branch_ids: string[];
+          created_at: string;
+          default_branch_id: string;
+          email: string;
+          full_name: string;
+          id: string;
+          invite_status: string;
+          is_active: boolean;
+          override_count: number;
+          phone: string;
+          role: Database['public']['Enums']['employee_role'];
+          total_count: number;
+          username: string;
+        }[];
+      };
       my_permissions: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -7989,6 +8077,7 @@ export type Database = {
           tenant_slug: string;
         }[];
       };
+      password_reset_lookup: { Args: { p_token_hash: string }; Returns: Json };
       register_file: {
         Args: {
           p_entity_id: string | null;
@@ -8004,6 +8093,10 @@ export type Database = {
         Returns: string;
       };
       require_module: { Args: { p_module: string }; Returns: undefined };
+      resend_employee_invite: {
+        Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
+        Returns: Json;
+      };
       session_context: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -8023,6 +8116,10 @@ export type Database = {
           p_confirm?: boolean;
           p_reason: string | null;
         };
+        Returns: undefined;
+      };
+      set_employee_active: {
+        Args: { p_active: boolean; p_employee_id: string; p_reason: string | null };
         Returns: undefined;
       };
       set_employee_branches: {
@@ -8057,6 +8154,18 @@ export type Database = {
           p_phone: string | null;
         };
         Returns: undefined;
+      };
+      update_employee: {
+        Args: {
+          p_default_branch_id: string | null;
+          p_email: string | null;
+          p_employee_id: string;
+          p_full_name: string;
+          p_phone: string | null;
+          p_role: Database['public']['Enums']['employee_role'];
+          p_username: string | null;
+        };
+        Returns: Json;
       };
     };
     Enums: {

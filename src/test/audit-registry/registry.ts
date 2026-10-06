@@ -9,6 +9,13 @@ export type AuditExpectation = { action: string } | { none: string };
 
 /** Keyed `METHOD /path` as mounted (same keys as the cross-shop and permission checks). */
 export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
+  'POST /api/employees': { action: 'employee.created' },
+  'PATCH /api/employees/:employeeId': { action: 'employee.updated' },
+  'PUT /api/employees/:employeeId/active': { action: 'employee.deactivate' },
+  'POST /api/employees/:employeeId/invite': { action: 'invite.resent' },
+  'POST /api/employees/:employeeId/password-reset': { action: 'employee.password_reset_requested' },
+  'POST /api/auth/password-reset/lookup': { none: 'Pre-session read-only reset lookup.' },
+  'POST /api/auth/password-reset/complete': { action: 'employee.password_reset_completed' },
   'POST /api/branches': { action: 'branch.created' },
   'PATCH /api/branches/:id': { action: 'branch.updated' },
   'POST /api/branches/:id/deactivate': { action: 'branch.deactivated' },

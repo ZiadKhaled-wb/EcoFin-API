@@ -16,6 +16,8 @@ import {
   AuthSelectShopBody,
   InviteLookupBody,
   InviteAcceptBody,
+  PasswordResetLookupBody,
+  PasswordResetCompleteBody,
 } from '@ziadkhaled-wb/contracts';
 import { asyncHandler } from '../utils/asyncHandler';
 import { authenticate } from '../middleware/auth';
@@ -31,7 +33,22 @@ import {
 import * as authController from '../controllers/auth.controller';
 import * as invitesController from '../controllers/invites.controller';
 
+import * as staff from '../controllers/staff.controller';
 const router = Router();
+router.post(
+  '/password-reset/lookup',
+  publicRoute(),
+  loginLimiter,
+  validate({ body: PasswordResetLookupBody }),
+  asyncHandler(staff.lookupReset),
+);
+router.post(
+  '/password-reset/complete',
+  publicRoute(),
+  loginLimiter,
+  validate({ body: PasswordResetCompleteBody }),
+  asyncHandler(staff.completeReset),
+);
 router.post(
   '/invites/lookup',
   publicRoute(),

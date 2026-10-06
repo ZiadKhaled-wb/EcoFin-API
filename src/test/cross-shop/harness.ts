@@ -20,6 +20,8 @@ export const SHOP_B = 'd1000000-0000-0000-0000-000000000002';
 
 /** Routes nobody needs a session for, so there is no shop to cross. Keyed `METHOD /path`. */
 export const PUBLIC_ROUTES: readonly string[] = [
+  'POST /api/auth/password-reset/lookup',
+  'POST /api/auth/password-reset/complete',
   'GET /health',
   'POST /api/auth/login',
   'POST /api/auth/refresh',

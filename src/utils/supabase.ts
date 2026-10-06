@@ -101,7 +101,7 @@ export function supabaseForRequest(
   });
 }
 
-/** Service role only for P01's pre-session invite lookup/accept; preserve F07 request metadata. */
+/** Fresh service role only for P01/O02 pre-session invite/reset lookup and completion; preserve F07 metadata. */
 export function supabaseForInvite(meta?: RequestMeta): DbClient {
   const env = getEnv();
   const headers: Record<string, string> = {};

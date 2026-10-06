@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0
+
+- O02 staff management and password reset schemas/codes; invitation lookup includes the display login. BRANCH_REQUIRED maps to 400 for staff validation.
+
 ## 0.7.0
 
 - O01 branch management, default safes, deactivation counts and branch error codes.
