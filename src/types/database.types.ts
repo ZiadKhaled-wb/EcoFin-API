@@ -207,6 +207,7 @@ export type Database = {
           code: string;
           created_at: string;
           created_by: string | null;
+          default_cash_account_id: string | null;
           eta_branch_code: string | null;
           governorate: string | null;
           id: string;
@@ -225,6 +226,7 @@ export type Database = {
           code: string;
           created_at?: string;
           created_by?: string | null;
+          default_cash_account_id?: string | null;
           eta_branch_code?: string | null;
           governorate?: string | null;
           id?: string;
@@ -243,6 +245,7 @@ export type Database = {
           code?: string;
           created_at?: string;
           created_by?: string | null;
+          default_cash_account_id?: string | null;
           eta_branch_code?: string | null;
           governorate?: string | null;
           id?: string;
@@ -261,6 +264,20 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'employees';
             referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'branches_default_cash_account_fk';
+            columns: ['default_cash_account_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'cash_accounts';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'branches_default_cash_account_fk';
+            columns: ['default_cash_account_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_cash_balances';
+            referencedColumns: ['cash_account_id', 'organization_id'];
           },
           {
             foreignKeyName: 'branches_org_fk';
@@ -7894,6 +7911,19 @@ export type Database = {
       auth_record_login: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_password_change: { Args: Record<PropertyKey, never>; Returns: undefined };
+      branch_deactivation_check: { Args: { p_branch_id: string }; Returns: Json };
+      create_branch: {
+        Args: {
+          p_address: string | null;
+          p_city: string | null;
+          p_code: string;
+          p_eta_branch_code: string | null;
+          p_governorate: string | null;
+          p_name: string;
+          p_phone: string | null;
+        };
+        Returns: string;
+      };
       get_subscription_status: { Args: Record<PropertyKey, never>; Returns: Json };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
       jobs_claim: {
@@ -7986,6 +8016,15 @@ export type Database = {
           role: Database['public']['Enums']['employee_role'];
         }[];
       };
+      set_branch_active: {
+        Args: {
+          p_active: boolean;
+          p_branch_id: string;
+          p_confirm?: boolean;
+          p_reason: string | null;
+        };
+        Returns: undefined;
+      };
       set_employee_branches: {
         Args: { p_branch_ids: string[]; p_employee_id: string; p_reason: string };
         Returns: {
@@ -8005,6 +8044,19 @@ export type Database = {
           granted: boolean;
           permission_key: string;
         }[];
+      };
+      update_branch: {
+        Args: {
+          p_address: string | null;
+          p_branch_id: string;
+          p_city: string | null;
+          p_default_cash_account_id: string | null;
+          p_eta_branch_code: string | null;
+          p_governorate: string | null;
+          p_name: string;
+          p_phone: string | null;
+        };
+        Returns: undefined;
       };
     };
     Enums: {

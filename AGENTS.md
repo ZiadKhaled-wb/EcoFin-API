@@ -51,5 +51,7 @@ EcoTech Pro: multi-tenant SaaS POS with in-house installments for Egyptian furni
 
 ## Non-negotiable rules
 
+Branch-scoped writes call `app.require_branch_access`; it also rejects inactive branches. Branch lists for any screen come from `GET /api/branches`.
+
 Module-gated features call `app.require_module('<key>')` in SQL or `requireModule` in the API; plan limits are enforced by triggers, so don't re-check them.
 Tenant from token only · decimal money · stock/cash only through ledger inserts · one transaction per multi-table write · idempotency keys · no editing issued documents · types from shared contracts · permission + audit on every write · schema only through new migrations · no hard-coded UI text. Full list: the `ecotech-build` skill.

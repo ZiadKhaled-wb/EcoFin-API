@@ -314,6 +314,11 @@ INSERT INTO t.denial VALUES
  ('admin_set_subscription_dates','admin_set_subscription_dates','org.settings_manage',$$SELECT public.admin_set_subscription_dates('d1000000-0000-0000-0000-000000000001',CURRENT_DATE,NULL,'denial')$$),
  ('admin_record_subscription_payment','admin_record_subscription_payment','org.settings_manage',$$SELECT public.admin_record_subscription_payment('d1000000-0000-0000-0000-000000000001',500,CURRENT_DATE,CURRENT_DATE,NULL,true,gen_random_uuid())$$),
  ('admin_get_subscription','admin_get_subscription','org.settings_manage',$$SELECT public.admin_get_subscription('d1000000-0000-0000-0000-000000000001')$$);
+INSERT INTO t.denial VALUES
+ ('create_branch','create_branch','branch.manage',$$SELECT public.create_branch('Denial branch','DEN',NULL,NULL,NULL,NULL,NULL)$$),
+ ('update_branch','update_branch','branch.manage',$$SELECT public.update_branch('d2000000-0000-0000-0000-000000000011','Updated',NULL,NULL,NULL,NULL,NULL,NULL)$$),
+ ('branch_deactivation_check','branch_deactivation_check','branch.manage',$$SELECT public.branch_deactivation_check('d2000000-0000-0000-0000-000000000012')$$),
+ ('set_branch_active','set_branch_active','branch.manage',$$SELECT public.set_branch_active('d2000000-0000-0000-0000-000000000012',false,'denial',true)$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

@@ -8,6 +8,7 @@ import {
   errorCodeHttpStatus,
   PlanLimitDetail,
   PlanDowngradeDetail,
+  BranchDeactivationCheck,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 
@@ -81,12 +82,20 @@ export function mapDbError(err: unknown): AppError | undefined {
   if (token === undefined || !Object.hasOwn(errorCodeHttpStatus, token)) return undefined;
   const code = token as ErrorCode;
   let details: unknown;
-  if (code === 'PLAN_LIMIT_REACHED' || code === 'PLAN_DOWNGRADE_BLOCKED') {
+  if (
+    code === 'PLAN_LIMIT_REACHED' ||
+    code === 'PLAN_DOWNGRADE_BLOCKED' ||
+    code === 'BRANCH_DEACTIVATE_NEEDS_CONFIRM'
+  ) {
     try {
       const raw = (err as { details?: unknown }).details;
       if (typeof raw === 'string') {
         const parsed = (
-          code === 'PLAN_LIMIT_REACHED' ? PlanLimitDetail : PlanDowngradeDetail
+          code === 'PLAN_LIMIT_REACHED'
+            ? PlanLimitDetail
+            : code === 'PLAN_DOWNGRADE_BLOCKED'
+              ? PlanDowngradeDetail
+              : BranchDeactivationCheck
         ).safeParse(JSON.parse(raw));
         if (parsed.success) details = parsed.data;
       }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0
+
+- O01 branch management, default safes, deactivation counts and branch error codes.
+
 ## 0.6.0
 
 - P05 subscription states, usage, billing schemas, module keys, warning constant and structured limit errors. Shop-list rows include subscription end/state.

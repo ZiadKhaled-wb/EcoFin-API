@@ -28,6 +28,15 @@ generated = generated.replace(/"?register_file"?:\s*\{[\s\S]*?Returns:/, (signat
   ),
 );
 const config = (await prettier.resolveConfig(target)) ?? {};
+// O01 nullable address/vault/reason RPC arguments are not inferred by PostgreSQL.
+generated = generated.replace(
+  /"?(?:create_branch|update_branch|set_branch_active)"?:\s*\{[\s\S]*?Returns:/g,
+  (signature) =>
+    signature.replace(
+      /("?p_(?:address|city|governorate|phone|eta_branch_code|default_cash_account_id|reason)"?:\s*string)(?! \| null)/g,
+      '$1 | null',
+    ),
+);
 generated = generated.replace(
   /"?admin_set_subscription_dates"?:\s*\{[\s\S]*?Returns:/,
   (signature) => signature.replace(/("?p_end"?:\s*string)(?! \| null)/g, '$1 | null'),

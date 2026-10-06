@@ -40,7 +40,7 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
 
   /** One request with its own IP and request id, so its audit row can be found exactly. */
   async function send(
-    method: 'get' | 'post' | 'put',
+    method: 'get' | 'post' | 'put' | 'patch',
     path: string,
     opts: { token?: string; orgId?: string; body?: object; key?: string } = {},
   ): Promise<Sent> {
@@ -115,6 +115,59 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
   // One driver per registry entry that has an action: performs the call, returns what was sent,
   // the shop the row must land in and the success status (200 unless the route creates: 201).
   const drivers: Record<string, () => Promise<{ sent: Sent; org: string; status?: number }>> = {
+    'POST /api/branches': async () => {
+      const f = await branchShop('create');
+      return {
+        sent: await send('post', '/api/branches', {
+          token: f.owner,
+          orgId: f.org,
+          body: { name: 'Audit branch', code: 'B2' },
+        }),
+        org: f.org,
+        status: 201,
+      };
+    },
+    'PATCH /api/branches/:id': async () => {
+      const f = await branchShop('update');
+      return {
+        sent: await send('patch', `/api/branches/${f.branch}`, {
+          token: f.owner,
+          orgId: f.org,
+          body: { name: 'Updated' },
+        }),
+        org: f.org,
+      };
+    },
+    'POST /api/branches/:id/deactivate': async () => {
+      const f = await branchShop('deactivate');
+      return {
+        sent: await send('post', `/api/branches/${f.branch}/deactivate`, {
+          token: f.owner,
+          orgId: f.org,
+          body: { reason: 'Audit' },
+        }),
+        org: f.org,
+      };
+    },
+    'POST /api/branches/:id/reactivate': async () => {
+      const f = await branchShop('reactivate');
+      expect(
+        (
+          await send('post', `/api/branches/${f.branch}/deactivate`, {
+            token: f.owner,
+            orgId: f.org,
+            body: { reason: 'Setup' },
+          })
+        ).res.status,
+      ).toBe(200);
+      return {
+        sent: await send('post', `/api/branches/${f.branch}/reactivate`, {
+          token: f.owner,
+          orgId: f.org,
+        }),
+        org: f.org,
+      };
+    },
     'POST /api/admin/shops/:id/plan': async () => {
       const f = await platformShop('plan');
       return {
@@ -264,6 +317,36 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     expect(sent.res.status, JSON.stringify(sent.res.body)).toBe(201);
     const org = sent.res.body.organization_id as string;
     return { sent, org, email, admin };
+  }
+  async function branchShop(suffix: string) {
+    const f = await platformShop('branch-' + suffix);
+    expect(
+      (
+        await send('post', `/api/admin/shops/${f.org}/plan`, {
+          token: f.admin,
+          body: { plan_key: 'retail', reason: 'Branch fixture' },
+        })
+      ).res.status,
+    ).toBe(200);
+    expect(
+      (
+        await send('post', '/api/auth/invites/accept', {
+          body: { token: await readInviteToken(f.email), password: SEED_PASSWORD },
+        })
+      ).res.status,
+    ).toBe(200);
+    const owner = (await login(f.email)).accessToken;
+    let branch = '';
+    if (suffix !== 'create') {
+      const made = await send('post', '/api/branches', {
+        token: owner,
+        orgId: f.org,
+        body: { name: 'Branch', code: 'B2' },
+      });
+      expect(made.res.status).toBe(201);
+      branch = made.res.body.id as string;
+    }
+    return { ...f, owner, branch };
   }
 
   const withAction = Object.entries(AUDIT_REGISTRY).flatMap(([route, e]) =>

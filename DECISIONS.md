@@ -189,3 +189,5 @@ Supabase tokens carry no shop. The active shop is chosen per request by the `x-o
 - P01: invite token = 32 random bytes in the URL fragment, only its SHA-256 stored, 72 h TTL, single use; super-admin functions check app.is_super_admin() instead of require_permission; service role only for pre-session lookup and accept.
 
 - P05: expiry is by date, never status; read-only writes enforced through require_permission with export.data allowed; org-locking triggers enforce limits and pending invitations count as users; warning starts 14 days before the end date.
+
+O01: branch code is immutable and uppercased; an active same-branch safe is the default (created/filled automatically); deactivation requires a reason and explicit confirmation for open shifts, stock or cash, never for the main branch; inactive branches reject writes through require_branch_access.

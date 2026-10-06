@@ -4,6 +4,7 @@ import type { Router } from 'express';
 import auditRoutes from './routes/audit.js';
 import adminRoutes from './routes/admin.js';
 import subscriptionRoutes from './routes/subscription.js';
+import branchesRoutes from './routes/branches.js';
 import monitoringRoutes from './routes/monitoring.js';
 import authRoutes from './routes/auth.js';
 import employeesRoutes from './routes/employees.js';
@@ -48,6 +49,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/auth', authRoutes);
   mountRouter(app, '/api/admin', adminRoutes);
   mountRouter(app, '/api/subscription', subscriptionRoutes);
+  mountRouter(app, '/api/branches', branchesRoutes);
   mountRouter(app, '/api/me', meRoutes);
   mountRouter(app, '/api/employees', employeesRoutes);
   mountRouter(app, '/api/files', filesRoutes);

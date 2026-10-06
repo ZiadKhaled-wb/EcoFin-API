@@ -336,3 +336,62 @@ crossShopCase({
     h.expect(h.code(aimed.res)).toBe('SHOP_NOT_ALLOWED');
   },
 });
+
+// O01 branch reads and writes cannot target a foreign tenant.
+for (const path of ['/api/branches', '/api/branches/manage'])
+  crossShopCase({
+    method: 'GET',
+    path,
+    name: path + ' rejects foreign shop header',
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call('GET', path, { token: a.accessToken, orgId: SHOP_B });
+      h.expect(foreign.res.status).toBe(403);
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+      const own = await h.call('GET', path, { token: a.accessToken });
+      h.expect(own.res.status).toBe(200);
+      h.expect(own.res.body.every((b: { id: string }) => b.id !== SHOP_B_BR1)).toBe(true);
+    },
+  });
+crossShopCase({
+  method: 'POST',
+  path: '/api/branches',
+  name: 'branch create rejects foreign shop header and injected tenant',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('POST', '/api/branches', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: { name: 'Foreign', code: 'FORE' },
+    });
+    h.expect(foreign.res.status).toBe(403);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    const injected = await h.call('POST', '/api/branches', {
+      token: a.accessToken,
+      body: { name: 'Foreign', code: 'FORE', organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+  },
+});
+for (const [method, suffix, body] of [
+  ['GET', '', undefined],
+  ['PATCH', '', { name: 'Hijack' }],
+  ['GET', '/deactivation-check', undefined],
+  ['POST', '/deactivate', { reason: 'Hijack', confirm: true }],
+  ['POST', '/reactivate', undefined],
+] as const)
+  crossShopCase({
+    method,
+    path: '/api/branches/:id' + suffix,
+    name: method + ' branch ' + suffix + ' refuses foreign id',
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call(method, '/api/branches/' + SHOP_B_BR1 + suffix, {
+        token: a.accessToken,
+        ...(body === undefined ? {} : { body }),
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('BRANCH_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    },
+  });
