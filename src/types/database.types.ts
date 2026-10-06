@@ -7812,10 +7812,104 @@ export type Database = {
       };
     };
     Functions: {
+      accept_invite: { Args: { p_auth_user_id: string; p_token_hash: string }; Returns: Json };
+      admin_list_organizations: {
+        Args: {
+          p_limit?: number;
+          p_offset?: number;
+          p_search?: string;
+          p_status?: Database['public']['Enums']['org_status'];
+        };
+        Returns: {
+          created_at: string;
+          id: string;
+          name: string;
+          owner_email: string;
+          owner_full_name: string;
+          owner_invite_status: string;
+          plan_key: string;
+          status: Database['public']['Enums']['org_status'];
+          tenant_slug: string;
+          total_count: number;
+        }[];
+      };
+      admin_provision_organization: {
+        Args: {
+          p_branch_name?: string;
+          p_expires_at?: string;
+          p_name: string;
+          p_owner_email: string;
+          p_owner_full_name: string;
+          p_owner_phone?: string;
+          p_plan_key: string;
+          p_tenant_slug: string;
+          p_token_hash?: string;
+        };
+        Returns: Json;
+      };
+      admin_resend_owner_invite: {
+        Args: { p_expires_at: string; p_organization_id: string; p_token_hash: string };
+        Returns: Json;
+      };
+      admin_set_organization_status: {
+        Args: {
+          p_organization_id: string;
+          p_reason?: string;
+          p_status: Database['public']['Enums']['org_status'];
+        };
+        Returns: undefined;
+      };
       auth_clear_must_change_password: { Args: { p_auth_user_id: string }; Returns: number };
       auth_record_login: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_password_change: { Args: Record<PropertyKey, never>; Returns: undefined };
+      invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
+      jobs_claim: {
+        Args: { p_limit?: number; p_types: string[]; p_worker: string };
+        Returns: {
+          attempts: number;
+          created_at: string;
+          dedupe_key: string | null;
+          finished_at: string | null;
+          id: string;
+          job_type: string;
+          last_error: string | null;
+          locked_at: string | null;
+          locked_by: string | null;
+          max_attempts: number;
+          organization_id: string | null;
+          payload: NonNullable<Json>;
+          run_at: string;
+          status: Database['public']['Enums']['job_status'];
+        }[];
+        SetofOptions: {
+          from: '*';
+          to: 'jobs';
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
+      jobs_enqueue_daily: {
+        Args: { p_job_type: string; p_local_time: string; p_max_attempts?: number; p_now?: string };
+        Returns: number;
+      };
+      jobs_fail: {
+        Args: { p_error: string; p_job_id: string; p_retry_in: string; p_worker: string };
+        Returns: Database['public']['Enums']['job_status'];
+      };
+      jobs_ledger_mismatches: {
+        Args: { p_organization_id: string };
+        Returns: {
+          branch_id: string;
+          cached: number;
+          detail: string;
+          from_ledger: number;
+          ledger: string;
+          organization_id: string;
+          subject_id: string;
+        }[];
+      };
+      jobs_succeed: { Args: { p_job_id: string; p_worker: string }; Returns: boolean };
       my_permissions: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -7833,16 +7927,30 @@ export type Database = {
           tenant_slug: string;
         }[];
       };
+      register_file: {
+        Args: {
+          p_entity_id: string | null;
+          p_entity_type: string | null;
+          p_id: string;
+          p_mime: string;
+          p_original_name: string | null;
+          p_path: string;
+          p_purpose: Database['public']['Enums']['file_purpose'];
+          p_sha256: string | null;
+          p_size_bytes: number;
+        };
+        Returns: string;
+      };
       session_context: {
         Args: Record<PropertyKey, never>;
         Returns: {
-          branch_ids: string[] | null;
-          default_branch_id: string | null;
-          employee_id: string | null;
-          must_change_password: boolean | null;
-          organization_id: string | null;
-          refusal: string | null;
-          role: Database['public']['Enums']['employee_role'] | null;
+          branch_ids: string[];
+          default_branch_id: string;
+          employee_id: string;
+          must_change_password: boolean;
+          organization_id: string;
+          refusal: string;
+          role: Database['public']['Enums']['employee_role'];
         }[];
       };
       set_employee_branches: {
@@ -7864,20 +7972,6 @@ export type Database = {
           granted: boolean;
           permission_key: string;
         }[];
-      };
-      register_file: {
-        Args: {
-          p_entity_id: string | null;
-          p_entity_type: string | null;
-          p_id: string;
-          p_mime: string;
-          p_original_name: string | null;
-          p_path: string;
-          p_purpose: Database['public']['Enums']['file_purpose'];
-          p_sha256: string | null;
-          p_size_bytes: number;
-        };
-        Returns: string;
       };
     };
     Enums: {

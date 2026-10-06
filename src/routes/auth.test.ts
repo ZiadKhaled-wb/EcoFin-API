@@ -28,6 +28,14 @@ const rpc: FakeRpc = vi.hoisted(() => ({ results: {}, calls: [] }));
 vi.mock('../utils/supabase', () => ({
   createAuthClient: () => ({ auth: authApi }),
   supabaseForRequest: (token: string, orgId?: string) => ({
+    from: () => {
+      const query = {
+        select: () => query,
+        eq: () => query,
+        maybeSingle: async () => ({ data: null, error: null }),
+      };
+      return query;
+    },
     rpc: (name: string) => {
       rpc.calls.push({ name, token, orgId });
       const result = Promise.resolve(rpc.results[name] ?? { data: [], error: null });

@@ -207,3 +207,6 @@ E2E_OWNER_EMAIL=owner.one@ecotech.test \
 ## Deferred stories
 
 **F05 (B8):** `docs/testing/plans/B8.md`. **F06 (B10):** `docs/testing/plans/B10.md` + EcoFin-Web `B10-web.md`. **F07 (B11):** `docs/testing/plans/B11.md` + EcoFin-Web `B11-web.md`. **F10:** `docs/testing/plans/F10.md`. **F13:** `docs/testing/plans/F13.md`. **Q02:** `docs/testing/plans/Q02.md` + EcoFin-Web `Q02-web.md`. **F11:** `docs/testing/plans/F11.md`. **F12:** `docs/testing/plans/F12.md`. **F14:** `docs/testing/plans/F14.md`.
+## P01 shop provisioning
+
+See [P01 plan](plans/P01.md) for SQL, unit, integration and Web coverage; final results in [P01 report](reports/P01_report.md).

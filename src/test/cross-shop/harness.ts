@@ -25,6 +25,14 @@ export const PUBLIC_ROUTES: readonly string[] = [
   'POST /api/auth/refresh',
   'POST /api/auth/forgot-password',
   'POST /api/auth/reset-password',
+  'POST /api/auth/invites/lookup',
+  'POST /api/auth/invites/accept',
+  // Platform level, no shop context. P01 covers super-admin-only access and caller JWTs.
+  'GET /api/admin/plans',
+  'GET /api/admin/shops',
+  'POST /api/admin/shops',
+  'POST /api/admin/shops/:id/status',
+  'POST /api/admin/shops/:id/owner-invite',
 ];
 
 export interface CallOptions {

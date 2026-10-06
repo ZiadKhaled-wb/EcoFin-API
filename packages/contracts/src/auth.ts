@@ -59,6 +59,8 @@ export const AuthLoginBody = z
   .strict()
   .refine(needsTenantSlug, tenantSlugIssue);
 export const AuthLoginResponse = AuthSession.extend({
+  /** Platform session: no employee or shop picker. Present only for an active super admin. */
+  is_super_admin: z.boolean().optional(),
   user: AuthUser,
   mustChangePassword: z.boolean(),
   /** Every shop this login belongs to. One entry when there is a single membership. */

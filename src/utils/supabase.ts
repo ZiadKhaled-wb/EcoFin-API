@@ -101,6 +101,19 @@ export function supabaseForRequest(
   });
 }
 
+/** Service role only for P01's pre-session invite lookup/accept; preserve F07 request metadata. */
+export function supabaseForInvite(meta?: RequestMeta): DbClient {
+  const env = getEnv();
+  const headers: Record<string, string> = {};
+  if (meta?.ip) headers['x-forwarded-for'] = meta.ip;
+  if (meta?.userAgent) headers['user-agent'] = meta.userAgent;
+  if (meta?.requestId) headers['x-request-id'] = meta.requestId;
+  return createClient<Database>(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: baseAuthOptions,
+    global: { headers },
+  });
+}
+
 export interface PasswordUpdateResult {
   ok: boolean;
   status: number;

@@ -159,6 +159,7 @@ async function signIn(email: string, password: string): Promise<Session | null> 
 // ============================================================================
 
 interface ShopDecision {
+  isSuperAdmin?: boolean;
   shops: ShopMembership[];
   activeShop: ShopMembership | null;
   mustChangePassword: boolean;
@@ -190,7 +191,7 @@ async function decideShops(
     if (error) throw dbError(error, 'super admin lookup');
     if (!data) throw invalidCredentials();
     if (!data.is_active) throw new AppError('Account disabled.', 'ACCOUNT_DISABLED');
-    return { shops: [], activeShop: null, mustChangePassword: false };
+    return { shops: [], activeShop: null, mustChangePassword: false, isSuperAdmin: true };
   }
 
   const candidates = targetSlug ? rows.filter((r) => r.tenantSlug === targetSlug) : rows;
@@ -199,7 +200,7 @@ async function decideShops(
   const active = candidates.filter((r) => r.isActive && !r.archived);
   if (active.length === 0) throw new AppError('Account disabled.', 'ACCOUNT_DISABLED');
   const open = active.filter((r) => r.orgStatus === 'active');
-  if (open.length === 0) throw new AppError('Shop inactive.', 'SHOP_INACTIVE');
+  if (open.length === 0) throw new AppError('Shop suspended.', 'ORG_SUSPENDED');
   const now = new Date();
   const usable = open.filter((r) => !subscriptionExpired(r, now));
   if (usable.length === 0) throw new AppError('Subscription expired.', 'SUBSCRIPTION_EXPIRED');
@@ -268,6 +269,7 @@ export async function login(body: AuthLoginBody, meta: RequestMeta): Promise<Aut
     const user: AuthUser = { id: session.user.id, email: session.user.email ?? null };
     return {
       ...toAuthSession(session),
+      ...(decision.isSuperAdmin ? { is_super_admin: true } : {}),
       user,
       mustChangePassword: decision.mustChangePassword,
       // With a target shop, only that shop is returned so the client knows which one is active.
@@ -297,7 +299,17 @@ export async function selectShop(
 ): Promise<AuthSelectShopResponse> {
   const shops = await myShops(supabaseForRequest(auth.accessToken, undefined, meta));
   const shop = shops.find((s) => s.orgId === orgId.toLowerCase());
-  if (!shop) throw new AppError('Shop not allowed.', 'SHOP_NOT_ALLOWED');
+  if (!shop) {
+    const db = supabaseForRequest(auth.accessToken, orgId, meta);
+    const { data, error } = await db
+      .from('organizations')
+      .select('status')
+      .eq('id', orgId)
+      .maybeSingle();
+    if (error) throw dbError(error, 'select-shop status');
+    if (data && data.status !== 'active') throw new AppError('Shop suspended.', 'ORG_SUSPENDED');
+    throw new AppError('Shop not allowed.', 'SHOP_NOT_ALLOWED');
+  }
   await recordLogin(auth.accessToken, shop.orgId, meta);
   return { user: { id: auth.userId, email: auth.email }, shop };
 }

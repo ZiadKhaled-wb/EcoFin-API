@@ -9,6 +9,7 @@ import { AuditSearchResponse, AuthLoginResponse, ErrorResponse } from '@ziadkhal
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
 import { AUDIT_REGISTRY } from '../test/audit-registry/registry';
+import { readInviteToken } from '../test/inviteMail';
 
 const RUN = process.env['RUN_INTEGRATION'] === '1';
 const SEED_PASSWORD = 'LocalDev-Only-2026!';
@@ -113,6 +114,39 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
   // One driver per registry entry that has an action: performs the call, returns what was sent,
   // the shop the row must land in and the success status (200 unless the route creates: 201).
   const drivers: Record<string, () => Promise<{ sent: Sent; org: string; status?: number }>> = {
+    'POST /api/admin/shops': async () => {
+      const fixture = await platformShop('create');
+      return { sent: fixture.sent, org: fixture.org, status: 201 };
+    },
+    'POST /api/admin/shops/:id/status': async () => {
+      const fixture = await platformShop('status');
+      return {
+        sent: await send('post', `/api/admin/shops/${fixture.org}/status`, {
+          token: fixture.admin,
+          body: { status: 'suspended', reason: 'audit test' },
+        }),
+        org: fixture.org,
+      };
+    },
+    'POST /api/admin/shops/:id/owner-invite': async () => {
+      const fixture = await platformShop('resend');
+      return {
+        sent: await send('post', `/api/admin/shops/${fixture.org}/owner-invite`, {
+          token: fixture.admin,
+        }),
+        org: fixture.org,
+      };
+    },
+    'POST /api/auth/invites/accept': async () => {
+      const fixture = await platformShop('accept');
+      const token = await readInviteToken(fixture.email);
+      return {
+        sent: await send('post', '/api/auth/invites/accept', {
+          body: { token, password: TEMP_PASSWORD },
+        }),
+        org: fixture.org,
+      };
+    },
     'POST /api/auth/login': async () => ({
       sent: await send('post', '/api/auth/login', {
         body: { identifier: 'owner.one@ecotech.test', password: SEED_PASSWORD },
@@ -181,6 +215,23 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       return { sent: { res, ip, requestId }, org: SHOP_ONE, status: 201 };
     },
   };
+
+  async function platformShop(suffix: string) {
+    const admin = (await login('superadmin@ecotech.test')).accessToken;
+    const email = `f07.p01.${suffix}.${STAMP}@ecotech.test`;
+    const sent = await send('post', '/api/admin/shops', {
+      token: admin,
+      body: {
+        name: `F07 ${suffix}`,
+        tenant_slug: `f07-${STAMP}-${suffix}`,
+        plan_key: 'starter',
+        owner: { full_name: 'Audit owner', email },
+      },
+    });
+    expect(sent.res.status, JSON.stringify(sent.res.body)).toBe(201);
+    const org = sent.res.body.organization_id as string;
+    return { sent, org, email, admin };
+  }
 
   const withAction = Object.entries(AUDIT_REGISTRY).flatMap(([route, e]) =>
     'action' in e ? [{ route, action: e.action }] : [],

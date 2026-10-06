@@ -298,6 +298,16 @@ FROM (VALUES ('logo', 'org.settings_manage'), ('product_image', 'catalog.manage'
              ('legal_document', 'legal.manage'), ('import', 'import.data'), ('export', 'export.data'), ('other', 'org.settings_manage')) v(p, k);
 
 -- The functions that need a case: callable by authenticated, minus the session helpers.
+-- P01 platform functions require a super admin rather than a tenant permission.
+INSERT INTO t.denial VALUES
+  ('admin_list_organizations','admin_list_organizations','org.settings_manage',
+   $$SELECT public.admin_list_organizations(NULL,NULL,10,0)$$),
+  ('admin_provision_organization','admin_provision_organization','org.settings_manage',
+   $$SELECT public.admin_provision_organization('Denied','test1-denied','starter','Owner','denied@example.com',NULL,'Main',repeat('a',64),now()+interval '1 day')$$),
+  ('admin_set_organization_status','admin_set_organization_status','org.settings_manage',
+   $$SELECT public.admin_set_organization_status('d1000000-0000-0000-0000-000000000001','suspended','denial')$$),
+  ('admin_resend_owner_invite','admin_resend_owner_invite','org.settings_manage',
+   $$SELECT public.admin_resend_owner_invite('d1000000-0000-0000-0000-000000000001',repeat('b',64),now()+interval '1 day')$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
@@ -321,15 +331,20 @@ BEGIN
         SET LOCAL ROLE authenticated;
         v_err := t.try(d.call);
         RESET ROLE;
-        PERFORM t.expect(format('4.1 %s: %s (lacks %s) gets PERMISSION_DENIED', d.case_name, v_role, d.key),
-                         v_role IS NOT NULL AND v_err ~ 'PERMISSION_DENIED', coalesce(v_err, '') || ' role=' || coalesce(v_role::text, 'none'));
+        PERFORM t.expect(format('4.1 %s: %s (lacks %s) gets required denial', d.case_name, v_role, d.key),
+                         v_role IS NOT NULL AND v_err ~ CASE WHEN d.fn LIKE 'admin_%' THEN '^SUPER_ADMIN_REQUIRED$' ELSE 'PERMISSION_DENIED' END, coalesce(v_err, '') || ' role=' || coalesce(v_role::text, 'none'));
         -- Same call as the owner works, so the arguments were valid and only the permission was missing.
         PERFORM t.as_user('d0000000-0000-0000-0000-000000000011', 'd1000000-0000-0000-0000-000000000001');
         SET LOCAL ROLE authenticated;
         v_owner_err := t.try(d.call);
         RESET ROLE;
-        PERFORM t.expect(format('4.2 %s: the same call works for the owner (valid arguments)', d.case_name),
-                         v_owner_err = '', v_owner_err);
+        IF d.fn LIKE 'admin_%' THEN
+            PERFORM t.expect(format('4.2 %s: tenant OWNER also cannot act as platform admin', d.case_name),
+                             v_owner_err = 'SUPER_ADMIN_REQUIRED', v_owner_err);
+        ELSE
+            PERFORM t.expect(format('4.2 %s: the same call works for the owner (valid arguments)', d.case_name),
+                             v_owner_err = '', v_owner_err);
+        END IF;
     END LOOP;
     PERFORM t.as_user(NULL);
 END $$;

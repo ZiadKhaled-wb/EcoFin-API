@@ -185,3 +185,5 @@ Supabase tokens carry no shop. The active shop is chosen per request by the `x-o
 - **Multipart**: `multer` 2.4.0 with memory storage and `limits.fileSize = FILE_MAX_BYTES`, the one allowed new dependency. No `@types/multer` (that would be a second dependency): the parts used are declared in `src/types/multer.d.ts`.
 - **Env**: `FILE_MAX_BYTES` (default 10485760, max = the bucket's limit) and `FILE_URL_TTL_SECONDS` (default 60, 1 to 3600).
 - **Orphans**: `scripts/files-orphan-report.ts` lists objects at least 24 h old with no `files` row. Report only. Wiring it to the job runner is a follow-up (F13 is merged).
+
+- P01: invite token = 32 random bytes in the URL fragment, only its SHA-256 stored, 72 h TTL, single use; super-admin functions check app.is_super_admin() instead of require_permission; service role only for pre-session lookup and accept.

@@ -79,7 +79,16 @@ describe('loadEnv', () => {
         ...valid,
         NODE_ENV: 'production',
         CORS_ALLOWED_ORIGINS: 'https://app.example.com',
+        SMTP_URL: 'smtp://localhost:54325',
+        MAIL_FROM: 'EcoFin <support@ecotech.test>',
       }).NODE_ENV,
     ).toBe('production');
+  });
+  it('requires mail in production and limits invite expiry to seven days', () => {
+    expect(() =>
+      loadEnv({ ...valid, NODE_ENV: 'production', CORS_ALLOWED_ORIGINS: valid.FRONTEND_URL }),
+    ).toThrow(/SMTP_URL.*MAIL_FROM/);
+    expect(loadEnv(valid).INVITE_TTL_HOURS).toBe(72);
+    expect(() => loadEnv({ ...valid, INVITE_TTL_HOURS: '169' })).toThrow(/INVITE_TTL_HOURS/);
   });
 });

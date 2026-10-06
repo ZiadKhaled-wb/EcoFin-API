@@ -1,4 +1,4 @@
--- F05 tenant isolation (migration 20261003080000_f05_tenant_storage.sql). LOCAL / DEV ONLY.
+﻿-- F05 tenant isolation (migration 20261003080000_f05_tenant_storage.sql). LOCAL / DEV ONLY.
 -- Run after `npm run db:reset`:  npm run db:smoke -- supabase/tests/f05_tenant_test.sql
 -- db:smoke wraps the file in BEGIN ... ROLLBACK, so it leaves nothing behind.
 -- Expected last line: failed 0.
@@ -273,7 +273,7 @@ SELECT t.expect('ctx: same login choosing the shop where it is disabled -> ACCOU
     t.ctx() = 'refusal=ACCOUNT_DISABLED', t.ctx());
 
 SELECT t.as_user('f5000000-0000-0000-0000-0000000000e1');
-SELECT t.expect('ctx: suspended shop -> SHOP_INACTIVE', t.ctx() = 'refusal=SHOP_INACTIVE', t.ctx());
+SELECT t.expect('ctx: suspended shop -> ORG_SUSPENDED', t.ctx() = 'refusal=ORG_SUSPENDED', t.ctx());
 
 SELECT t.as_user('f5000000-0000-0000-0000-0000000000f1');
 SELECT t.expect('ctx: subscription ended -> SUBSCRIPTION_EXPIRED', t.ctx() = 'refusal=SUBSCRIPTION_EXPIRED', t.ctx());

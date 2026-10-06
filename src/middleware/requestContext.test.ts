@@ -1,4 +1,4 @@
-// loadRequestContext + getCtx. dbFor is mocked: session_context() answers what each test needs.
+﻿// loadRequestContext + getCtx. dbFor is mocked: session_context() answers what each test needs.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 
@@ -108,7 +108,7 @@ describe('loadRequestContext', () => {
     ['SHOP_NOT_ALLOWED', 403],
     ['SHOP_SELECTION_REQUIRED', 400],
     ['ACCOUNT_DISABLED', 403],
-    ['SHOP_INACTIVE', 403],
+    ['ORG_SUSPENDED', 403],
     ['SUBSCRIPTION_EXPIRED', 403],
   ])('refusal %s -> %i with that code, no req.ctx', async (code, status) => {
     db.response = { data: refused(code), error: null };
@@ -139,9 +139,9 @@ describe('loadRequestContext', () => {
   });
 
   it('allowMustChangePassword still applies every other refusal', async () => {
-    db.response = { data: refused('SHOP_INACTIVE'), error: null };
+    db.response = { data: refused('ORG_SUSPENDED'), error: null };
     const err = await run(mockReq(), requestContext({ allowMustChangePassword: true }));
-    expect(err).toMatchObject({ statusCode: 403, code: 'SHOP_INACTIVE' });
+    expect(err).toMatchObject({ statusCode: 403, code: 'ORG_SUSPENDED' });
   });
 
   it('a DB error carrying a contract code -> that code', async () => {

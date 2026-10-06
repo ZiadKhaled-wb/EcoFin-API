@@ -1,4 +1,4 @@
-// Unit tests for the F04 auth service. Supabase and the service-role module are mocked.
+﻿// Unit tests for the F04 auth service. Supabase and the service-role module are mocked.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthError, AuthApiError } from '@supabase/supabase-js';
 import {
@@ -250,9 +250,9 @@ describe('login', () => {
   it.each([
     ['inactive employee', membership({ isActive: false }), 'ACCOUNT_DISABLED'],
     ['archived employee', membership({ archived: true }), 'ACCOUNT_DISABLED'],
-    ['suspended shop', membership({ orgStatus: 'suspended' }), 'SHOP_INACTIVE'],
-    ['closed shop', membership({ orgStatus: 'closed' }), 'SHOP_INACTIVE'],
-    ['shop with status expired', membership({ orgStatus: 'expired' }), 'SHOP_INACTIVE'],
+    ['suspended shop', membership({ orgStatus: 'suspended' }), 'ORG_SUSPENDED'],
+    ['closed shop', membership({ orgStatus: 'closed' }), 'ORG_SUSPENDED'],
+    ['shop with status expired', membership({ orgStatus: 'expired' }), 'ORG_SUSPENDED'],
     [
       'subscription ended yesterday',
       membership({ subscriptionEnd: '2000-01-01' }),
@@ -361,12 +361,12 @@ describe('login', () => {
     signInOk();
     db.rpc['auth_record_login'] = {
       data: null,
-      error: { message: 'SHOP_INACTIVE', code: '42501' },
+      error: { message: 'ORG_SUSPENDED', code: '42501' },
     };
     const err = await caught(
       auth.login({ identifier: 'owner.one@ecotech.test', password: 'pw' }, META),
     );
-    expect(err.code).toBe('SHOP_INACTIVE');
+    expect(err.code).toBe('ORG_SUSPENDED');
     expect(authApi.admin.signOut).toHaveBeenCalledWith(ACCESS, 'local');
   });
 

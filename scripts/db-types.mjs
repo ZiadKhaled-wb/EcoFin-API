@@ -13,12 +13,20 @@ const HEADER = `// GENERATED FILE - DO NOT EDIT BY HAND.
 // Regenerate after a migration change: npm run db:reset && npm run db:types
 `;
 
-const generated = readFileSync(0, 'utf8');
+let generated = readFileSync(0, 'utf8');
 if (!generated.includes('export type Database')) {
   console.error('db:types: no generated types on stdin (is the local stack running?)');
   process.exit(1);
 }
 
+// PostgreSQL does not expose function-argument nullability. F14 accepts NULL for
+// these parameters; preserve that existing contract whenever CLI types regenerate.
+generated = generated.replace(/"?register_file"?:\s*\{[\s\S]*?Returns:/, (signature) =>
+  signature.replace(
+    /("?p_(?:entity_id|entity_type|original_name|sha256)"?:\s*string)(?! \| null)/g,
+    '$1 | null',
+  ),
+);
 const config = (await prettier.resolveConfig(target)) ?? {};
 const formatted = await prettier.format(`${HEADER}\n${generated}`, { ...config, filepath: target });
 writeFileSync(target, formatted);

@@ -35,7 +35,11 @@ INSERT INTO t.no_permission_ok VALUES
   ('my_permissions',              'session helper: the caller''s own permission keys, writes nothing'),
   ('auth_record_login',           'login helper: audits the caller''s own login (any employee may log in)'),
   ('auth_record_logout',          'login helper: audits the caller''s own logout'),
-  ('auth_record_password_change', 'login helper: audits the caller''s own password change');
+  ('auth_record_password_change', 'login helper: audits the caller''s own password change'),
+  ('admin_provision_organization', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_list_organizations', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_set_organization_status', 'platform super admin; checks app.is_super_admin()'),
+  ('admin_resend_owner_invite', 'platform super admin; checks app.is_super_admin()');
 
 -- ---------------------------------------------------------------- catalog helpers (plpgsql, so a
 -- privilege function never runs on rows of another kind or schema before the filter)

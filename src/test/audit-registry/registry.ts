@@ -9,6 +9,11 @@ export type AuditExpectation = { action: string } | { none: string };
 
 /** Keyed `METHOD /path` as mounted (same keys as the cross-shop and permission checks). */
 export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
+  'POST /api/admin/shops': { action: 'org.provisioned' },
+  'POST /api/admin/shops/:id/status': { action: 'org.suspended' },
+  'POST /api/admin/shops/:id/owner-invite': { action: 'invite.resent' },
+  'POST /api/auth/invites/lookup': { none: 'Pre-session read-only invitation lookup; no changes.' },
+  'POST /api/auth/invites/accept': { action: 'invite.accepted' },
   'POST /api/auth/login': { action: 'auth.login' },
   'POST /api/auth/refresh': {
     none: 'Token refresh changes no data; the session was audited at login.',

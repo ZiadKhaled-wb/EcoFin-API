@@ -14,6 +14,8 @@ import {
   AuthRefreshBody,
   AuthResetPasswordBody,
   AuthSelectShopBody,
+  InviteLookupBody,
+  InviteAcceptBody,
 } from '@ziadkhaled-wb/contracts';
 import { asyncHandler } from '../utils/asyncHandler';
 import { authenticate } from '../middleware/auth';
@@ -27,8 +29,23 @@ import {
   resetPasswordLimiter,
 } from '../middleware/rateLimit';
 import * as authController from '../controllers/auth.controller';
+import * as invitesController from '../controllers/invites.controller';
 
 const router = Router();
+router.post(
+  '/invites/lookup',
+  publicRoute(),
+  loginLimiter,
+  validate({ body: InviteLookupBody }),
+  asyncHandler(invitesController.lookup),
+);
+router.post(
+  '/invites/accept',
+  publicRoute(),
+  loginLimiter,
+  validate({ body: InviteAcceptBody }),
+  asyncHandler(invitesController.accept),
+);
 
 // --- Public -----------------------------------------------------------------
 // D19: each route has one access marker (publicRoute / authenticatedOnly / requirePermission).
