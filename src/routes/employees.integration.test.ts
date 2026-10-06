@@ -274,4 +274,49 @@ describe.skipIf(!RUN)('F06 permissions over HTTP (local Supabase)', () => {
     expect(removeForeign.status).toBe(403);
     expect(code(removeForeign)).toBe('FORBIDDEN');
   });
+
+  it('EC-143: deactivate refuses the live token at once; reactivate lets the employee back; one audit row each', async () => {
+    const owner = await login('owner.one@ecotech.test');
+    const cashier = await login('cashier.one@ecotech.test');
+    const target = await login(targetEmail, TARGET_PASSWORD);
+    const active = (id: string, token: string, body: object) =>
+      call('put', `/api/employees/${id}/active`, token, body);
+    expect((await call('get', '/api/auth/me', target)).status).toBe(200);
+
+    // Refusals: no employee.manage, no reason, the owner as target (and so the owner themself).
+    const denied = await active(targetId, cashier, { active: false, reason: 'should not work' });
+    expect(denied.status).toBe(403);
+    expect(code(denied)).toBe('PERMISSION_DENIED');
+    const noReason = await active(targetId, owner, { active: false, reason: ' ' });
+    expect(noReason.status).toBe(400);
+    const ownerTarget = await active(OWNER_ONE, owner, { active: false, reason: 'x' });
+    expect(ownerTarget.status).toBe(403);
+    expect(code(ownerTarget)).toBe('FORBIDDEN');
+    expect(await auditRows('employee.active_set')).toBe(0);
+
+    const off = await active(targetId, owner, { active: false, reason: 'left the company' });
+    expect(off.status, JSON.stringify(off.body)).toBe(200);
+    expect(off.body).toEqual({
+      employeeId: targetId,
+      active: false,
+      id: targetId,
+      is_active: false,
+    });
+    expect(await auditRows('employee.active_set')).toBe(1);
+    const liveToken = await call('get', '/api/auth/me', target);
+    expect(liveToken.status).toBe(403);
+    expect(code(liveToken)).toBe('ACCOUNT_DISABLED');
+    const relogin = await request(app)
+      .post('/api/auth/login')
+      .set('X-Forwarded-For', nextIp())
+      .send({ identifier: targetEmail, password: TARGET_PASSWORD });
+    expect(relogin.status).toBe(403);
+
+    const on = await active(targetId, owner, { active: true, reason: 'came back' });
+    expect(on.status).toBe(200);
+    expect(on.body).toEqual({ employeeId: targetId, active: true, id: targetId, is_active: true });
+    expect(await auditRows('employee.active_set')).toBe(2);
+    const back = await login(targetEmail, TARGET_PASSWORD);
+    expect((await call('get', '/api/auth/me', back)).status).toBe(200);
+  });
 });

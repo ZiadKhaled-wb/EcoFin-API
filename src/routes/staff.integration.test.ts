@@ -196,7 +196,7 @@ describe.skipIf(!RUN)('O02 staff against local Supabase', () => {
     ] as const) {
       const r = await call(method, `/api/employees/${ownerId}${suffix}`, owner, body);
       expect(r.status).toBe(403);
-      expect(r.body.error.code).toBe('TARGET_NOT_ALLOWED');
+      expect(r.body.error.code).toBe(suffix === '/active' ? 'FORBIDDEN' : 'TARGET_NOT_ALLOWED');
     }
     const invalid = await call('post', '/api/employees', owner, {
       full_name: 'Invalid',

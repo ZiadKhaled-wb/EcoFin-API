@@ -71,20 +71,23 @@ describe.skipIf(!RUN)('F05 cross-shop suite against local Supabase', () => {
         return count ?? 0;
       },
       async accessOf(employeeId) {
-        const [o, b] = await Promise.all([
+        const [o, b, e] = await Promise.all([
           service
             .from('employee_permission_overrides')
             .select('permission_key, granted')
             .eq('employee_id', employeeId),
           service.from('employee_branches').select('branch_id').eq('employee_id', employeeId),
+          service.from('employees').select('is_active').eq('id', employeeId).single(),
         ]);
         if (o.error) throw new Error(o.error.message);
         if (b.error) throw new Error(b.error.message);
+        if (e.error) throw new Error(e.error.message);
         return {
           overrides: (o.data as { permission_key: string; granted: boolean }[])
             .map((r) => `${r.permission_key}=${String(r.granted)}`)
             .sort(),
           branchIds: (b.data as { branch_id: string }[]).map((r) => r.branch_id).sort(),
+          active: e.data.is_active as boolean,
         };
       },
     };

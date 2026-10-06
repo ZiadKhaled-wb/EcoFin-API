@@ -11,7 +11,6 @@ export type AuditExpectation = { action: string } | { none: string };
 export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/employees': { action: 'employee.created' },
   'PATCH /api/employees/:employeeId': { action: 'employee.updated' },
-  'PUT /api/employees/:employeeId/active': { action: 'employee.deactivate' },
   'POST /api/employees/:employeeId/invite': { action: 'invite.resent' },
   'POST /api/employees/:employeeId/password-reset': { action: 'employee.password_reset_requested' },
   'POST /api/auth/password-reset/lookup': { none: 'Pre-session read-only reset lookup.' },
@@ -43,6 +42,7 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/auth/change-password': { action: 'auth.password_change' },
   'PUT /api/employees/:employeeId/permissions': { action: 'employee.permission_set' },
   'PUT /api/employees/:employeeId/branches': { action: 'employee.branches_set' },
+  'PUT /api/employees/:employeeId/active': { action: 'employee.active_set' },
   'POST /api/files': { action: 'file.upload' },
   'POST /api/monitoring/test-error': {
     none: 'Monitoring test (Q02): writes nothing, only raises an error on purpose.',

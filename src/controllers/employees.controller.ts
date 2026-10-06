@@ -3,6 +3,7 @@
 // Thin handlers: validate() already parsed params and body with the contract schemas.
 import type { Request, Response } from 'express';
 import type {
+  EmployeeActiveSetBody,
   EmployeeBranchesAssignBody,
   EmployeeIdParams,
   EmployeePermissionOverrideBody,
@@ -22,4 +23,11 @@ export async function setBranches(req: Request, res: Response) {
   const { employeeId } = req.params as EmployeeIdParams;
   const body = req.body as EmployeeBranchesAssignBody;
   res.json(await employeesService.setEmployeeBranches(getCtx(req), employeeId, body));
+}
+
+/** PUT /api/employees/:employeeId/active */
+export async function setActive(req: Request, res: Response) {
+  const { employeeId } = req.params as EmployeeIdParams;
+  const body = req.body as EmployeeActiveSetBody;
+  res.json(await employeesService.setEmployeeActive(getCtx(req), employeeId, body));
 }

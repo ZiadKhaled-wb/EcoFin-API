@@ -228,6 +228,18 @@ INSERT INTO t.w VALUES ('file_b_id', t.try($$SELECT public.register_file(
 INSERT INTO t.w VALUES ('file_b_entity', t.try($$SELECT public.register_file(
     'e1990000-0000-0000-0000-000000000002', 'd1000000-0000-0000-0000-000000000001/customer_id/2026/10/z.png', 'z.png',
     'image/png', 10, NULL, 'customer_id', 'customer', 'e1040000-0000-0000-0000-00000000000b')$$));
+INSERT INTO t.w VALUES ('active_b_emp', t.try($$SELECT public.set_employee_active(
+    'd3000000-0000-0000-0000-000000000022', false, 'TEST-1 cross-shop')$$));
+-- EC-142: the other entity rules, and the own shop's customer still works.
+INSERT INTO t.w VALUES ('file_bad_type', t.try($$SELECT public.register_file(
+    'e1990000-0000-0000-0000-000000000003', 'd1000000-0000-0000-0000-000000000001/other/2026/10/t.png', 't.png',
+    'image/png', 10, NULL, 'other', 'branch', 'd2000000-0000-0000-0000-000000000011')$$));
+INSERT INTO t.w VALUES ('file_id_no_type', t.try($$SELECT public.register_file(
+    'e1990000-0000-0000-0000-000000000004', 'd1000000-0000-0000-0000-000000000001/other/2026/10/u.png', 'u.png',
+    'image/png', 10, NULL, 'other', NULL, 'e1040000-0000-0000-0000-00000000000a')$$));
+INSERT INTO t.w VALUES ('file_own_entity', t.try($$SELECT public.register_file(
+    'e1990000-0000-0000-0000-000000000005', 'd1000000-0000-0000-0000-000000000001/customer_id/2026/10/v.png', 'v.png',
+    'image/png', 10, NULL, 'customer_id', 'customer', 'e1040000-0000-0000-0000-00000000000a')$$));
 RESET ROLE;
 SELECT t.as_user(NULL);
 
@@ -255,11 +267,29 @@ SELECT t.expect('3.5 register_file reusing shop B''s file id fails and leaves B'
     AND (SELECT organization_id = 'd1000000-0000-0000-0000-000000000002' AND path LIKE 'd1000000-0000-0000-0000-000000000002/%'
          FROM files WHERE id = 'e1130000-0000-0000-0000-00000000000b'),
     (SELECT err FROM t.w WHERE name = 'file_b_id'));
-SELECT t.known_bug('3.6 register_file pointing at a shop B customer (entity_id) fails and writes no row',
-    (SELECT err FROM t.w WHERE name = 'file_b_entity') <> ''
+-- 3.6 was a known bug until EC-142 (register_file didn't check the entity's shop).
+SELECT t.expect('3.6 register_file pointing at a shop B customer (entity_id) fails with NOT_FOUND and writes no row',
+    (SELECT err FROM t.w WHERE name = 'file_b_entity') ~ 'NOT_FOUND'
     AND NOT EXISTS (SELECT 1 FROM files WHERE id = 'e1990000-0000-0000-0000-000000000002'),
-    'register_file does not check that p_entity_id belongs to the caller''s shop '
-    || '(supabase/migrations/20261005120000_f14_register_file.sql:53-56); the API checks it, a direct call does not');
+    (SELECT err FROM t.w WHERE name = 'file_b_entity'));
+SELECT t.expect('3.7 register_file with an unknown entity type fails (VALIDATION_FAILED) and writes no row',
+    (SELECT err FROM t.w WHERE name = 'file_bad_type') ~ 'VALIDATION_FAILED'
+    AND NOT EXISTS (SELECT 1 FROM files WHERE id = 'e1990000-0000-0000-0000-000000000003'),
+    (SELECT err FROM t.w WHERE name = 'file_bad_type'));
+SELECT t.expect('3.8 register_file with an entity id but no entity type fails (VALIDATION_FAILED) and writes no row',
+    (SELECT err FROM t.w WHERE name = 'file_id_no_type') ~ 'VALIDATION_FAILED'
+    AND NOT EXISTS (SELECT 1 FROM files WHERE id = 'e1990000-0000-0000-0000-000000000004'),
+    (SELECT err FROM t.w WHERE name = 'file_id_no_type'));
+SELECT t.expect('3.9 register_file pointing at the own shop''s customer still works',
+    (SELECT err FROM t.w WHERE name = 'file_own_entity') = ''
+    AND EXISTS (SELECT 1 FROM files WHERE id = 'e1990000-0000-0000-0000-000000000005'
+                AND entity_id = 'e1040000-0000-0000-0000-00000000000a'),
+    (SELECT err FROM t.w WHERE name = 'file_own_entity'));
+
+SELECT t.expect('3.10 set_employee_active on a shop B employee fails (NOT_FOUND) and B''s employee stays active',
+    (SELECT err FROM t.w WHERE name = 'active_b_emp') ~ 'NOT_FOUND'
+    AND (SELECT is_active FROM employees WHERE id = 'd3000000-0000-0000-0000-000000000022'),
+    (SELECT err FROM t.w WHERE name = 'active_b_emp'));
 
 -- ---------------------------------------------------------------- 4. permission denial (generic)
 -- One employee per non-owner role in shop A, so every permission key has a role without it.

@@ -6,6 +6,8 @@
 // DB errors into contract codes.
 
 import type {
+  EmployeeActiveSetBody,
+  EmployeeActiveSetResponse,
   EmployeeBranchesAssignBody,
   EmployeeBranchesAssignResponse,
   EmployeePermissionOverrideBody,
@@ -56,4 +58,22 @@ export async function setEmployeeBranches(
     .single();
   if (error) fail(error, 'set_employee_branches');
   return { employeeId: data.employee_id, branchIds: data.branch_ids };
+}
+
+/** EC-143: deactivate or reactivate an employee (refused on their next request when off). */
+export async function setEmployeeActive(
+  ctx: RequestContext,
+  employeeId: string,
+  body: EmployeeActiveSetBody,
+): Promise<EmployeeActiveSetResponse> {
+  await assertSameOrg(ctx, 'employees', [employeeId]);
+  const { data, error } = await ctx.db
+    .rpc('set_employee_active', {
+      p_employee_id: employeeId,
+      p_active: body.active,
+      p_reason: body.reason,
+    })
+    .single();
+  if (error) fail(error, 'set_employee_active');
+  return { employeeId: data.employee_id, active: data.is_active };
 }

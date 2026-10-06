@@ -64,8 +64,10 @@ export interface CrossShopHarness {
   code(res: Response): string;
   /** audit_log rows in `orgId` written from `ip` (service-role read, test only). */
   auditRowsFrom(orgId: string, ip: string): Promise<number>;
-  /** An employee's permission overrides and branch ids (service-role read, test only). */
-  accessOf(employeeId: string): Promise<{ overrides: string[]; branchIds: string[] }>;
+  /** An employee's permission overrides, branch ids and active flag (service-role read, test only). */
+  accessOf(
+    employeeId: string,
+  ): Promise<{ overrides: string[]; branchIds: string[]; active: boolean }>;
 }
 
 export interface CrossShopCase {

@@ -163,7 +163,7 @@ export async function setEmployeeActive(ctx: RequestContext, id: string, body: E
     p_reason: body.reason ?? null,
   });
   if (error) fail(error);
-  return { id, is_active: body.active };
+  return { id, is_active: body.active, employeeId: id, active: body.active };
 }
 export async function resendEmployeeInvite(ctx: RequestContext, id: string) {
   const e = await employee(ctx, id);
