@@ -7845,6 +7845,13 @@ export type Database = {
           role: Database['public']['Enums']['employee_role'] | null;
         }[];
       };
+      set_employee_active: {
+        Args: { p_active: boolean; p_employee_id: string; p_reason: string };
+        Returns: {
+          employee_id: string;
+          is_active: boolean;
+        }[];
+      };
       set_employee_branches: {
         Args: { p_branch_ids: string[]; p_employee_id: string; p_reason: string };
         Returns: {

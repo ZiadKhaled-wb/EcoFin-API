@@ -196,26 +196,26 @@ describe.skipIf(!RUN)('TEST-1: F14 files across shops with real shop B data', ()
       expect(count).toBe(0);
     });
 
-    // KNOWN BUG (TEST-1): register_file doesn't check that p_entity_id belongs to the caller's shop
-    // (supabase/migrations/20261005120000_f14_register_file.sql:53-56). The API checks it (test
-    // above), a direct call with the user's token does not. `.fails` until the function is fixed.
-    it.fails(
-      "register_file pointing at shop B's customer (entity_id) is refused, no row",
-      async () => {
-        const id = crypto.randomUUID();
-        const { error } = await asA.rpc('register_file', {
-          p_id: id,
-          p_path: `${SHOP_ONE}/customer_id/2026/10/${id}.png`,
-          p_original_name: 'x.png',
-          p_mime: 'image/png',
-          p_size_bytes: 10,
-          p_sha256: null,
-          p_purpose: 'customer_id',
-          p_entity_type: 'customer',
-          p_entity_id: customerB,
-        });
-        expect(error).not.toBeNull();
-      },
-    );
+    // Was a known bug (`it.fails`) until EC-142: register_file now checks the entity's shop itself.
+    it("register_file pointing at shop B's customer (entity_id) is refused (NOT_FOUND), no row", async () => {
+      const id = crypto.randomUUID();
+      const { error } = await asA.rpc('register_file', {
+        p_id: id,
+        p_path: `${SHOP_ONE}/customer_id/2026/10/${id}.png`,
+        p_original_name: 'x.png',
+        p_mime: 'image/png',
+        p_size_bytes: 10,
+        p_sha256: null,
+        p_purpose: 'customer_id',
+        p_entity_type: 'customer',
+        p_entity_id: customerB,
+      });
+      expect(error?.message).toMatch(/^NOT_FOUND/);
+      const { count } = await service
+        .from('files')
+        .select('id', { count: 'exact', head: true })
+        .eq('id', id);
+      expect(count).toBe(0);
+    });
   });
 });
