@@ -45,13 +45,11 @@ export async function sendPasswordResetEmail(message: {
       dateStyle: 'full',
       timeStyle: 'short',
     }).format(new Date(message.expiresAt));
-  await nodemailer
-    .createTransport(env.SMTP_URL)
-    .sendMail({
-      from: env.MAIL_FROM,
-      to: message.email,
-      subject: `تعيين كلمة المرور / Set password — ${message.shopName}`,
-      text: `مرحباً ${message.fullName}\nطلب مسؤول ${message.shopName} إعادة تعيين كلمة المرور.\n${message.link}\nينتهي الرابط في ${format('ar-EG')} (توقيت القاهرة).\n\nHello ${message.fullName},\nYour ${message.shopName} administrator requested a password reset.\n${message.link}\nThe link expires on ${format('en-GB')} (Cairo time).`,
-    });
+  await nodemailer.createTransport(env.SMTP_URL).sendMail({
+    from: env.MAIL_FROM,
+    to: message.email,
+    subject: `تعيين كلمة المرور / Set password — ${message.shopName}`,
+    text: `مرحباً ${message.fullName}\nطلب مسؤول ${message.shopName} إعادة تعيين كلمة المرور.\n${message.link}\nينتهي الرابط في ${format('ar-EG')} (توقيت القاهرة).\n\nHello ${message.fullName},\nYour ${message.shopName} administrator requested a password reset.\n${message.link}\nThe link expires on ${format('en-GB')} (Cairo time).`,
+  });
   return true;
 }

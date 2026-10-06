@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 import request from 'supertest';
 vi.mock('../middleware/auth', () => ({
   authenticate: (req: Request, _res: Response, next: NextFunction) => {
-    req.auth = { userId: 'fake', accessToken: 'fake',email:'fake@example.com' };
+    req.auth = { userId: 'fake', accessToken: 'fake', email: 'fake@example.com' };
     next();
   },
   dbFor: vi.fn(),

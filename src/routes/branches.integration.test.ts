@@ -185,16 +185,14 @@ describe.skipIf(!RUN)('O01 branches against local stack', () => {
       .select('id')
       .single();
     expect(d.error).toBeNull();
-    const shift = await service
-      .from('shifts')
-      .insert({
-        organization_id: org,
-        number: `B2-SH-26-${STAMP}`,
-        branch_id: second,
-        employee_id: ownerEmployee,
-        drawer_account_id: d.data!.id,
-        idempotency_key: `o01-shift-${STAMP}`,
-      });
+    const shift = await service.from('shifts').insert({
+      organization_id: org,
+      number: `B2-SH-26-${STAMP}`,
+      branch_id: second,
+      employee_id: ownerEmployee,
+      drawer_account_id: d.data!.id,
+      idempotency_key: `o01-shift-${STAMP}`,
+    });
     expect(shift.error).toBeNull();
     const r = await call('post', `/api/branches/${second}/deactivate`, owner, {
       reason: 'shift warning',

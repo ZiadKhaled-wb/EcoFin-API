@@ -99,15 +99,13 @@ describe.skipIf(!RUN)('P05 subscriptions against local stack', () => {
     });
   });
   it('parallel device inserts serialize the last seat', async () => {
-    const seed = await service
-      .from('devices')
-      .insert(
-        Array.from({ length: 5 }, (_, i) => ({
-          organization_id: org,
-          branch_id: branch,
-          name: 'D' + i,
-        })),
-      );
+    const seed = await service.from('devices').insert(
+      Array.from({ length: 5 }, (_, i) => ({
+        organization_id: org,
+        branch_id: branch,
+        name: 'D' + i,
+      })),
+    );
     expect(seed.error).toBeNull();
     const results = await Promise.all(
       ['A', 'B'].map((name) =>

@@ -3,12 +3,10 @@ import type { Request, Response } from 'express';
 import { requireModule } from './modules';
 describe('P05 module middleware', () => {
   it.each([false, true])('module available = %s', async (allowed) => {
-    const rpc = vi
-      .fn()
-      .mockResolvedValue({
-        data: null,
-        error: allowed ? null : { message: 'MODULE_NOT_IN_PLAN: installments' },
-      });
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: allowed ? null : { message: 'MODULE_NOT_IN_PLAN: installments' },
+    });
     const req = { ctx: { db: { rpc } } } as unknown as Request;
     const next = vi.fn();
     requireModule('installments')(req, {} as Response, next);
