@@ -13,6 +13,8 @@ If you haven't done it this session, run `AGENT_SETUP.md` (repo root). If a mand
 
 ## 1. Before you write anything
 
+**First:** if the slice is Port or Rewrite, read its section in `docs/OLD_CODE_MAP.md` and only the old files it lists.
+
 1. Read **only** your task file. It names the slice ID, the files you may touch, and the "Done when" checks.
 2. Open the slice in `docs/EcoTech_Pro_Slices.md` (search for its ID, e.g. `### S01`). Read only that slice plus the "Rules that apply to every slice" section.
    If the task touches the database: read only the tables it names in `docs/EcoTech_Pro_Data_Model.md`, plus §1 (conventions), §2 (access model) and §12 (baseline refinements). The real schema is `supabase/migrations/20261002000000_v1_baseline.sql` (server repo): search it for the table, don't read it all. If the doc and the SQL differ, the SQL wins. Never add or rename a table, column or enum that isn't there. If you need one, stop and ask.
