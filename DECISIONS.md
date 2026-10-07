@@ -1,5 +1,9 @@
 # Decisions (server repo)
 
+### D42. Category filters include one level of children
+Category-aware product queries use `category_id = ANY(app.category_with_children(org, category_id))`.
+The helper is tenant-scoped and returns the requested category plus its direct children only.
+
 Decisions taken during Sprint 1 that the docs don't already settle. Newest last. Each one is the simplest option that follows the docs.
 
 ## Sprint 1 (3 Oct 2026)

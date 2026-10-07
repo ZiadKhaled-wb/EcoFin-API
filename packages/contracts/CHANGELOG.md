@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.0
+
+- C01 categories: Category, CategoryList, CategoryCreateBody, CategoryUpdateBody, CategoryIdParams, CategoryArchiveBody, CategoryInUseDetail.
+
 ## 0.10.0
 
 - T01 VAT engine: computeDocumentTax and returnLineTax (same results as the SQL engine on the golden cases), TaxClass schemas and bodies, TaxKind. ShopSettings gains installment_markup_vat, delivery_fee_tax_class_id, deposit_vat_timing. Error codes TAX_CLASS_NAME_TAKEN, TAX_CLASS_IN_USE, TAX_DISCOUNT_TOO_LARGE.
@@ -52,3 +56,6 @@
 - First release: common types (Uuid, Money, dates, pagination, idempotency key), error codes and shape, roles, 61 permission keys with role defaults, schemas for auth (F04), access (F06), audit search (F07) and health (F08).
 - Auth contract: login and forgot-password take `identifier` (+ `tenantSlug`, required for usernames); shops carry `tenantSlug`; `mustChangePassword` in login and me; change-password schema; password max 72 (bcrypt limit).
 - select-shop response is now `{ user, shop }` only (no tokens; Supabase tokens carry no shop, D23).
+## 0.11.0
+
+- Add category schemas and category error codes.

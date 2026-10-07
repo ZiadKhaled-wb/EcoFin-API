@@ -85,6 +85,12 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     return (res.body as { id: string }).id;
   }
+  const categoryBody = () => ({ name: `F07 ${STAMP}-${ipCounter}` });
+  async function newCategory(token: string) {
+    const { res } = await send('post', '/api/categories', { token, body: categoryBody() });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return (res.body as { id: string }).id;
+  }
 
   async function createEmployee(email: string, password: string) {
     const user = await service.auth.admin.createUser({ email, password, email_confirm: true });
@@ -172,6 +178,48 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       ).toBe(200);
       return {
         sent: await send('post', `/api/tax-classes/${id}/restore`, { token: owner.accessToken }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/categories': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', '/api/categories', {
+          token: owner.accessToken,
+          body: categoryBody(),
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'PATCH /api/categories/:id': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newCategory(owner.accessToken);
+      return {
+        sent: await send('patch', `/api/categories/${id}`, {
+          token: owner.accessToken,
+          body: categoryBody(),
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/categories/:id/archive': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newCategory(owner.accessToken);
+      return {
+        sent: await send('post', `/api/categories/${id}/archive`, { token: owner.accessToken }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/categories/:id/restore': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newCategory(owner.accessToken);
+      expect(
+        (await send('post', `/api/categories/${id}/archive`, { token: owner.accessToken })).res
+          .status,
+      ).toBe(200);
+      return {
+        sent: await send('post', `/api/categories/${id}/restore`, { token: owner.accessToken }),
         org: SHOP_ONE,
       };
     },

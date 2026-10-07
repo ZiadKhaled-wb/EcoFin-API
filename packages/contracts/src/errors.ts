@@ -115,6 +115,11 @@ export const errorCodeHttpStatus = {
   TAX_CLASS_NAME_TAKEN: 409,
   TAX_CLASS_IN_USE: 409,
   TAX_DISCOUNT_TOO_LARGE: 400,
+  CATEGORY_NOT_FOUND: 404,
+  CATEGORY_NAME_TAKEN: 409,
+  CATEGORY_IN_USE: 409,
+  CATEGORY_DEPTH: 400,
+  CATEGORY_PARENT_ARCHIVED: 409,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

@@ -7,7 +7,7 @@
 // id), expect 403/404, then prove shop B didn't change (no audit row from this call's IP, B's
 // session still works, A's password unchanged...).
 
-import { crossShopCase, SHOP_A, SHOP_B } from './harness';
+import { crossShopCase, SHOP_A, SHOP_B, type CrossShopHarness } from './harness';
 
 const OWNER_A = 'owner.one@ecotech.test';
 const OWNER_B = 'owner.two@ecotech.test';
@@ -40,6 +40,86 @@ const SHOP_A_BR2 = 'd2000000-0000-0000-0000-000000000012';
 const SHOP_B_BR1 = 'd2000000-0000-0000-0000-000000000021';
 const CASHIER_A = 'd3000000-0000-0000-0000-000000000012';
 const CASHIER_B = 'd3000000-0000-0000-0000-000000000022';
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/categories',
+  name: 'categories list refuses a foreign shop header',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/categories', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/categories',
+  name: 'category create rejects foreign header and tenant body',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = { name: `Cross-shop ${Date.now()}` };
+    const foreign = await h.call('POST', '/api/categories', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/categories', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+// The seeded shops have no categories (unlike tax classes, no seed trigger
+// exists), so each case that needs a shop B category creates one first.
+async function shopBCategory(h: CrossShopHarness, tag: string) {
+  const b = await h.login(OWNER_B);
+  const created = await h.call('POST', '/api/categories', {
+    token: b.accessToken,
+    body: { name: `Cross-shop ${tag} ${Date.now()}` },
+  });
+  h.expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+  return (created.res.body as { id: string }).id;
+}
+
+for (const method of ['PATCH', 'POST'] as const) {
+  const suffix = method === 'PATCH' ? '' : '/archive';
+  crossShopCase({
+    method,
+    path: `/api/categories/:id${suffix}`,
+    name: `${method} category rejects another shop's id`,
+    async run(h) {
+      const id = await shopBCategory(h, method.toLowerCase());
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call(method, `/api/categories/${id}${suffix}`, {
+        token: a.accessToken,
+        body: method === 'PATCH' ? { name: `Foreign ${Date.now()}` } : {},
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('CATEGORY_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    },
+  });
+}
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/categories/:id/restore',
+  name: 'category restore rejects another shop id',
+  async run(h) {
+    const id = await shopBCategory(h, 'restore');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('POST', `/api/categories/${id}/restore`, { token: a.accessToken });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('CATEGORY_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
 
 crossShopCase({
   method: 'GET',
