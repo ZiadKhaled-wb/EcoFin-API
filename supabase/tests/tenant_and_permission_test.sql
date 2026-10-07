@@ -369,12 +369,16 @@ INSERT INTO t.denial VALUES
  ('create_tax_class','create_tax_class','catalog.manage',$$SELECT public.create_tax_class('Denial class','standard',1,'T1','V009')$$),
  ('update_tax_class','update_tax_class','catalog.manage',$$SELECT public.update_tax_class((SELECT id FROM public.tax_classes WHERE organization_id='d1000000-0000-0000-0000-000000000001' LIMIT 1),'{"name":"Denied"}')$$),
  ('set_tax_class_archived','set_tax_class_archived','catalog.manage',$$SELECT public.set_tax_class_archived((SELECT id FROM public.tax_classes WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND kind='exempt' LIMIT 1),true)$$);
+INSERT INTO t.denial VALUES
+ ('create_category','create_category','catalog.manage',$$SELECT public.create_category('Denial category',NULL)$$),
+ ('update_category','update_category','catalog.manage',$$SELECT public.update_category((SELECT id FROM public.categories WHERE organization_id='d1000000-0000-0000-0000-000000000001' LIMIT 1),'{"name":"Denied"}')$$),
+ ('set_category_archived','set_category_archived','catalog.manage',$$SELECT public.set_category_archived((SELECT id FROM public.categories WHERE organization_id='d1000000-0000-0000-0000-000000000001' LIMIT 1),false)$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
   AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
   AND p.proname NOT IN ('session_context', 'my_shops', 'my_permissions',
-                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change', 'get_subscription_status','require_module','get_shop_settings','list_tax_classes');
+                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change', 'get_subscription_status','require_module','get_shop_settings','list_tax_classes','list_categories');
 
 SELECT t.expect('4.0 every callable write function has a permission-denial case here',
     NOT EXISTS (SELECT 1 FROM t.write_functions w WHERE w.fn NOT IN (SELECT fn FROM t.denial)),
