@@ -1,4 +1,4 @@
-// ESLint 9 flat config: typescript-eslint with type-aware rules, Prettier-compatible.
+// ESLint 10 flat config: typescript-eslint with type-aware rules, Prettier-compatible.
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import prettier from 'eslint-config-prettier';
