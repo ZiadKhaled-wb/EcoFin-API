@@ -670,6 +670,7 @@ SELECT t.error('default class cannot be archived',format('SELECT public.set_tax_
 SELECT public.set_tax_class_archived(t.class(t.org('a'),'exempt'),true);
 SELECT t.expect('list shows archived last',(SELECT (l->-1->>'kind')='exempt' AND (l->-1->>'archived_at') IS NOT NULL AND jsonb_array_length(l)=4 FROM public.list_tax_classes() l));
 SELECT public.set_tax_class_archived(t.class(t.org('a'),'exempt'),false);
+SELECT 'DIAG' AS diag, t.id('reduced') AS reduced_id, (SELECT row_to_json(x)::text FROM (SELECT c.organization_id, c.archived_at, c.kind, c.rate FROM public.tax_classes c WHERE c.id=t.id('reduced')) x) AS reduced_row, app.current_org_id() AS current_org, t.org('a') AS org_a, (SELECT count(*) FROM t.ids) AS ids;
 SELECT public.update_org_settings(jsonb_build_object('installment_markup_vat','taxed','deposit_vat_timing','on_deposit','delivery_fee_tax_class_id',t.id('reduced')));
 SELECT t.expect('accountant settings saved',(SELECT s->>'installment_markup_vat'='taxed' AND s->>'deposit_vat_timing'='on_deposit' AND s->>'delivery_fee_tax_class_id'=t.id('reduced')::text FROM public.get_shop_settings() s));
 SELECT t.error('bad markup setting',$q$SELECT public.update_org_settings('{"installment_markup_vat":"sometimes"}')$q$,'SETTINGS_INVALID');
