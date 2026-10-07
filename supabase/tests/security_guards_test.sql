@@ -51,7 +51,10 @@ INSERT INTO t.no_permission_ok VALUES
   ('list_installment_policies', 'P03: read-only; checks app.has_permission so an expired (read-only) shop can still read'),
   ('get_shop_profile', 'P04: read-only legal and financing profile of the session''s own shop; any employee'),
   ('list_tax_classes', 'T01: read-only tax classes of the session''s own shop; any employee (POS, product forms)'),
-  ('list_categories', 'C01: read-only categories of the session''s own shop; any employee (catalog, POS, reports)');
+  ('list_categories', 'C01: read-only categories of the session''s own shop; any employee (catalog, POS, reports)'),
+  ('list_products', 'C02: read-only catalog search of the session''s own shop; any employee (catalog screen, POS)'),
+  ('get_product', 'C02: read-only product of the session''s own shop, archived included (old documents); any employee'),
+  ('lookup_product', 'C02: read-only POS lookup by barcode or SKU, active products of the session''s own shop; any employee');
 
 -- ---------------------------------------------------------------- catalog helpers (plpgsql, so a
 -- privilege function never runs on rows of another kind or schema before the filter)

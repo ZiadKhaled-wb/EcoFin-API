@@ -374,13 +374,17 @@ INSERT INTO t.denial VALUES
  ('update_category','update_category','catalog.manage',$$SELECT public.update_category((SELECT id FROM public.categories WHERE organization_id='d1000000-0000-0000-0000-000000000001' LIMIT 1),'{"name":"Denied"}')$$),
  ('set_category_archived','set_category_archived','catalog.manage',$$SELECT public.set_category_archived((SELECT id FROM public.categories WHERE organization_id='d1000000-0000-0000-0000-000000000001' LIMIT 1),false)$$);
 INSERT INTO t.denial VALUES
+ ('create_product','create_product','catalog.manage',$$SELECT public.create_product('{"name_ar":"Denied","sku":"DENIED-1","cash_price":"1"}')$$),
+ ('update_product','update_product','catalog.manage',$$SELECT public.update_product((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' LIMIT 1),'{"name_en":"Denied"}')$$),
+ ('set_product_archived','set_product_archived','catalog.manage',$$SELECT public.set_product_archived((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' LIMIT 1),true)$$);
+INSERT INTO t.denial VALUES
  ('update_org_profile','update_org_profile','org.profile_manage',$$SELECT public.update_org_profile('{"legal_name":"Denied"}')$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
   AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
   AND p.proname NOT IN ('session_context', 'my_shops', 'my_permissions',
-                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change', 'get_subscription_status','require_module','get_shop_settings','list_tax_classes','get_shop_profile','list_categories');
+                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change', 'get_subscription_status','require_module','get_shop_settings','list_tax_classes','get_shop_profile','list_categories','list_products','get_product','lookup_product');
 
 SELECT t.expect('4.0 every callable write function has a permission-denial case here',
     NOT EXISTS (SELECT 1 FROM t.write_functions w WHERE w.fn NOT IN (SELECT fn FROM t.denial)),
