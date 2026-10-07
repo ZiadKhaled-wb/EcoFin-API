@@ -750,6 +750,62 @@ export const openApiSpec = {
                 },
             },
         },
+        '/api/settings': {
+            get: {
+                tags: ['Settings'],
+                summary: 'Shop settings (P03)',
+                description:
+                    'Any employee of the shop. Money and column percentages are decimal strings. Includes the caller\'s own discount cap (my_discount), the current installment policy and the tax class options. Schema: ShopSettings in @ziadkhaled-wb/contracts.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: {
+                    200: { description: 'Settings', content: { 'application/json': { schema: { type: 'object' } } } },
+                    401: { $ref: '#/components/responses/Error' },
+                    403: { $ref: '#/components/responses/Error' },
+                },
+            },
+            patch: {
+                tags: ['Settings'],
+                summary: 'Change shop settings (org.settings_manage)',
+                description:
+                    'Any subset of the editable fields (ShopSettingsUpdateBody). receipt_fields and legal_referral_days merge; discount_caps replaces. One org.settings_updated audit row with the changed keys; no change, no row. Errors: SETTINGS_INVALID, NAME_REQUIRED, TAX_CLASS_NOT_FOUND, FILE_NOT_FOUND.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: {
+                    200: { description: 'The full settings after the change', content: { 'application/json': { schema: { type: 'object' } } } },
+                    400: { $ref: '#/components/responses/Error' },
+                    403: { $ref: '#/components/responses/Error' },
+                    404: { $ref: '#/components/responses/Error' },
+                },
+            },
+        },
+        '/api/settings/installment-policies': {
+            get: {
+                tags: ['Settings'],
+                summary: 'Installment policy versions, newest first (org.settings_manage)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: {
+                    200: { description: 'InstallmentPolicyList', content: { 'application/json': { schema: { type: 'array', items: { type: 'object' } } } } },
+                    403: { $ref: '#/components/responses/Error' },
+                },
+            },
+            post: {
+                tags: ['Settings'],
+                summary: 'Publish a new installment policy version (org.settings_manage, installments module)',
+                description:
+                    'Body: InstallmentPolicyBody, the changes from the current version. Versions are immutable; contracts keep the version they used. The same terms again return the current version. Errors: POLICY_INVALID, MODULE_NOT_IN_PLAN.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: {
+                    201: { description: 'The current version (InstallmentPolicy)', content: { 'application/json': { schema: { type: 'object' } } } },
+                    400: { $ref: '#/components/responses/Error' },
+                    403: { $ref: '#/components/responses/Error' },
+                },
+            },
+        },
     },
 } as const;
 

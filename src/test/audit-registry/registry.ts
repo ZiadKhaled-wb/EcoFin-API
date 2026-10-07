@@ -15,6 +15,8 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/employees/:employeeId/password-reset': { action: 'employee.password_reset_requested' },
   'POST /api/auth/password-reset/lookup': { none: 'Pre-session read-only reset lookup.' },
   'POST /api/auth/password-reset/complete': { action: 'employee.password_reset_completed' },
+  'PATCH /api/settings': { action: 'org.settings_updated' },
+  'POST /api/settings/installment-policies': { action: 'installment_policy.published' },
   'POST /api/branches': { action: 'branch.created' },
   'PATCH /api/branches/:id': { action: 'branch.updated' },
   'POST /api/branches/:id/deactivate': { action: 'branch.deactivated' },

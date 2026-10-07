@@ -361,12 +361,16 @@ INSERT INTO t.denial VALUES
  ('resend_employee_invite','resend_employee_invite','employee.manage',$$SELECT public.resend_employee_invite('a0200000-0000-4000-8000-000000000011',repeat('d',64),now()+interval '1 day')$$),
  ('create_password_reset','create_password_reset','employee.manage',$$SELECT public.create_password_reset('a0200000-0000-4000-8000-000000000010',repeat('e',64),now()+interval '1 hour')$$),
  ('list_employees','list_employees','employee.manage',$$SELECT public.list_employees(NULL,NULL,NULL,10,0)$$);
+INSERT INTO t.denial VALUES
+ ('update_org_settings','update_org_settings','org.settings_manage',$$SELECT public.update_org_settings('{"theme_color":"#000000"}')$$),
+ ('publish_installment_policy','publish_installment_policy','org.settings_manage',$$SELECT public.publish_installment_policy('{"grace_days":2}')$$),
+ ('list_installment_policies','list_installment_policies','org.settings_manage',$$SELECT public.list_installment_policies()$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
   AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
   AND p.proname NOT IN ('session_context', 'my_shops', 'my_permissions',
-                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change', 'get_subscription_status','require_module');
+                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change', 'get_subscription_status','require_module','get_shop_settings');
 
 SELECT t.expect('4.0 every callable write function has a permission-denial case here',
     NOT EXISTS (SELECT 1 FROM t.write_functions w WHERE w.fn NOT IN (SELECT fn FROM t.denial)),

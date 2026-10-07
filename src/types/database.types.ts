@@ -2751,8 +2751,10 @@ export type Database = {
       installment_policies: {
         Row: {
           allowed_frequencies: Database['public']['Enums']['installment_frequency'][];
+          amount_tiers: NonNullable<Json>;
           created_at: string;
           created_by: string | null;
+          down_payment_rules: NonNullable<Json>;
           early_settlement_pct: number | null;
           early_settlement_rule: Database['public']['Enums']['early_settlement_rule'];
           effective_from: string;
@@ -2764,9 +2766,12 @@ export type Database = {
           late_fee_type: Database['public']['Enums']['late_fee_type'];
           late_fee_value: number;
           markup_tiers: NonNullable<Json>;
+          max_down_payment_pct: number | null;
           max_months: number;
           min_down_payment_pct: number;
           min_installment: number;
+          min_installment_by_frequency: NonNullable<Json>;
+          min_sale_amount: number;
           organization_id: string;
           rounding_step: number;
           survey_required_above: number | null;
@@ -2774,8 +2779,10 @@ export type Database = {
         };
         Insert: {
           allowed_frequencies?: Database['public']['Enums']['installment_frequency'][];
+          amount_tiers?: NonNullable<Json>;
           created_at?: string;
           created_by?: string | null;
+          down_payment_rules?: NonNullable<Json>;
           early_settlement_pct?: number | null;
           early_settlement_rule?: Database['public']['Enums']['early_settlement_rule'];
           effective_from?: string;
@@ -2787,9 +2794,12 @@ export type Database = {
           late_fee_type?: Database['public']['Enums']['late_fee_type'];
           late_fee_value?: number;
           markup_tiers: NonNullable<Json>;
+          max_down_payment_pct?: number | null;
           max_months: number;
           min_down_payment_pct?: number;
           min_installment?: number;
+          min_installment_by_frequency?: NonNullable<Json>;
+          min_sale_amount?: number;
           organization_id: string;
           rounding_step?: number;
           survey_required_above?: number | null;
@@ -2797,8 +2807,10 @@ export type Database = {
         };
         Update: {
           allowed_frequencies?: Database['public']['Enums']['installment_frequency'][];
+          amount_tiers?: NonNullable<Json>;
           created_at?: string;
           created_by?: string | null;
+          down_payment_rules?: NonNullable<Json>;
           early_settlement_pct?: number | null;
           early_settlement_rule?: Database['public']['Enums']['early_settlement_rule'];
           effective_from?: string;
@@ -2810,9 +2822,12 @@ export type Database = {
           late_fee_type?: Database['public']['Enums']['late_fee_type'];
           late_fee_value?: number;
           markup_tiers?: NonNullable<Json>;
+          max_down_payment_pct?: number | null;
           max_months?: number;
           min_down_payment_pct?: number;
           min_installment?: number;
+          min_installment_by_frequency?: NonNullable<Json>;
+          min_sale_amount?: number;
           organization_id?: string;
           rounding_step?: number;
           survey_required_above?: number | null;
@@ -3230,15 +3245,24 @@ export type Database = {
           allow_negative_bank: boolean;
           collector_commission_pct: number;
           credit_limit_income_multiple: number | null;
+          credit_min_score: number;
+          credit_score_weights: NonNullable<Json>;
+          currency: string;
+          customer_ban_days: number;
           default_tax_class_id: string | null;
           discount_caps: NonNullable<Json>;
+          global_min_stock: number;
+          legal_referral_days: NonNullable<Json>;
           organization_id: string;
+          overdue_warning_interval_days: number;
           prices_include_vat: boolean;
           purchase_approval_threshold: number | null;
+          receipt_fields: NonNullable<Json>;
           receipt_footer: string | null;
           receipt_header: string | null;
           receipt_width_mm: number;
           return_policy_days: number;
+          theme_color: string;
           updated_at: string;
           updated_by: string | null;
         };
@@ -3246,15 +3270,24 @@ export type Database = {
           allow_negative_bank?: boolean;
           collector_commission_pct?: number;
           credit_limit_income_multiple?: number | null;
+          credit_min_score?: number;
+          credit_score_weights?: NonNullable<Json>;
+          currency?: string;
+          customer_ban_days?: number;
           default_tax_class_id?: string | null;
           discount_caps?: NonNullable<Json>;
+          global_min_stock?: number;
+          legal_referral_days?: NonNullable<Json>;
           organization_id: string;
+          overdue_warning_interval_days?: number;
           prices_include_vat?: boolean;
           purchase_approval_threshold?: number | null;
+          receipt_fields?: NonNullable<Json>;
           receipt_footer?: string | null;
           receipt_header?: string | null;
           receipt_width_mm?: number;
           return_policy_days?: number;
+          theme_color?: string;
           updated_at?: string;
           updated_by?: string | null;
         };
@@ -3262,15 +3295,24 @@ export type Database = {
           allow_negative_bank?: boolean;
           collector_commission_pct?: number;
           credit_limit_income_multiple?: number | null;
+          credit_min_score?: number;
+          credit_score_weights?: NonNullable<Json>;
+          currency?: string;
+          customer_ban_days?: number;
           default_tax_class_id?: string | null;
           discount_caps?: NonNullable<Json>;
+          global_min_stock?: number;
+          legal_referral_days?: NonNullable<Json>;
           organization_id?: string;
+          overdue_warning_interval_days?: number;
           prices_include_vat?: boolean;
           purchase_approval_threshold?: number | null;
+          receipt_fields?: NonNullable<Json>;
           receipt_footer?: string | null;
           receipt_header?: string | null;
           receipt_width_mm?: number;
           return_policy_days?: number;
+          theme_color?: string;
           updated_at?: string;
           updated_by?: string | null;
         };
@@ -3342,6 +3384,7 @@ export type Database = {
       };
       organizations: {
         Row: {
+          address: string | null;
           commercial_register: string | null;
           created_at: string;
           creditor_model: Database['public']['Enums']['creditor_model'];
@@ -3351,6 +3394,7 @@ export type Database = {
           legal_name: string | null;
           logo_file_id: string | null;
           name: string;
+          phone: string | null;
           plan_key: string;
           status: Database['public']['Enums']['org_status'];
           subscription_end: string | null;
@@ -3361,6 +3405,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          address?: string | null;
           commercial_register?: string | null;
           created_at?: string;
           creditor_model?: Database['public']['Enums']['creditor_model'];
@@ -3370,6 +3415,7 @@ export type Database = {
           legal_name?: string | null;
           logo_file_id?: string | null;
           name: string;
+          phone?: string | null;
           plan_key: string;
           status?: Database['public']['Enums']['org_status'];
           subscription_end?: string | null;
@@ -3380,6 +3426,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          address?: string | null;
           commercial_register?: string | null;
           created_at?: string;
           creditor_model?: Database['public']['Enums']['creditor_model'];
@@ -3389,6 +3436,7 @@ export type Database = {
           legal_name?: string | null;
           logo_file_id?: string | null;
           name?: string;
+          phone?: string | null;
           plan_key?: string;
           status?: Database['public']['Enums']['org_status'];
           subscription_end?: string | null;
@@ -7988,6 +8036,7 @@ export type Database = {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
         Returns: Json;
       };
+      get_shop_settings: { Args: Record<PropertyKey, never>; Returns: Json };
       get_subscription_status: { Args: Record<PropertyKey, never>; Returns: Json };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
       jobs_claim: {
@@ -8060,6 +8109,7 @@ export type Database = {
           username: string;
         }[];
       };
+      list_installment_policies: { Args: Record<PropertyKey, never>; Returns: Json };
       my_permissions: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -8078,6 +8128,7 @@ export type Database = {
         }[];
       };
       password_reset_lookup: { Args: { p_token_hash: string }; Returns: Json };
+      publish_installment_policy: { Args: { p_policy: Json }; Returns: string };
       register_file: {
         Args: {
           p_entity_id: string | null;
@@ -8170,6 +8221,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      update_org_settings: { Args: { p_changes: Json }; Returns: undefined };
     };
     Enums: {
       adjustment_reason: 'damage' | 'loss' | 'found' | 'correction' | 'count' | 'other';
@@ -8278,7 +8330,7 @@ export type Database = {
         | 'completed'
         | 'failed'
         | 'cancelled';
-      installment_frequency: 'monthly' | 'weekly';
+      installment_frequency: 'monthly' | 'weekly' | 'daily';
       job_status: 'queued' | 'running' | 'succeeded' | 'failed' | 'dead';
       late_fee_type: 'none' | 'fixed' | 'percent';
       legal_status: 'preparing' | 'filed' | 'in_court' | 'judgment' | 'closed';
@@ -8538,7 +8590,7 @@ export const Constants = {
         'failed',
         'cancelled',
       ],
-      installment_frequency: ['monthly', 'weekly'],
+      installment_frequency: ['monthly', 'weekly', 'daily'],
       job_status: ['queued', 'running', 'succeeded', 'failed', 'dead'],
       late_fee_type: ['none', 'fixed', 'percent'],
       legal_status: ['preparing', 'filed', 'in_court', 'judgment', 'closed'],

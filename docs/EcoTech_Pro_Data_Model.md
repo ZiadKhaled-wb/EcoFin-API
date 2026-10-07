@@ -109,9 +109,9 @@ erDiagram
 | Table | Columns (beyond the conventions) | Notes |
 |---|---|---|
 | `plans` *(platform)* | `key` PK, `name`, `price_monthly numeric(18,2)`, `max_branches`, `max_users`, `max_devices`, `modules text[]` | RLS on; SELECT for authenticated, writes by service role only |
-| `organizations` | `name`, `legal_name`, `commercial_register`, `tax_registration_no`, `tenant_slug` UK, `timezone` (default `Africa/Cairo`), `default_language`, `logo_file_id`, `plan_key` FK, `subscription_start`, `subscription_end`, `status org_status`, `creditor_model`, `installments_enabled` | No UPDATE policy for tenants; changes go through functions (P03, P04) or the platform |
-| `org_settings` | `organization_id` PK, `receipt_header`, `receipt_footer`, `receipt_width`, `prices_include_vat`, `default_tax_class_id`, `discount_caps jsonb` (role → %), `return_policy_days`, `purchase_approval_threshold`, `credit_limit_income_multiple` | P03 |
-| `installment_policies` | `version int`, `min_down_payment_pct numeric(5,2)`, `max_months`, `markup_tiers jsonb`, `allowed_frequencies installment_frequency[]`, `min_installment`, `late_fee_type`, `late_fee_value`, `late_fee_cap`, `grace_days`, `early_settlement_rule`, `guarantor_required_above`, `survey_required_above`, `effective_from` | **Immutable versions.** A contract stores the `policy_id` it used. UNIQUE (org, version). |
+| `organizations` | `name`, `legal_name`, `commercial_register`, `tax_registration_no`, `tenant_slug` UK, `timezone` (default `Africa/Cairo`), `default_language`, `logo_file_id`, `address`, `phone` (P03), `plan_key` FK, `subscription_start`, `subscription_end`, `status org_status`, `creditor_model`, `installments_enabled` | No UPDATE policy for tenants; changes go through functions (P03, P04) or the platform |
+| `org_settings` | `organization_id` PK, `receipt_header`, `receipt_footer`, `receipt_width`, `prices_include_vat`, `default_tax_class_id`, `discount_caps jsonb` (role → %), `return_policy_days`, `purchase_approval_threshold`, `credit_limit_income_multiple`; P03 (D40): `receipt_fields jsonb` (field → shown), `theme_color`, `currency` (EGP only), `credit_min_score`, `credit_score_weights jsonb` (sum 100), `legal_referral_days jsonb` (frequency → days overdue), `customer_ban_days`, `overdue_warning_interval_days`, `global_min_stock` | P03. Written only by `update_org_settings` |
+| `installment_policies` | `version int`, `min_down_payment_pct numeric(5,2)`, `max_months`, `markup_tiers jsonb`, `allowed_frequencies installment_frequency[]`, `min_installment`; P03 (D40): `min_sale_amount`, `max_down_payment_pct`, `down_payment_rules jsonb` (frequency → percent / one_installment / installment_per_day_of_month), `min_installment_by_frequency jsonb`, `amount_tiers jsonb` (max months by sale amount), `late_fee_type`, `late_fee_value`, `late_fee_cap`, `grace_days`, `early_settlement_rule`, `guarantor_required_above`, `survey_required_above`, `effective_from` | **Immutable versions.** A contract stores the `policy_id` it used. UNIQUE (org, version). |
 | `branches` | `code` (UK per org), `name`, `address`, `phone`, `eta_branch_code`, `is_active` | |
 | `employees` | `auth_user_id` UK, `full_name`, `phone`, `email`, `username` (UK per org, lower-cased), `national_id` (PII), `role employee_role`, `is_active`, `must_change_password`, `last_login_at` | One OWNER per org (partial UK) |
 | `employee_branches` | `employee_id`, `branch_id` (PK both) | Branch scope |
@@ -493,7 +493,7 @@ erDiagram
 | `doc_type` | sale, sales_return, quotation, sales_order, delivery, contract, payment, purchase_order, purchase_invoice, purchase_return, supplier_payment, transfer, stock_count, stock_adjustment, cash_transfer, expense, warranty_claim, legal_case |
 | `cash_movement_type` | float_in, float_out, sale, refund, deposit, collection, supplier_payment, expense, transfer_in, transfer_out, settlement, adjustment, opening |
 | `payment_method` | cash, bank_transfer, store_credit |
-| `installment_frequency` | monthly, weekly |
+| `installment_frequency` | monthly, weekly, daily (daily added in P03, D40) |
 | `contract_status` | active, completed, rescheduled, written_off, returned |
 | `legal_status` | preparing, filed, in_court, judgment, closed |
 | Other statuses | transfer, count, PO, purchase invoice, order, delivery, claim, survey, approval, shift, fiscal, reservation, return kind, refund method, charge kind, change kind: values as in the slices doc |
@@ -504,7 +504,7 @@ Each one derives the org and employee from `auth.uid()`, checks a permission, lo
 
 | Area | Functions |
 |---|---|
-| Platform | `provision_organization` (service role), `accept_invite`, `update_org_settings`, `publish_installment_policy` |
+| Platform | `provision_organization` (service role), `accept_invite`, `update_org_settings`, `publish_installment_policy` (P03, plus `get_shop_settings`, `list_installment_policies`; helpers `app.current_installment_policy`, `app.discount_cap_pct`, `app.check_discount`) |
 | Inventory | `post_stock_adjustment`, `post_stock_count`, `send_transfer`, `receive_transfer` |
 | Purchasing | `approve_purchase_invoice`, `reject_purchase_invoice`, `post_supplier_payment`, `post_purchase_return` |
 | Cash | `open_shift`, `close_shift`, `post_cash_transfer`, `settle_collector_wallet`, `post_expense`, `close_day` |

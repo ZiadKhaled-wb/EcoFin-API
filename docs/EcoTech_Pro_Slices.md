@@ -263,8 +263,10 @@ Built first. Everything else depends on it. Mostly smart agents.
 - General: name, logo, address, phone, timezone, language
 - Receipts: header, footer, which fields appear, paper width
 - Tax: VAT registration number, default tax class, prices include VAT or not
-- Installment policy (read by N01): minimum down payment %, max months, markup %, allowed frequencies, late-fee rule, grace days
+- Installment policy (read by N01): minimum down payment %, max months, markup %, allowed frequencies (monthly, weekly, daily), late-fee rule, grace days
+  - From FinTech-Pro (D40): max months by sale amount, minimum installment per frequency, down payment rule per frequency (min %, one installment up front, or for daily one installment per day of the month so far), max down payment %, minimum sale amount for installments
 - Discount cap % per role
+- From FinTech-Pro (D40), stored now and read by later slices: credit minimum score and score weights (R03), days overdue before legal referral per frequency, customer ban period and warning interval (N04, L01), global minimum stock alert (C02), theme colour; currency is EGP only
 - Changes are audited (F07)
 
 **Done when:** changing a setting changes the behaviour it controls (tested for the installment policy and discount cap).
