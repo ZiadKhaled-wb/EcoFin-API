@@ -52,10 +52,7 @@ describe('C01 category service', () => {
     db.queue({ data: [row(id, 'Chairs')], error: null });
     const created = await createCategory(ctx, { name: 'Chairs' });
     expect(created).toEqual(row(id, 'Chairs'));
-    expect(db.rpc).toHaveBeenCalledWith('create_category', {
-      p_name: 'Chairs',
-      p_parent_id: null,
-    });
+    expect(db.rpc).toHaveBeenCalledWith('create_category', { p_name: 'Chairs' });
   });
 
   it('updates and archives with the right rpc arguments', async () => {

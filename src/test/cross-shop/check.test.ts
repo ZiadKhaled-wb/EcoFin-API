@@ -75,7 +75,18 @@ describe('cross-shop route check (D19)', () => {
     expect(keys).toEqual(
       expect.arrayContaining(['GET /api/settings/profile', 'PATCH /api/settings/profile']),
     );
-    expect(keys).toHaveLength(61);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'GET /api/products',
+        'GET /api/products/lookup',
+        'GET /api/products/:id',
+        'POST /api/products',
+        'PATCH /api/products/:id',
+        'POST /api/products/:id/archive',
+        'POST /api/products/:id/restore',
+      ]),
+    );
+    expect(keys).toHaveLength(68);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {
@@ -84,11 +95,11 @@ describe('cross-shop route check (D19)', () => {
     extra.get('/:id', (_req, res) => {
       res.json({});
     });
-    mountRouter(app, '/api/products', extra);
+    mountRouter(app, '/api/widgets', extra);
     const lines: string[] = [];
     expect(runCrossShopCheck(app, registeredCases(), (l) => lines.push(l))).toBe(1);
     expect(lines).toContain(
-      'MISSING cross-shop case: GET /api/products/:id (add one in src/test/cross-shop/cases.ts)',
+      'MISSING cross-shop case: GET /api/widgets/:id (add one in src/test/cross-shop/cases.ts)',
     );
   });
 

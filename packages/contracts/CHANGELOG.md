@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.13.0
+
+- C02 products: Product, ProductList, ProductListQuery (search, category_id, include_subcategories, status), ProductLookupQuery, ProductCreateBody, ProductUpdateBody, ProductIdParams, EtaItemType, ProductStatus. Error codes PRODUCT_NOT_FOUND (404), PRODUCT_SKU_TAKEN, PRODUCT_BARCODE_TAKEN, PRODUCT_SERIAL_LOCKED, PRODUCT_CATEGORY_ARCHIVED (409).
+
 ## 0.12.0
 
 - P04 legal and financing profile: `ShopProfile`, `ShopProfileUpdateBody`; error code `INSTALLMENTS_DISABLED` (403). `tax_registration_no` is edited through the profile, no longer through `PATCH /api/settings`.
@@ -35,6 +39,7 @@
 ## 0.5.0
 
 - P01 shop provisioning, platform shop administration, single-use invitations and the optional super-admin login flag.
+
 ## 0.4.2
 
 - Access (EC-143): `EmployeeActiveSetBody` (`active`, `reason`), `EmployeeActiveSetResponse` and `EmployeeActiveSet` for `PUT /employees/:employeeId/active` (deactivate or reactivate an employee). Additive.
@@ -60,6 +65,7 @@
 - First release: common types (Uuid, Money, dates, pagination, idempotency key), error codes and shape, roles, 61 permission keys with role defaults, schemas for auth (F04), access (F06), audit search (F07) and health (F08).
 - Auth contract: login and forgot-password take `identifier` (+ `tenantSlug`, required for usernames); shops carry `tenantSlug`; `mustChangePassword` in login and me; change-password schema; password max 72 (bcrypt limit).
 - select-shop response is now `{ user, shop }` only (no tokens; Supabase tokens carry no shop, D23).
+
 ## 0.11.0
 
 - Add category schemas and category error codes.

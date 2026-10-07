@@ -121,6 +121,134 @@ crossShopCase({
   },
 });
 
+// C02 products: shop B's product is created the real way, then shop A aims at it.
+async function shopBProduct(h: CrossShopHarness, tag: string) {
+  const b = await h.login(OWNER_B);
+  const created = await h.call('POST', '/api/products', {
+    token: b.accessToken,
+    body: { name_ar: `Cross-shop ${tag}`, sku: `XS-${tag}-${Date.now()}`, cash_price: '10.00' },
+  });
+  h.expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+  const product = created.res.body as { id: string; barcode: string };
+  return { ...product, token: b.accessToken };
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/products',
+  name: 'products list refuses a foreign shop header and an org query key',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/products', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/products', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/products/lookup',
+  name: "product lookup never finds another shop's barcode",
+  async run(h) {
+    const product = await shopBProduct(h, 'lookup');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/products/lookup', {
+      token: a.accessToken,
+      query: 'code=' + encodeURIComponent(product.barcode),
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('PRODUCT_NOT_FOUND');
+    const header = await h.call('GET', '/api/products/lookup', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      query: 'code=' + encodeURIComponent(product.barcode),
+    });
+    h.expect(header.res.status).toBe(403);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/products/:id',
+  name: "product read rejects another shop's id",
+  async run(h) {
+    const product = await shopBProduct(h, 'get');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', `/api/products/${product.id}`, { token: a.accessToken });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('PRODUCT_NOT_FOUND');
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/products',
+  name: 'product create rejects foreign header and tenant body',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = { name_ar: 'Cross-shop', sku: `XS-NEW-${Date.now()}`, cash_price: '1.00' };
+    const foreign = await h.call('POST', '/api/products', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/products', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+for (const [method, suffix] of [
+  ['PATCH', ''],
+  ['POST', '/archive'],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/products/:id${suffix}`,
+    name: `${method} product${suffix} rejects another shop's id`,
+    async run(h) {
+      const product = await shopBProduct(h, method.toLowerCase());
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call(method, `/api/products/${product.id}${suffix}`, {
+        token: a.accessToken,
+        body: method === 'PATCH' ? { cash_price: '1.00' } : {},
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('PRODUCT_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    },
+  });
+}
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/products/:id/restore',
+  name: "product restore rejects another shop's id",
+  async run(h) {
+    const product = await shopBProduct(h, 'restore');
+    const archived = await h.call('POST', `/api/products/${product.id}/archive`, {
+      token: product.token,
+    });
+    h.expect(archived.res.status).toBe(200);
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('POST', `/api/products/${product.id}/restore`, {
+      token: a.accessToken,
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('PRODUCT_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
 crossShopCase({
   method: 'GET',
   path: '/api/auth/me',
