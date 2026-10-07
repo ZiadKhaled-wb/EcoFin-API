@@ -5,11 +5,14 @@ CREATE TABLE t.results(name text,ok boolean,detail text);
 CREATE TABLE t.shops(tag text,result jsonb);
 CREATE TABLE t.ids(tag text,id uuid);
 CREATE FUNCTION t.expect(n text,b boolean,d text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$ INSERT INTO t.results VALUES(n,b,d) $$;
+-- A call that should fail but doesn't is rolled back as well (T_NO_ERROR), so it never changes
+-- what later checks see.
 CREATE FUNCTION t.error(n text,q text,c text) RETURNS void LANGUAGE plpgsql AS $$
-BEGIN BEGIN EXECUTE q; PERFORM t.expect(n,false,'no error'); EXCEPTION WHEN others THEN PERFORM t.expect(n,split_part(SQLERRM,':',1)=c,SQLERRM); END; END $$;
+BEGIN BEGIN EXECUTE q; RAISE EXCEPTION 'T_NO_ERROR'; EXCEPTION WHEN others THEN PERFORM t.expect(n,SQLERRM<>'T_NO_ERROR' AND split_part(SQLERRM,':',1)=c,SQLERRM); END; END $$;
 CREATE FUNCTION t.as_user(u text,o uuid DEFAULT NULL) RETURNS void LANGUAGE sql AS $$ SELECT set_config('request.jwt.claim.sub',COALESCE(u,''),false),set_config('app.org_id','',false),set_config('request.headers',CASE WHEN o IS NULL THEN '{}' ELSE json_build_object('x-org-id',o)::text END,false) $$;
 CREATE FUNCTION t.org(s text) RETURNS uuid LANGUAGE sql AS $$ SELECT (result->>'organization_id')::uuid FROM t.shops WHERE tag=s $$;
 CREATE FUNCTION t.id(s text) RETURNS uuid LANGUAGE sql AS $$ SELECT id FROM t.ids WHERE tag=s $$;
+CREATE FUNCTION t.default_class(o uuid) RETURNS uuid LANGUAGE sql SECURITY DEFINER SET search_path='' AS $$ SELECT default_tax_class_id FROM public.org_settings WHERE organization_id=o $$;
 CREATE FUNCTION t.class(o uuid,k text) RETURNS uuid LANGUAGE sql SECURITY DEFINER SET search_path='' AS $$ SELECT id FROM public.tax_classes WHERE organization_id=o AND kind::text=k ORDER BY created_at,id LIMIT 1 $$;
 GRANT USAGE ON SCHEMA t TO authenticated;
 GRANT SELECT ON t.shops,t.ids TO authenticated;
@@ -666,11 +669,10 @@ SELECT t.error('rate above 100',$q$SELECT public.create_tax_class('Huge','standa
 SELECT t.error('kind change to zero keeps rate 5',format('SELECT public.update_tax_class(%L,%L)',t.id('reduced'),'{"kind":"zero"}'),'VALIDATION_FAILED');
 SELECT t.error('foreign class update',format('SELECT public.update_tax_class(%L,%L)',t.class(t.org('b'),'standard'),'{"rate":"10"}'),'TAX_CLASS_NOT_FOUND');
 SELECT t.error('foreign class archive',format('SELECT public.set_tax_class_archived(%L,true)',t.class(t.org('b'),'standard')),'TAX_CLASS_NOT_FOUND');
-SELECT t.error('default class cannot be archived',format('SELECT public.set_tax_class_archived(%L,true)',t.class(t.org('a'),'standard')),'TAX_CLASS_IN_USE');
+SELECT t.error('default class cannot be archived',format('SELECT public.set_tax_class_archived(%L,true)',t.default_class(t.org('a'))),'TAX_CLASS_IN_USE');
 SELECT public.set_tax_class_archived(t.class(t.org('a'),'exempt'),true);
 SELECT t.expect('list shows archived last',(SELECT (l->-1->>'kind')='exempt' AND (l->-1->>'archived_at') IS NOT NULL AND jsonb_array_length(l)=4 FROM public.list_tax_classes() l));
 SELECT public.set_tax_class_archived(t.class(t.org('a'),'exempt'),false);
-SELECT 'DIAG' AS diag, t.id('reduced') AS reduced_id, (SELECT row_to_json(x)::text FROM (SELECT c.organization_id, c.archived_at, c.kind, c.rate FROM public.tax_classes c WHERE c.id=t.id('reduced')) x) AS reduced_row, app.current_org_id() AS current_org, t.org('a') AS org_a, (SELECT count(*) FROM t.ids) AS ids;
 SELECT public.update_org_settings(jsonb_build_object('installment_markup_vat','taxed','deposit_vat_timing','on_deposit','delivery_fee_tax_class_id',t.id('reduced')));
 SELECT t.expect('accountant settings saved',(SELECT s->>'installment_markup_vat'='taxed' AND s->>'deposit_vat_timing'='on_deposit' AND s->>'delivery_fee_tax_class_id'=t.id('reduced')::text FROM public.get_shop_settings() s));
 SELECT t.error('bad markup setting',$q$SELECT public.update_org_settings('{"installment_markup_vat":"sometimes"}')$q$,'SETTINGS_INVALID');
