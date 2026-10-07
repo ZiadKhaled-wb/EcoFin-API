@@ -121,6 +121,33 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     'POST /api/employees/:employeeId/invite': () => staffAudit('invite'),
     'POST /api/employees/:employeeId/password-reset': () => staffAudit('reset'),
     'POST /api/auth/password-reset/complete': () => staffAudit('complete'),
+    'PATCH /api/settings': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('patch', '/api/settings', {
+          token: owner.accessToken,
+          body: { receipt_footer: `F07 ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/settings/installment-policies': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const current = await send('get', '/api/settings', { token: owner.accessToken });
+      const grace =
+        (((current.res.body as { installment_policy: { grace_days: number } | null })
+          .installment_policy?.grace_days ?? 0) +
+          1) %
+        366;
+      return {
+        sent: await send('post', '/api/settings/installment-policies', {
+          token: owner.accessToken,
+          body: { grace_days: grace },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
     'POST /api/branches': async () => {
       const f = await branchShop('create');
       return {

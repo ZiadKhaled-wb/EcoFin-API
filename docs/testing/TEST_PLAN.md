@@ -227,3 +227,7 @@ See [O01 plan](plans/O01.md).
 ## O02 — employees (EC-41 / EC-143 part 2)
 
 See [O02 plan](plans/O02.md) and [O02 report](reports/O02_report.md). Covers immediate session refusal after deactivation and permission changes on the next request.
+
+## P03 — shop settings (EC-36)
+
+See [P03 plan](plans/P03.md). Covers the "Done when" (discount cap and installment policy change the behaviour they control) and the FinTech-Pro rules kept in D40.

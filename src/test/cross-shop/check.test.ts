@@ -54,7 +54,15 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/branches/:id/reactivate',
       ]),
     );
-    expect(keys).toHaveLength(45);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'GET /api/settings',
+        'PATCH /api/settings',
+        'GET /api/settings/installment-policies',
+        'POST /api/settings/installment-policies',
+      ]),
+    );
+    expect(keys).toHaveLength(49);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

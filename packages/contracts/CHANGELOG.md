@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.0
+
+- P03 shop settings: ShopSettings, ShopSettingsUpdateBody, InstallmentPolicy(Body/List), Percent, InstallmentFrequency (adds daily), receipt fields, discount caps, credit weights, legal referral days. Error codes SETTINGS_INVALID, POLICY_INVALID, TAX_CLASS_NOT_FOUND, DISCOUNT_ABOVE_CAP.
+
 ## 0.8.1
 
 - Merge EC-143 activation contracts with the shop task contracts; activation returns both naming conventions for existing callers.

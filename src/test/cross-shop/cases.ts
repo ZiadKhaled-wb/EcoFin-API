@@ -480,3 +480,36 @@ for (const method of ['GET', 'POST'] as const)
       }
     },
   });
+
+// P03 settings: reads and writes stay in the caller's shop; a header aimed at shop B is refused
+// and an injected tenant id is a validation error.
+for (const [method, path, body] of [
+  ['GET', '/api/settings', undefined],
+  ['PATCH', '/api/settings', { name: 'Hijack' }],
+  ['GET', '/api/settings/installment-policies', undefined],
+  ['POST', '/api/settings/installment-policies', { grace_days: 7 }],
+] as const)
+  crossShopCase({
+    method,
+    path,
+    name: `${method} ${path} refuses a foreign shop header and an injected tenant`,
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call(method, path, {
+        token: a.accessToken,
+        orgId: SHOP_B,
+        ...(body === undefined ? {} : { body }),
+      });
+      h.expect(foreign.res.status).toBe(403);
+      h.expect(h.code(foreign.res)).toBe('SHOP_NOT_ALLOWED');
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+      if (body !== undefined) {
+        const injected = await h.call(method, path, {
+          token: a.accessToken,
+          body: { ...body, organization_id: SHOP_B },
+        });
+        h.expect(injected.res.status).toBe(400);
+        h.expect(await h.auditRowsFrom(SHOP_B, injected.ip)).toBe(0);
+      }
+    },
+  });

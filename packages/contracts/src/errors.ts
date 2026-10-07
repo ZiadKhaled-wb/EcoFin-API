@@ -106,6 +106,11 @@ export const errorCodeHttpStatus = {
   FILE_PATH_INVALID: 422,
   FILE_TOO_LARGE: 413,
   FILE_TYPE_NOT_ALLOWED: 415,
+  // P03 shop settings
+  SETTINGS_INVALID: 400,
+  POLICY_INVALID: 400,
+  TAX_CLASS_NOT_FOUND: 404,
+  DISCOUNT_ABOVE_CAP: 403,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;
