@@ -9,6 +9,7 @@ import {
   PlanLimitDetail,
   PlanDowngradeDetail,
   BranchDeactivationCheck,
+  CategoryInUseDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 
@@ -85,7 +86,8 @@ export function mapDbError(err: unknown): AppError | undefined {
   if (
     code === 'PLAN_LIMIT_REACHED' ||
     code === 'PLAN_DOWNGRADE_BLOCKED' ||
-    code === 'BRANCH_DEACTIVATE_NEEDS_CONFIRM'
+    code === 'BRANCH_DEACTIVATE_NEEDS_CONFIRM' ||
+    code === 'CATEGORY_IN_USE'
   ) {
     try {
       const raw = (err as { details?: unknown }).details;
@@ -95,7 +97,9 @@ export function mapDbError(err: unknown): AppError | undefined {
             ? PlanLimitDetail
             : code === 'PLAN_DOWNGRADE_BLOCKED'
               ? PlanDowngradeDetail
-              : BranchDeactivationCheck
+              : code === 'CATEGORY_IN_USE'
+                ? CategoryInUseDetail
+                : BranchDeactivationCheck
         ).safeParse(JSON.parse(raw));
         if (parsed.success) details = parsed.data;
       }

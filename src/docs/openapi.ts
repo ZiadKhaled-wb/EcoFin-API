@@ -820,6 +820,44 @@ export const openApiSpec = {
                 responses: { 200: { description: 'TaxClass' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/categories': {
+            get: {
+                tags: ['Catalog'],
+                summary: 'List product categories',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'CategoryList' } },
+            },
+            post: {
+                tags: ['Catalog'],
+                summary: 'Create a product category',
+                security: [{ bearerAuth: [] }],
+                responses: { 201: { description: 'Category' } },
+            },
+        },
+        '/api/categories/{id}': {
+            patch: {
+                tags: ['Catalog'],
+                summary: 'Update a product category',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Category' } },
+            },
+        },
+        '/api/categories/{id}/archive': {
+            post: {
+                tags: ['Catalog'],
+                summary: 'Archive a product category',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Category' } },
+            },
+        },
+        '/api/categories/{id}/restore': {
+            post: {
+                tags: ['Catalog'],
+                summary: 'Restore a product category',
+                security: [{ bearerAuth: [] }],
+                responses: { 200: { description: 'Category' } },
+            },
+        },
         '/api/settings/installment-policies': {
             get: {
                 tags: ['Settings'],

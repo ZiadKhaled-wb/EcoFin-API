@@ -8251,6 +8251,13 @@ export type Database = {
       };
       update_org_settings: { Args: { p_changes: Json }; Returns: undefined };
       update_tax_class: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
+      list_categories: { Args: Record<string, never>; Returns: Json };
+      create_category: { Args: { p_name: string; p_parent_id?: string | null }; Returns: string };
+      update_category: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
+      set_category_archived: {
+        Args: { p_archived: boolean; p_id: string; p_move_to?: string | null };
+        Returns: undefined;
+      };
     };
     Enums: {
       adjustment_reason: 'damage' | 'loss' | 'found' | 'correction' | 'count' | 'other';

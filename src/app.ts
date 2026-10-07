@@ -13,6 +13,7 @@ import healthRoutes from './routes/health.js';
 import meRoutes from './routes/me.js';
 import settingsRoutes from './routes/settings.js';
 import taxClassesRoutes from './routes/taxClasses.js';
+import categoriesRoutes from './routes/categories.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { noClientOrg } from './middleware/noClientOrg.js';
 import { requestId } from './middleware/requestId.js';
@@ -54,6 +55,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/branches', branchesRoutes);
   mountRouter(app, '/api/settings', settingsRoutes);
   mountRouter(app, '/api/tax-classes', taxClassesRoutes);
+  mountRouter(app, '/api/categories', categoriesRoutes);
   mountRouter(app, '/api/me', meRoutes);
   mountRouter(app, '/api/employees', employeesRoutes);
   mountRouter(app, '/api/files', filesRoutes);
