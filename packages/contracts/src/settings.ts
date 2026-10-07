@@ -196,6 +196,10 @@ const settingsFields = {
   overdue_warning_interval_days: wholeDays.min(1).max(365),
   // Inventory (C02)
   global_min_stock: wholeDays.min(0),
+  // VAT (T01, D41): to be confirmed with the client's accountant
+  installment_markup_vat: z.enum(['not_taxed', 'taxed']),
+  delivery_fee_tax_class_id: Uuid.nullable(),
+  deposit_vat_timing: z.enum(['on_delivery', 'on_deposit']),
 };
 
 export const TaxClassOption = z.object({

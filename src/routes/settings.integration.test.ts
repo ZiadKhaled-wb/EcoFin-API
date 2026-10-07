@@ -10,6 +10,8 @@ import {
   InstallmentPolicy,
   InstallmentPolicyList,
   ShopSettings,
+  TaxClass,
+  TaxClassList,
 } from '@ziadkhaled-wb/contracts';
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
@@ -187,6 +189,47 @@ describe.skipIf(!RUN)('P03 settings against local stack', () => {
     });
     expect(bad.status).toBe(400);
     expect(code(bad)).toBe('POLICY_INVALID');
+  });
+
+  it('T01: tax classes start with the three defaults; the owner manages them, the cashier reads', async () => {
+    const list = TaxClassList.parse((await call('get', '/api/tax-classes')).body);
+    expect(list.map((c) => [c.kind, c.rate]).sort()).toEqual([
+      ['exempt', '0.00'],
+      ['standard', '14.00'],
+      ['zero', '0.00'],
+    ]);
+    const standard = list.find((c) => c.kind === 'standard')!;
+    const s = ShopSettings.parse((await call('get', '/api/settings')).body);
+    expect(s.default_tax_class_id).toBe(standard.id);
+    expect(s.delivery_fee_tax_class_id).toBe(standard.id);
+    expect(s.installment_markup_vat).toBe('not_taxed');
+
+    const created = await call('post', '/api/tax-classes', owner, {
+      name: 'Reduced 5%',
+      kind: 'standard',
+      rate: '5',
+      eta_tax_type: 'T1',
+      eta_subtype: 'V010',
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const reduced = TaxClass.parse(created.body);
+    expect(reduced.rate).toBe('5.00');
+    const updated = await call('patch', `/api/tax-classes/${reduced.id}`, owner, { rate: '7.5' });
+    expect(TaxClass.parse(updated.body).rate).toBe('7.50');
+    const inUse = await call('post', `/api/tax-classes/${standard.id}/archive`);
+    expect(inUse.status).toBe(409);
+    expect(code(inUse)).toBe('TAX_CLASS_IN_USE');
+    const taken = await call('post', '/api/tax-classes', owner, {
+      name: 'Reduced 5%',
+      kind: 'standard',
+      rate: '5',
+      eta_tax_type: 'T1',
+      eta_subtype: 'V010',
+    });
+    expect(code(taken)).toBe('TAX_CLASS_NAME_TAKEN');
+    expect((await call('get', '/api/tax-classes', cashier)).status).toBe(200);
+    const denied = await call('post', `/api/tax-classes/${reduced.id}/archive`, cashier);
+    expect(denied.status).toBe(403);
   });
 
   it('the cashier is refused every settings write and the policy history', async () => {

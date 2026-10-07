@@ -60,9 +60,14 @@ describe('cross-shop route check (D19)', () => {
         'PATCH /api/settings',
         'GET /api/settings/installment-policies',
         'POST /api/settings/installment-policies',
+        'GET /api/tax-classes',
+        'POST /api/tax-classes',
+        'PATCH /api/tax-classes/:id',
+        'POST /api/tax-classes/:id/archive',
+        'POST /api/tax-classes/:id/restore',
       ]),
     );
-    expect(keys).toHaveLength(49);
+    expect(keys).toHaveLength(54);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {
