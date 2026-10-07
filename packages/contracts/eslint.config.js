@@ -1,4 +1,4 @@
-// ESLint 9 flat config, same rules as the API repo (type-aware subset).
+// ESLint 10 flat config, same rules as the API repo (type-aware subset).
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import prettier from 'eslint-config-prettier';
