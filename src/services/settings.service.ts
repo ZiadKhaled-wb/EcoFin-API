@@ -4,6 +4,8 @@
 import {
   InstallmentPolicyList,
   ShopSettings,
+  ShopProfile,
+  type ShopProfileUpdateBody,
   Uuid,
   type InstallmentPolicy,
   type InstallmentPolicyBody,
@@ -21,6 +23,21 @@ export async function getSettings(ctx: RequestContext): Promise<ShopSettings> {
   const { data, error } = await ctx.db.rpc('get_shop_settings');
   if (error) fail(error);
   return ShopSettings.parse(data);
+}
+
+export async function getProfile(ctx: RequestContext): Promise<ShopProfile> {
+  const { data, error } = await ctx.db.rpc('get_shop_profile');
+  if (error) fail(error);
+  return ShopProfile.parse(data);
+}
+
+export async function updateProfile(
+  ctx: RequestContext,
+  body: ShopProfileUpdateBody,
+): Promise<ShopProfile> {
+  const { error } = await ctx.db.rpc('update_org_profile', { p_changes: body as Json });
+  if (error) fail(error);
+  return getProfile(ctx);
 }
 
 /** Changes only the fields in the body, then returns the full settings. */

@@ -16,5 +16,6 @@ export * from './subscriptions.js';
 export * from './branches.js';
 export * from './employees.js';
 export * from './settings.js';
+export * from './profile.js';
 export * from './tax.js';
 export * from './categories.js';

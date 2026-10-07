@@ -566,6 +566,8 @@ for (const method of ['GET', 'POST'] as const)
 for (const [method, path, body] of [
   ['GET', '/api/settings', undefined],
   ['PATCH', '/api/settings', { name: 'Hijack' }],
+  ['GET', '/api/settings/profile', undefined],
+  ['PATCH', '/api/settings/profile', { legal_name: 'Hijack' }],
   ['GET', '/api/settings/installment-policies', undefined],
   ['POST', '/api/settings/installment-policies', { grace_days: 7 }],
 ] as const)
