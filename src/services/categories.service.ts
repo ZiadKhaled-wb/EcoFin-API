@@ -28,7 +28,8 @@ async function one(ctx: RequestContext, id: string) {
 export async function createCategory(ctx: RequestContext, body: CategoryCreateBody) {
   const { data, error } = await ctx.db.rpc('create_category', {
     p_name: body.name,
-    p_parent_id: body.parent_id ?? null,
+    // SQL default NULL: a top-level category leaves the key out.
+    ...(body.parent_id ? { p_parent_id: body.parent_id } : {}),
   });
   if (error) fail(error);
   return one(ctx, Uuid.parse(data));
@@ -47,7 +48,7 @@ export async function setCategoryArchived(
   const { error } = await ctx.db.rpc('set_category_archived', {
     p_id: id,
     p_archived: archived,
-    p_move_to: body.move_to_category_id ?? null,
+    ...(body.move_to_category_id ? { p_move_to: body.move_to_category_id } : {}),
   });
   if (error) fail(error);
   return one(ctx, id);

@@ -237,3 +237,7 @@ See [P03 plan](plans/P03.md). Covers the "Done when" (discount cap and installme
 ## P04 — legal and financing profile (EC-37)
 
 See [P04 plan](plans/P04.md). Covers the installment switch on contracts and the creditor stored on every contract (D43).
+
+## C02 — products (EC-43)
+
+See [C02 plan](plans/C02.md). Covers the slice's Done when (created, found by barcode through the POS lookup, archived, still shown in old sales) and the D44 rules.

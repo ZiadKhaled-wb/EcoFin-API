@@ -3402,6 +3402,7 @@ export type Database = {
         Row: {
           address: string | null;
           commercial_register: string | null;
+          consumer_finance_legal_status: string | null;
           created_at: string;
           creditor_model: Database['public']['Enums']['creditor_model'];
           default_language: string;
@@ -3423,6 +3424,7 @@ export type Database = {
         Insert: {
           address?: string | null;
           commercial_register?: string | null;
+          consumer_finance_legal_status?: string | null;
           created_at?: string;
           creditor_model?: Database['public']['Enums']['creditor_model'];
           default_language?: string;
@@ -3444,6 +3446,7 @@ export type Database = {
         Update: {
           address?: string | null;
           commercial_register?: string | null;
+          consumer_finance_legal_status?: string | null;
           created_at?: string;
           creditor_model?: Database['public']['Enums']['creditor_model'];
           default_language?: string;
@@ -8033,6 +8036,7 @@ export type Database = {
         };
         Returns: string;
       };
+      create_category: { Args: { p_name: string; p_parent_id?: string }; Returns: string };
       create_employee: {
         Args: {
           p_branch_ids: string[];
@@ -8052,6 +8056,7 @@ export type Database = {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
         Returns: Json;
       };
+      create_product: { Args: { p: Json }; Returns: string };
       create_tax_class: {
         Args: {
           p_eta_subtype: string;
@@ -8062,6 +8067,8 @@ export type Database = {
         };
         Returns: string;
       };
+      get_product: { Args: { p_id: string }; Returns: Json };
+      get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       get_shop_settings: { Args: Record<PropertyKey, never>; Returns: Json };
       get_subscription_status: { Args: Record<PropertyKey, never>; Returns: Json };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
@@ -8111,6 +8118,7 @@ export type Database = {
         }[];
       };
       jobs_succeed: { Args: { p_job_id: string; p_worker: string }; Returns: boolean };
+      list_categories: { Args: Record<PropertyKey, never>; Returns: Json };
       list_employees: {
         Args: {
           p_limit: number;
@@ -8136,7 +8144,19 @@ export type Database = {
         }[];
       };
       list_installment_policies: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_products: {
+        Args: {
+          p_category_id?: string;
+          p_include_children?: boolean;
+          p_limit?: number;
+          p_offset?: number;
+          p_search?: string;
+          p_status?: string;
+        };
+        Returns: Json;
+      };
       list_tax_classes: { Args: Record<PropertyKey, never>; Returns: Json };
+      lookup_product: { Args: { p_code: string }; Returns: Json };
       my_permissions: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -8196,6 +8216,10 @@ export type Database = {
         };
         Returns: undefined;
       };
+      set_category_archived: {
+        Args: { p_archived: boolean; p_id: string; p_move_to?: string };
+        Returns: undefined;
+      };
       set_employee_active: {
         Args: { p_active: boolean; p_employee_id: string; p_reason: string | null };
         Returns: {
@@ -8223,6 +8247,7 @@ export type Database = {
           permission_key: string;
         }[];
       };
+      set_product_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
       set_tax_class_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
       update_branch: {
         Args: {
@@ -8237,6 +8262,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      update_category: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
       update_employee: {
         Args: {
           p_default_branch_id: string | null;
@@ -8249,17 +8275,11 @@ export type Database = {
         };
         Returns: Json;
       };
-      update_org_settings: { Args: { p_changes: Json }; Returns: undefined };
-      get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       update_org_profile: { Args: { p_changes: Json }; Returns: undefined };
+      update_org_settings: { Args: { p_changes: Json }; Returns: undefined };
+      update_org_settings_p03: { Args: { p_changes: Json }; Returns: undefined };
+      update_product: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
       update_tax_class: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
-      list_categories: { Args: Record<string, never>; Returns: Json };
-      create_category: { Args: { p_name: string; p_parent_id?: string | null }; Returns: string };
-      update_category: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
-      set_category_archived: {
-        Args: { p_archived: boolean; p_id: string; p_move_to?: string | null };
-        Returns: undefined;
-      };
     };
     Enums: {
       adjustment_reason: 'damage' | 'loss' | 'found' | 'correction' | 'count' | 'other';

@@ -858,6 +858,78 @@ export const openApiSpec = {
                 responses: { 200: { description: 'Category' } },
             },
         },
+        '/api/products': {
+            get: {
+                tags: ['Catalog'],
+                summary: 'Search the catalog (any employee)',
+                description: 'search matches the Arabic or English name, a SKU prefix or the exact barcode. category_id includes subcategories unless include_subcategories=false. status: active (default) | archived | all. Schema: ProductListQuery → ProductList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'search', in: 'query', schema: { type: 'string', maxLength: 100 } },
+                    { name: 'category_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'include_subcategories', in: 'query', schema: { type: 'string', enum: ['true', 'false'], default: 'true' } },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['active', 'archived', 'all'], default: 'active' } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'ProductList' }, 400: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Catalog'],
+                summary: 'Create a product (catalog.manage)',
+                description: 'An empty or missing barcode is generated (in-store EAN-13 starting with 2). tax_class_id defaults to the shop default. avg_cost is never accepted. Schema: ProductCreateBody → Product.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 201: { description: 'Product' }, 400: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/products/lookup': {
+            get: {
+                tags: ['Catalog'],
+                summary: 'POS lookup: an active product by exact barcode, then SKU (any employee)',
+                description: 'Archived products answer PRODUCT_NOT_FOUND. Schema: ProductLookupQuery → Product.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'code', in: 'query', required: true, schema: { type: 'string', minLength: 1, maxLength: 64 } }],
+                responses: { 200: { description: 'Product' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/products/{id}': {
+            get: {
+                tags: ['Catalog'],
+                summary: 'Read a product, archived included (any employee)',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Product' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            patch: {
+                tags: ['Catalog'],
+                summary: 'Update a product (catalog.manage; a price change also needs catalog.price_change)',
+                description: 'barcode null or empty generates a new one. is_serialized is locked (PRODUCT_SERIAL_LOCKED) once units or stock movements exist. An archived product answers PRODUCT_NOT_FOUND. Schema: ProductUpdateBody → Product.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Product' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/products/{id}/archive': {
+            post: {
+                tags: ['Catalog'],
+                summary: 'Archive a product (catalog.manage); it can no longer be sold',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Product' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/products/{id}/restore': {
+            post: {
+                tags: ['Catalog'],
+                summary: 'Restore an archived product (catalog.manage)',
+                description: 'Refused under an archived category (PRODUCT_CATEGORY_ARCHIVED) or with an archived tax class (TAX_CLASS_NOT_FOUND).',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Product' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/settings/profile': {
             get: {
                 tags: ['Settings'],

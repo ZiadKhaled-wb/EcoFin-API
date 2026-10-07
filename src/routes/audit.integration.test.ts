@@ -91,6 +91,16 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     return (res.body as { id: string }).id;
   }
+  const productBody = () => ({
+    name_ar: `F07 ${STAMP}-${ipCounter}`,
+    sku: `F07-${STAMP}-${ipCounter}`,
+    cash_price: '10.00',
+  });
+  async function newProduct(token: string) {
+    const { res } = await send('post', '/api/products', { token, body: productBody() });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return (res.body as { id: string }).id;
+  }
 
   async function createEmployee(email: string, password: string) {
     const user = await service.auth.admin.createUser({ email, password, email_confirm: true });
@@ -220,6 +230,50 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       ).toBe(200);
       return {
         sent: await send('post', `/api/categories/${id}/restore`, { token: owner.accessToken }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/products': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', '/api/products', {
+          token: owner.accessToken,
+          body: productBody(),
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    // A non-price change: product.updated (product.price_changed is proven in SQL and in
+    // products.integration.test.ts).
+    'PATCH /api/products/:id': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newProduct(owner.accessToken);
+      return {
+        sent: await send('patch', `/api/products/${id}`, {
+          token: owner.accessToken,
+          body: { name_en: `F07 ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/products/:id/archive': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newProduct(owner.accessToken);
+      return {
+        sent: await send('post', `/api/products/${id}/archive`, { token: owner.accessToken }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/products/:id/restore': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newProduct(owner.accessToken);
+      expect(
+        (await send('post', `/api/products/${id}/archive`, { token: owner.accessToken })).res
+          .status,
+      ).toBe(200);
+      return {
+        sent: await send('post', `/api/products/${id}/restore`, { token: owner.accessToken }),
         org: SHOP_ONE,
       };
     },
