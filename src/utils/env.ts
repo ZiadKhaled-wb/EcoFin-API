@@ -4,7 +4,16 @@
 // either returns the typed env or throws ONE error naming every bad or missing variable (never
 // their values). `server.ts` calls `getEnv()` on startup so a bad deployment stops
 // with a clear message; tests can import any module freely.
-import 'dotenv/config';
+import { config as loadDotenv } from 'dotenv';
+
+loadDotenv({ path: '.env' });
+if (process.env['NODE_ENV'] !== 'production') {
+  const inherited = new Map(Object.keys(process.env).map((key) => [key, process.env[key]]));
+  loadDotenv({ path: '.env.local', override: true });
+  for (const [key, value] of inherited) {
+    if (value !== undefined) process.env[key] = value;
+  }
+}
 
 import { z } from 'zod';
 

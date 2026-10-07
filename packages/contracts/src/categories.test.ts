@@ -60,9 +60,11 @@ describe('C01 category contracts', () => {
 
   it('validates the archive move target and the in-use detail', () => {
     expect(CategoryArchiveBody.parse({})).toEqual({});
-    expect(CategoryArchiveBody.parse({ move_to_category_id: null })).toEqual({
-      move_to_category_id: null,
+    expect(CategoryArchiveBody.parse({ move_to_category_id: category.id })).toEqual({
+      move_to_category_id: category.id,
     });
+    expect(CategoryArchiveBody.safeParse({ move_to_category_id: null }).success).toBe(false);
+    expect(CategoryArchiveBody.safeParse({ move_to_category_id: 'invalid' }).success).toBe(false);
     expect(CategoryInUseDetail.parse({ active_products: 2, active_children: 0 })).toMatchObject({
       active_products: 2,
     });

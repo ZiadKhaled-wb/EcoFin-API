@@ -74,7 +74,7 @@ BEGIN
     END IF;
     IF p_parent_id IS NOT NULL THEN
         SELECT * INTO v_parent FROM public.categories
-        WHERE id = p_parent_id AND organization_id = v_org;
+        WHERE id = p_parent_id AND organization_id = v_org FOR UPDATE;
         IF NOT FOUND THEN
             RAISE EXCEPTION 'CATEGORY_NOT_FOUND' USING ERRCODE = 'P0001';
         END IF;
@@ -153,7 +153,7 @@ BEGIN
         END IF;
         IF v_new_parent IS NOT NULL THEN
             SELECT * INTO v_parent FROM public.categories
-            WHERE id = v_new_parent AND organization_id = v_org;
+            WHERE id = v_new_parent AND organization_id = v_org FOR UPDATE;
             IF NOT FOUND THEN
                 RAISE EXCEPTION 'CATEGORY_NOT_FOUND' USING ERRCODE = 'P0001';
             END IF;
@@ -193,7 +193,8 @@ CREATE FUNCTION public.set_category_archived(p_id uuid, p_archived boolean, p_mo
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $$
 DECLARE
-    v_emp uuid; v_org uuid; v_cat public.categories%ROWTYPE; v_target public.categories%ROWTYPE;
+    v_emp uuid; v_org uuid; v_cat public.categories%ROWTYPE; v_parent public.categories%ROWTYPE;
+    v_target public.categories%ROWTYPE;
     v_children integer; v_products integer; v_moved integer := 0; v_after jsonb;
 BEGIN
     v_emp := app.require_permission('catalog.manage');
@@ -211,11 +212,16 @@ BEGIN
     END IF;
 
     IF NOT p_archived THEN                          -- restore
-        IF v_cat.parent_id IS NOT NULL AND EXISTS (
-            SELECT 1 FROM public.categories pc
-            WHERE pc.id = v_cat.parent_id AND pc.organization_id = v_org
-              AND pc.archived_at IS NOT NULL) THEN
-            RAISE EXCEPTION 'CATEGORY_PARENT_ARCHIVED' USING ERRCODE = 'P0001';
+        IF v_cat.parent_id IS NOT NULL THEN
+            -- Serialize restore with a concurrent parent archive and child creation.
+            SELECT * INTO v_parent FROM public.categories
+            WHERE id = v_cat.parent_id AND organization_id = v_org FOR UPDATE;
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'CATEGORY_NOT_FOUND' USING ERRCODE = 'P0001';
+            END IF;
+            IF v_parent.archived_at IS NOT NULL THEN
+                RAISE EXCEPTION 'CATEGORY_PARENT_ARCHIVED' USING ERRCODE = 'P0001';
+            END IF;
         END IF;
         UPDATE public.categories SET archived_at = NULL, updated_by = v_emp WHERE id = p_id;
         PERFORM app.write_audit('category.restored', 'category', p_id,

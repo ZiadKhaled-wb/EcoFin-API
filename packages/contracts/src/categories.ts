@@ -35,9 +35,7 @@ export type CategoryUpdateBody = z.infer<typeof CategoryUpdateBody>;
 export const CategoryIdParams = z.object({ id: Uuid }).strict();
 export type CategoryIdParams = z.infer<typeof CategoryIdParams>;
 /** Archive body: where to move the category's active products before archiving. */
-export const CategoryArchiveBody = z
-  .object({ move_to_category_id: Uuid.nullable().optional() })
-  .strict();
+export const CategoryArchiveBody = z.object({ move_to_category_id: Uuid.optional() }).strict();
 export type CategoryArchiveBody = z.infer<typeof CategoryArchiveBody>;
 /** CATEGORY_IN_USE details: why the archive was refused. */
 export const CategoryInUseDetail = z
