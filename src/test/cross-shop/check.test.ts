@@ -84,9 +84,10 @@ describe('cross-shop route check (D19)', () => {
         'PATCH /api/products/:id',
         'POST /api/products/:id/archive',
         'POST /api/products/:id/restore',
+        'GET /api/products/:id/units',
       ]),
     );
-    expect(keys).toHaveLength(68);
+    expect(keys).toHaveLength(69);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

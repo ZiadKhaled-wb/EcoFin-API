@@ -1,8 +1,10 @@
 import {
   Product,
   ProductList,
+  ProductUnitList,
   type ProductCreateBody,
   type ProductListQuery,
+  type ProductUnitsQuery,
   type ProductUpdateBody,
   Uuid,
 } from '@ziadkhaled-wb/contracts';
@@ -77,4 +79,18 @@ export async function setProductArchived(
   const { error } = await ctx.db.rpc('set_product_archived', { p_id: id, p_archived: archived });
   if (error) fail(error);
   return getProduct(ctx, id);
+}
+
+/** C03 labels: the product's serialized units in the caller's accessible branches. */
+export async function listProductUnits(
+  ctx: RequestContext,
+  id: string,
+  query: ProductUnitsQuery,
+): Promise<ProductUnitList> {
+  const { data, error } = await ctx.db.rpc('list_product_units', {
+    p_product_id: id,
+    p_status: query.status,
+  });
+  if (error) fail(error);
+  return ProductUnitList.parse(data);
 }

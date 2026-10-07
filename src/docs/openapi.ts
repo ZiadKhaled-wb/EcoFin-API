@@ -911,7 +911,20 @@ export const openApiSpec = {
                 responses: { 200: { description: 'Product' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
-        '/api/products/{id}/archive': {
+        '/api/products/{id}/units': {
+            get: {
+                tags: ['Catalog'],
+                summary: 'Serialized units of a product, for labels (any employee)',
+                description: 'Units in the branches the caller can access (OWNER: all), in serial order. status: in_stock (default), any unit status, or all. Another shop\'s product answers PRODUCT_NOT_FOUND. Schema: ProductUnitsQuery → ProductUnitList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'status', in: 'query', schema: { type: 'string', default: 'in_stock' } },
+                ],
+                responses: { 200: { description: 'ProductUnitList' }, 400: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },        '/api/products/{id}/archive': {
             post: {
                 tags: ['Catalog'],
                 summary: 'Archive a product (catalog.manage); it can no longer be sold',

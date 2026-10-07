@@ -384,7 +384,7 @@ SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
   AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
   AND p.proname NOT IN ('session_context', 'my_shops', 'my_permissions',
-                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change', 'get_subscription_status','require_module','get_shop_settings','list_tax_classes','get_shop_profile','list_categories','list_products','get_product','lookup_product');
+                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change', 'get_subscription_status','require_module','get_shop_settings','list_tax_classes','get_shop_profile','list_categories','list_products','get_product','lookup_product','list_product_units');
 
 SELECT t.expect('4.0 every callable write function has a permission-denial case here',
     NOT EXISTS (SELECT 1 FROM t.write_functions w WHERE w.fn NOT IN (SELECT fn FROM t.denial)),

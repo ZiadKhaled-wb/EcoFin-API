@@ -8144,6 +8144,7 @@ export type Database = {
         }[];
       };
       list_installment_policies: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_product_units: { Args: { p_product_id: string; p_status?: string }; Returns: Json };
       list_products: {
         Args: {
           p_category_id?: string;

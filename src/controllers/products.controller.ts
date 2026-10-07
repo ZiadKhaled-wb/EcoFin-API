@@ -4,6 +4,7 @@ import {
   ProductIdParams,
   type ProductListQuery,
   type ProductLookupQuery,
+  type ProductUnitsQuery,
   ProductUpdateBody,
 } from '@ziadkhaled-wb/contracts';
 import { getCtx } from '../middleware/requestContext';
@@ -31,4 +32,9 @@ export async function archive(req: Request, res: Response) {
 }
 export async function restore(req: Request, res: Response) {
   res.json(await service.setProductArchived(getCtx(req), id(req), false));
+}
+export async function units(req: Request, res: Response) {
+  res.json(
+    await service.listProductUnits(getCtx(req), id(req), req.query as unknown as ProductUnitsQuery),
+  );
 }

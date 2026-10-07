@@ -6,6 +6,8 @@ import {
   ProductList,
   ProductListQuery,
   ProductLookupQuery,
+  ProductUnitList,
+  ProductUnitsQuery,
   ProductUpdateBody,
 } from './products.js';
 import { errorCodeHttpStatus } from './errors.js';
@@ -176,5 +178,15 @@ describe('C02 product contracts', () => {
       PRODUCT_SERIAL_LOCKED: 409,
       PRODUCT_CATEGORY_ARCHIVED: 409,
     });
+  });
+
+  it('C03: units of a product, in stock by default', () => {
+    expect(ProductUnitsQuery.parse({})).toEqual({ status: 'in_stock' });
+    expect(ProductUnitsQuery.parse({ status: 'all' })).toEqual({ status: 'all' });
+    expect(ProductUnitsQuery.safeParse({ status: 'lost' }).success).toBe(false);
+    expect(ProductUnitsQuery.safeParse({ branch_id: product.id }).success).toBe(false);
+    const unit = { id: product.id, serial: 'IMEI-1', branch_id: product.id, status: 'in_stock' };
+    expect(ProductUnitList.parse([unit])).toEqual([unit]);
+    expect(ProductUnitList.safeParse([{ ...unit, status: 'gone' }]).success).toBe(false);
   });
 });

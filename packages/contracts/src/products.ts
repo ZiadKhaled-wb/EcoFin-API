@@ -146,3 +146,34 @@ export type ProductUpdateInput = z.input<typeof ProductUpdateBody>;
 
 export const ProductIdParams = z.object({ id: Uuid }).strict();
 export type ProductIdParams = z.infer<typeof ProductIdParams>;
+
+/** Values of `public.unit_status` (a serialized unit's lifecycle). */
+export const UnitStatus = z.enum([
+  'in_stock',
+  'reserved',
+  'in_transit',
+  'sold',
+  'returned',
+  'in_repair',
+  'written_off',
+]);
+export type UnitStatus = z.infer<typeof UnitStatus>;
+
+/**
+ * C03: a serialized unit of a product, for labels (the serial / IMEI is printed as the barcode).
+ * Only units in branches the caller can access are listed.
+ */
+export const ProductUnit = z.object({
+  id: Uuid,
+  serial: z.string(),
+  branch_id: Uuid,
+  status: UnitStatus,
+});
+export type ProductUnit = z.infer<typeof ProductUnit>;
+export const ProductUnitList = z.array(ProductUnit);
+export type ProductUnitList = z.infer<typeof ProductUnitList>;
+/** Default: units in stock. */
+export const ProductUnitsQuery = z
+  .object({ status: z.union([UnitStatus, z.literal('all')]).default('in_stock') })
+  .strict();
+export type ProductUnitsQuery = z.infer<typeof ProductUnitsQuery>;

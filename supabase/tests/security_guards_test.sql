@@ -54,7 +54,8 @@ INSERT INTO t.no_permission_ok VALUES
   ('list_categories', 'C01: read-only categories of the session''s own shop; any employee (catalog, POS, reports)'),
   ('list_products', 'C02: read-only catalog search of the session''s own shop; any employee (catalog screen, POS)'),
   ('get_product', 'C02: read-only product of the session''s own shop, archived included (old documents); any employee'),
-  ('lookup_product', 'C02: read-only POS lookup by barcode or SKU, active products of the session''s own shop; any employee');
+  ('lookup_product', 'C02: read-only POS lookup by barcode or SKU, active products of the session''s own shop; any employee'),
+  ('list_product_units', 'C03: read-only serials of a product''s units in the caller''s accessible branches (labels); any employee');
 
 -- ---------------------------------------------------------------- catalog helpers (plpgsql, so a
 -- privilege function never runs on rows of another kind or schema before the filter)
