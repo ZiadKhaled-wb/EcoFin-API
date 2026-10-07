@@ -375,8 +375,8 @@ INSERT INTO t.denial VALUES
  ('set_category_archived','set_category_archived','catalog.manage',$$SELECT public.set_category_archived((SELECT id FROM public.categories WHERE organization_id='d1000000-0000-0000-0000-000000000001' LIMIT 1),false)$$);
 INSERT INTO t.denial VALUES
  ('create_product','create_product','catalog.manage',$$SELECT public.create_product('{"name_ar":"Denied","sku":"DENIED-1","cash_price":"1"}')$$),
- ('update_product','update_product','catalog.manage',$$SELECT public.update_product((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' LIMIT 1),'{"name_en":"Denied"}')$$),
- ('set_product_archived','set_product_archived','catalog.manage',$$SELECT public.set_product_archived((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' LIMIT 1),true)$$);
+ ('update_product','update_product','catalog.manage',$$SELECT public.update_product((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND archived_at IS NULL ORDER BY id LIMIT 1),'{"name_en":"Denied"}')$$),
+ ('set_product_archived','set_product_archived','catalog.manage',$$SELECT public.set_product_archived((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND archived_at IS NULL ORDER BY id LIMIT 1),false)$$);
 INSERT INTO t.denial VALUES
  ('update_org_profile','update_org_profile','org.profile_manage',$$SELECT public.update_org_profile('{"legal_name":"Denied"}')$$);
 CREATE TABLE t.write_functions AS
