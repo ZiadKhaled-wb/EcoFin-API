@@ -29,6 +29,7 @@ EcoTech Pro: multi-tenant SaaS POS with in-house installments for Egyptian furni
 - Open only the files your task lists, plus what they import. Smart agents with the graphify CLI can use `graphify query/explain/path`.
 - Database schema (server repo): `supabase/migrations/20261002000000_v1_baseline.sql`. Search it for the table you need; never read it whole.
 - Never read whole folders. Never rebuild or commit `graphify-out/`; the maintainers do that.
+- Exception: `../FinTech-Pro-Deployed` (the old project) is a **read-only** reference. A task may read only the old paths listed for its slice in `EcoFin-API/docs/OLD_CODE_MAP.md`. Never write, install, build or run anything there, never open its `.env*` files, never copy secrets, and for Rewrite slices never copy business logic, only fields, screens and labels.
 
 ## Commands
 - Install: `npm ci`
