@@ -13,6 +13,20 @@ CREATE FUNCTION t.id(s text) RETURNS uuid LANGUAGE sql AS $$ SELECT id FROM t.id
 -- The app.* helpers have no grants; sales functions (definers) call them. These wrappers do the same.
 CREATE FUNCTION t.check_discount(p numeric) RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path='' AS $$ SELECT app.check_discount(p) $$;
 CREATE FUNCTION t.policy_version(o uuid) RETURNS integer LANGUAGE sql SECURITY DEFINER SET search_path='' AS $$ SELECT (app.current_installment_policy(o)).version $$;
+-- An imported contract (is_migrated: no sale or order needed) with real customer, branch and policy.
+CREATE FUNCTION t.ok_contract(o uuid) RETURNS public.creditor_model LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE v_customer uuid; v_creditor public.creditor_model;
+BEGIN
+    INSERT INTO public.customers(organization_id,full_name) VALUES(o,'P04 customer') RETURNING id INTO v_customer;
+    INSERT INTO public.contracts(organization_id,number,customer_id,branch_id,policy_id,creditor,cash_price,financed_amount,markup_pct,markup_amount,total_payable,installments_count,frequency,first_due_date,idempotency_key,is_migrated)
+    VALUES(o,'P04-OK-1',v_customer,(SELECT id FROM public.branches WHERE organization_id=o AND is_main),(SELECT id FROM public.installment_policies WHERE organization_id=o ORDER BY version DESC LIMIT 1),'in_house',100,100,0,0,100,1,'monthly',current_date,'p04-allowed-0001',true)
+    RETURNING creditor INTO v_creditor;
+    RETURN v_creditor;
+END $$;
+CREATE FUNCTION t.try_contract(o uuid) RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path='' AS $$
+    INSERT INTO public.contracts(organization_id,number,customer_id,branch_id,policy_id,creditor,cash_price,financed_amount,markup_pct,markup_amount,total_payable,installments_count,frequency,first_due_date,idempotency_key)
+    VALUES(o,'BLOCKED','a0300000-0000-4000-8000-000000000099','a0300000-0000-4000-8000-000000000099','a0300000-0000-4000-8000-000000000099','in_house',100,100,0,0,100,1,'monthly',current_date,'disabled-0001')
+$$;
 GRANT USAGE ON SCHEMA t TO authenticated;
 GRANT SELECT ON t.shops,t.ids TO authenticated;
 GRANT INSERT ON t.results,t.ids TO authenticated;
@@ -40,6 +54,13 @@ SELECT t.as_user('a0300000-0000-4000-8000-000000000001',t.org('a'));
 SET LOCAL ROLE authenticated;
 SELECT t.expect('owner reads settings',(SELECT s->>'name'='P03 a' AND (s#>>'{installment_policy,version}')::int=1 AND (s#>>'{my_discount,cap_pct}')::numeric=100 AND jsonb_array_length(s->'tax_class_options')=4 AND s->>'purchase_approval_threshold' IS NULL FROM public.get_shop_settings() s));
 SELECT public.update_org_settings(jsonb_build_object('name',' Shop A2 ','address','Cairo','phone','0100','receipt_fields',jsonb_build_object('customer',false),'discount_caps',jsonb_build_object('CASHIER',5,'BRANCH_MANAGER',15),'credit_score_weights',jsonb_build_object('guarantors',50,'income',30,'residence',10,'identity',10),'default_tax_class_id',:'tax_a_id','logo_file_id',:'logo_a_id','purchase_approval_threshold','25000.50','legal_referral_days',jsonb_build_object('weekly',49)));
+SELECT t.expect('profile starts with in-house financing', (public.get_shop_profile()->>'creditor_model')='in_house' AND public.get_shop_profile()->>'installments_enabled'='true');
+SELECT public.update_org_profile('{"legal_name":"Shop A Legal","commercial_register":"CR-100","tax_registration_no":"TAX-100","consumer_finance_legal_status":"Owner supplied","installments_enabled":false}');
+SELECT t.expect('profile updates legal fields and switch', (public.get_shop_profile()->>'legal_name')='Shop A Legal' AND public.get_shop_profile()->>'commercial_register'='CR-100' AND public.get_shop_profile()->>'tax_registration_no'='TAX-100' AND public.get_shop_profile()->>'consumer_finance_legal_status'='Owner supplied' AND public.get_shop_profile()->>'installments_enabled'='false');
+SELECT t.error('settings endpoint cannot edit tax registration',$q$SELECT public.update_org_settings('{"tax_registration_no":"BYPASS"}')$q$,'SETTINGS_INVALID');
+SELECT t.error('disabled installments reject contract insert',format('SELECT t.try_contract(%L)',t.org('a')),'INSTALLMENTS_DISABLED');
+SELECT public.update_org_profile('{"installments_enabled":true}');
+SELECT t.expect('enabled installments accept a contract that stores the shop creditor', t.ok_contract(t.org('a'))=(SELECT creditor_model FROM public.organizations WHERE id=t.org('a')));
 SELECT t.expect('settings read back',(SELECT s->>'name'='Shop A2' AND s->>'address'='Cairo' AND s->>'purchase_approval_threshold'='25000.50' AND s#>>'{receipt_fields,customer}'='false' AND s#>>'{receipt_fields,logo}'='true' AND (s#>>'{legal_referral_days,weekly}')::int=49 AND (s#>>'{legal_referral_days,daily}')::int=35 AND s->>'default_tax_class_id'=:'tax_a_id' FROM public.get_shop_settings() s));
 SELECT public.update_org_settings(jsonb_build_object('name','Shop A2','address','Cairo'));
 SELECT t.error('unknown key',$q$SELECT public.update_org_settings('{"organization_id":"x"}')$q$,'SETTINGS_INVALID');
@@ -58,6 +79,7 @@ SELECT t.error('foreign tax class',format('SELECT public.update_org_settings(%L)
 SELECT t.error('foreign logo file',format('SELECT public.update_org_settings(%L)',jsonb_build_object('logo_file_id',:'logo_b_id')),'FILE_NOT_FOUND');
 SELECT t.error('logo must be a logo file',format('SELECT public.update_org_settings(%L)',jsonb_build_object('logo_file_id',:'other_a_id')),'FILE_NOT_FOUND');
 RESET ROLE;
+SELECT t.expect('both profile updates are audited', (SELECT count(*)=2 AND bool_and(action='org.profile_updated') FROM public.audit_log WHERE organization_id=t.org('a') AND action='org.profile_updated'));
 SELECT t.expect('one audit row with changed keys only',(SELECT count(*)=1 FROM public.audit_log WHERE organization_id=t.org('a') AND action='org.settings_updated') AND (SELECT before->>'name'='P03 a' AND after->>'name'='Shop A2' AND NOT (after ? 'timezone') AND after ? 'discount_caps' FROM public.audit_log WHERE organization_id=t.org('a') AND action='org.settings_updated'));
 SELECT t.expect('foreign shop unchanged',(SELECT o.name='P03 b' AND o.address IS NULL AND s.discount_caps='{}' FROM public.organizations o JOIN public.org_settings s ON s.organization_id=o.id WHERE o.id=t.org('b')));
 

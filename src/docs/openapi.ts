@@ -858,6 +858,25 @@ export const openApiSpec = {
                 responses: { 200: { description: 'Category' } },
             },
         },
+        '/api/settings/profile': {
+            get: {
+                tags: ['Settings'],
+                summary: 'Read the legal and financing profile (P04)',
+                description: 'Any employee may read the shop profile. creditor_model is read-only and is in_house in V1. Schema: ShopProfile.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'ShopProfile' }, 401: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+            patch: {
+                tags: ['Settings'],
+                summary: 'Update the legal and financing profile (org.profile_manage)',
+                description: 'Body: ShopProfileUpdateBody. Legal status is owner-entered information, not an eligibility determination. One org.profile_updated audit row records changed keys only. Turning installments off denies new contract inserts and leaves existing contracts serviceable.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'ShopProfile' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/settings/installment-policies': {
             get: {
                 tags: ['Settings'],

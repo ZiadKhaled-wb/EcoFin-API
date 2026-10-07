@@ -233,3 +233,7 @@ See [O02 plan](plans/O02.md) and [O02 report](reports/O02_report.md). Covers imm
 ## P03 — shop settings (EC-36)
 
 See [P03 plan](plans/P03.md). Covers the "Done when" (discount cap and installment policy change the behaviour they control) and the FinTech-Pro rules kept in D40.
+
+## P04 — legal and financing profile (EC-37)
+
+See [P04 plan](plans/P04.md). Covers the installment switch on contracts and the creditor stored on every contract (D43).

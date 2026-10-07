@@ -166,7 +166,6 @@ const settingsFields = {
   timezone: z.string().min(1).max(64),
   default_language: z.enum(['ar', 'en']),
   logo_file_id: Uuid.nullable(),
-  tax_registration_no: trimmedOrNull(50),
   // Receipts
   receipt_header: z.string().max(500).nullable(),
   receipt_footer: z.string().max(500).nullable(),
@@ -212,6 +211,7 @@ export const TaxClassOption = z.object({
 /** GET /api/settings: every employee of the shop may read it. */
 export const ShopSettings = z.object({
   ...settingsFields,
+  tax_registration_no: trimmedOrNull(50),
   currency: z.literal('EGP'),
   updated_at: IsoTimestamp,
   updated_by: Uuid.nullable(),

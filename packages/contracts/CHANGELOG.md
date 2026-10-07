@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.0
+
+- P04 legal and financing profile: `ShopProfile`, `ShopProfileUpdateBody`; error code `INSTALLMENTS_DISABLED` (403). `tax_registration_no` is edited through the profile, no longer through `PATCH /api/settings`.
+
 ## 0.11.0
 
 - C01 categories: Category, CategoryList, CategoryCreateBody, CategoryUpdateBody, CategoryIdParams, CategoryArchiveBody, CategoryInUseDetail.

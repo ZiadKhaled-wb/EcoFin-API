@@ -8250,6 +8250,8 @@ export type Database = {
         Returns: Json;
       };
       update_org_settings: { Args: { p_changes: Json }; Returns: undefined };
+      get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
+      update_org_profile: { Args: { p_changes: Json }; Returns: undefined };
       update_tax_class: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
       list_categories: { Args: Record<string, never>; Returns: Json };
       create_category: { Args: { p_name: string; p_parent_id?: string | null }; Returns: string };

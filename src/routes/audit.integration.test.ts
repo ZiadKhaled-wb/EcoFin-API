@@ -233,6 +233,16 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
+    'PATCH /api/settings/profile': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('patch', '/api/settings/profile', {
+          token: owner.accessToken,
+          body: { consumer_finance_legal_status: `FRA note ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+      };
+    },
     'POST /api/settings/installment-policies': async () => {
       const owner = await login('owner.one@ecotech.test');
       const current = await send('get', '/api/settings', { token: owner.accessToken });

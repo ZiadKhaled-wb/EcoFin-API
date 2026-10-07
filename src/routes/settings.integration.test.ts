@@ -10,6 +10,7 @@ import {
   InstallmentPolicy,
   InstallmentPolicyList,
   ShopSettings,
+  ShopProfile,
   TaxClass,
   TaxClassList,
 } from '@ziadkhaled-wb/contracts';
@@ -149,6 +150,35 @@ describe.skipIf(!RUN)('P03 settings against local stack', () => {
     });
     expect(tax.status).toBe(404);
     expect(code(tax)).toBe('TAX_CLASS_NOT_FOUND');
+  });
+
+  it('owner manages the legal profile and installment switch; cashier cannot', async () => {
+    const initial = await call('get', '/api/settings/profile');
+    expect(initial.status, JSON.stringify(initial.body)).toBe(200);
+    expect(ShopProfile.parse(initial.body).creditor_model).toBe('in_house');
+    const updated = await call('patch', '/api/settings/profile', owner, {
+      legal_name: 'P03 Legal Entity',
+      commercial_register: 'CR-123',
+      tax_registration_no: 'TAX-456',
+      consumer_finance_legal_status: 'Owner supplied status',
+      installments_enabled: false,
+    });
+    expect(updated.status, JSON.stringify(updated.body)).toBe(200);
+    expect(ShopProfile.parse(updated.body)).toMatchObject({
+      legal_name: 'P03 Legal Entity',
+      commercial_register: 'CR-123',
+      tax_registration_no: 'TAX-456',
+      consumer_finance_legal_status: 'Owner supplied status',
+      installments_enabled: false,
+      creditor_model: 'in_house',
+    });
+    const forbidden = await call('patch', '/api/settings/profile', cashier, {
+      installments_enabled: true,
+    });
+    expect(forbidden.status).toBe(403);
+    expect(code(forbidden)).toBe('PERMISSION_DENIED');
+    const smuggled = await call('patch', '/api/settings', owner, { tax_registration_no: 'NOPE' });
+    expect(smuggled.status).toBe(400);
   });
 
   it('publishing a policy creates a new version and leaves the old one as it was', async () => {

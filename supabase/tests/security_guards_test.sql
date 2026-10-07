@@ -49,6 +49,7 @@ INSERT INTO t.no_permission_ok VALUES
   ('require_module', 'read-only module check for the session''s own shop'),
   ('get_shop_settings', 'P03: read-only settings of the session''s own shop; any employee (POS needs receipt, VAT, discount rules)'),
   ('list_installment_policies', 'P03: read-only; checks app.has_permission so an expired (read-only) shop can still read'),
+  ('get_shop_profile', 'P04: read-only legal and financing profile of the session''s own shop; any employee'),
   ('list_tax_classes', 'T01: read-only tax classes of the session''s own shop; any employee (POS, product forms)'),
   ('list_categories', 'C01: read-only categories of the session''s own shop; any employee (catalog, POS, reports)');
 

@@ -1,4 +1,4 @@
-export const CONTRACTS_VERSION = '0.11.0';
+export const CONTRACTS_VERSION = '0.12.0';
 
 export * from './common.js';
 export * from './money.js';
@@ -16,5 +16,6 @@ export * from './subscriptions.js';
 export * from './branches.js';
 export * from './employees.js';
 export * from './settings.js';
+export * from './profile.js';
 export * from './tax.js';
 export * from './categories.js';
