@@ -3250,8 +3250,11 @@ export type Database = {
           currency: string;
           customer_ban_days: number;
           default_tax_class_id: string | null;
+          delivery_fee_tax_class_id: string | null;
+          deposit_vat_timing: string;
           discount_caps: NonNullable<Json>;
           global_min_stock: number;
+          installment_markup_vat: string;
           legal_referral_days: NonNullable<Json>;
           organization_id: string;
           overdue_warning_interval_days: number;
@@ -3275,8 +3278,11 @@ export type Database = {
           currency?: string;
           customer_ban_days?: number;
           default_tax_class_id?: string | null;
+          delivery_fee_tax_class_id?: string | null;
+          deposit_vat_timing?: string;
           discount_caps?: NonNullable<Json>;
           global_min_stock?: number;
+          installment_markup_vat?: string;
           legal_referral_days?: NonNullable<Json>;
           organization_id: string;
           overdue_warning_interval_days?: number;
@@ -3300,8 +3306,11 @@ export type Database = {
           currency?: string;
           customer_ban_days?: number;
           default_tax_class_id?: string | null;
+          delivery_fee_tax_class_id?: string | null;
+          deposit_vat_timing?: string;
           discount_caps?: NonNullable<Json>;
           global_min_stock?: number;
+          installment_markup_vat?: string;
           legal_referral_days?: NonNullable<Json>;
           organization_id?: string;
           overdue_warning_interval_days?: number;
@@ -3320,6 +3329,13 @@ export type Database = {
           {
             foreignKeyName: 'org_settings_default_tax_fk';
             columns: ['default_tax_class_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'tax_classes';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'org_settings_delivery_fee_tax_fk';
+            columns: ['delivery_fee_tax_class_id', 'organization_id'];
             isOneToOne: false;
             referencedRelation: 'tax_classes';
             referencedColumns: ['id', 'organization_id'];
@@ -8036,6 +8052,16 @@ export type Database = {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
         Returns: Json;
       };
+      create_tax_class: {
+        Args: {
+          p_eta_subtype: string;
+          p_eta_tax_type: string;
+          p_kind: Database['public']['Enums']['tax_kind'];
+          p_name: string;
+          p_rate: number;
+        };
+        Returns: string;
+      };
       get_shop_settings: { Args: Record<PropertyKey, never>; Returns: Json };
       get_subscription_status: { Args: Record<PropertyKey, never>; Returns: Json };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
@@ -8110,6 +8136,7 @@ export type Database = {
         }[];
       };
       list_installment_policies: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_tax_classes: { Args: Record<PropertyKey, never>; Returns: Json };
       my_permissions: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -8196,6 +8223,7 @@ export type Database = {
           permission_key: string;
         }[];
       };
+      set_tax_class_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
       update_branch: {
         Args: {
           p_address: string | null;
@@ -8222,6 +8250,7 @@ export type Database = {
         Returns: Json;
       };
       update_org_settings: { Args: { p_changes: Json }; Returns: undefined };
+      update_tax_class: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
     };
     Enums: {
       adjustment_reason: 'damage' | 'loss' | 'found' | 'correction' | 'count' | 'other';

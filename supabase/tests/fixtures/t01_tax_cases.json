@@ -1,0 +1,606 @@
+{
+  "note": "T01 golden cases (D41). Run by packages/contracts/src/tax.test.ts and supabase/tests/t01_vat_test.sql; both engines must give exactly these results. Rounding follows D31 (half-up, per line); to be confirmed with the accountant.",
+  "documents": [
+    {
+      "id": "G01",
+      "title": "Price without VAT: 100 at 14%",
+      "input": {
+        "prices_include_vat": false,
+        "document_discount": "0.00",
+        "lines": [
+          {
+            "unit_price": "100.00",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "line_amount": "100.00",
+            "discount_amount": "0.00",
+            "tax_rate": "14",
+            "net": "100.00",
+            "tax": "14.00",
+            "gross": "114.00"
+          }
+        ],
+        "subtotal": "100.00",
+        "discount_total": "0.00",
+        "net_total": "100.00",
+        "tax_total": "14.00",
+        "total": "114.00"
+      }
+    },
+    {
+      "id": "G02",
+      "title": "Price with VAT: 114 at 14%",
+      "input": {
+        "prices_include_vat": true,
+        "document_discount": "0.00",
+        "lines": [
+          {
+            "unit_price": "114.00",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "line_amount": "114.00",
+            "discount_amount": "0.00",
+            "tax_rate": "14",
+            "net": "100.00",
+            "tax": "14.00",
+            "gross": "114.00"
+          }
+        ],
+        "subtotal": "114.00",
+        "discount_total": "0.00",
+        "net_total": "100.00",
+        "tax_total": "14.00",
+        "total": "114.00"
+      }
+    },
+    {
+      "id": "G03",
+      "title": "Price with VAT, net rounds: 100 at 14%",
+      "input": {
+        "prices_include_vat": true,
+        "document_discount": "0.00",
+        "lines": [
+          {
+            "unit_price": "100.00",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "line_amount": "100.00",
+            "discount_amount": "0.00",
+            "tax_rate": "14",
+            "net": "87.72",
+            "tax": "12.28",
+            "gross": "100.00"
+          }
+        ],
+        "subtotal": "100.00",
+        "discount_total": "0.00",
+        "net_total": "87.72",
+        "tax_total": "12.28",
+        "total": "100.00"
+      }
+    },
+    {
+      "id": "G04",
+      "title": "Half-up on the tax: net 0.25 at 14% (0.035)",
+      "input": {
+        "prices_include_vat": false,
+        "document_discount": "0.00",
+        "lines": [
+          {
+            "unit_price": "0.25",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "line_amount": "0.25",
+            "discount_amount": "0.00",
+            "tax_rate": "14",
+            "net": "0.25",
+            "tax": "0.04",
+            "gross": "0.29"
+          }
+        ],
+        "subtotal": "0.25",
+        "discount_total": "0.00",
+        "net_total": "0.25",
+        "tax_total": "0.04",
+        "total": "0.29"
+      }
+    },
+    {
+      "id": "G05",
+      "title": "Price with VAT, net rounds down: 10.00 at 14%",
+      "input": {
+        "prices_include_vat": true,
+        "document_discount": "0.00",
+        "lines": [
+          {
+            "unit_price": "10.00",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "line_amount": "10.00",
+            "discount_amount": "0.00",
+            "tax_rate": "14",
+            "net": "8.77",
+            "tax": "1.23",
+            "gross": "10.00"
+          }
+        ],
+        "subtotal": "10.00",
+        "discount_total": "0.00",
+        "net_total": "8.77",
+        "tax_total": "1.23",
+        "total": "10.00"
+      }
+    },
+    {
+      "id": "G06",
+      "title": "Quantity: 3 x 33.33 without VAT",
+      "input": {
+        "prices_include_vat": false,
+        "document_discount": "0.00",
+        "lines": [
+          {
+            "unit_price": "33.33",
+            "quantity": 3,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "line_amount": "99.99",
+            "discount_amount": "0.00",
+            "tax_rate": "14",
+            "net": "99.99",
+            "tax": "14.00",
+            "gross": "113.99"
+          }
+        ],
+        "subtotal": "99.99",
+        "discount_total": "0.00",
+        "net_total": "99.99",
+        "tax_total": "14.00",
+        "total": "113.99"
+      }
+    },
+    {
+      "id": "G07",
+      "title": "Tax is per line, not on the total: two lines of 0.25",
+      "input": {
+        "prices_include_vat": false,
+        "document_discount": "0.00",
+        "lines": [
+          {
+            "unit_price": "0.25",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          },
+          {
+            "unit_price": "0.25",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "line_amount": "0.25",
+            "discount_amount": "0.00",
+            "tax_rate": "14",
+            "net": "0.25",
+            "tax": "0.04",
+            "gross": "0.29"
+          },
+          {
+            "line_amount": "0.25",
+            "discount_amount": "0.00",
+            "tax_rate": "14",
+            "net": "0.25",
+            "tax": "0.04",
+            "gross": "0.29"
+          }
+        ],
+        "subtotal": "0.50",
+        "discount_total": "0.00",
+        "net_total": "0.50",
+        "tax_total": "0.08",
+        "total": "0.58"
+      }
+    },
+    {
+      "id": "G08",
+      "title": "Mixed classes: standard, zero-rated, exempt",
+      "input": {
+        "prices_include_vat": false,
+        "document_discount": "0.00",
+        "lines": [
+          {
+            "unit_price": "100.00",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          },
+          {
+            "unit_price": "50.00",
+            "quantity": 1,
+            "tax_rate": "0",
+            "line_discount": "0.00"
+          },
+          {
+            "unit_price": "30.00",
+            "quantity": 1,
+            "tax_rate": "0",
+            "line_discount": "0.00"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "line_amount": "100.00",
+            "discount_amount": "0.00",
+            "tax_rate": "14",
+            "net": "100.00",
+            "tax": "14.00",
+            "gross": "114.00"
+          },
+          {
+            "line_amount": "50.00",
+            "discount_amount": "0.00",
+            "tax_rate": "0",
+            "net": "50.00",
+            "tax": "0.00",
+            "gross": "50.00"
+          },
+          {
+            "line_amount": "30.00",
+            "discount_amount": "0.00",
+            "tax_rate": "0",
+            "net": "30.00",
+            "tax": "0.00",
+            "gross": "30.00"
+          }
+        ],
+        "subtotal": "180.00",
+        "discount_total": "0.00",
+        "net_total": "180.00",
+        "tax_total": "14.00",
+        "total": "194.00"
+      }
+    },
+    {
+      "id": "G09",
+      "title": "Line discount before tax: 200 less 20",
+      "input": {
+        "prices_include_vat": false,
+        "document_discount": "0.00",
+        "lines": [
+          {
+            "unit_price": "200.00",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "20.00"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "line_amount": "200.00",
+            "discount_amount": "20.00",
+            "tax_rate": "14",
+            "net": "180.00",
+            "tax": "25.20",
+            "gross": "205.20"
+          }
+        ],
+        "subtotal": "200.00",
+        "discount_total": "20.00",
+        "net_total": "180.00",
+        "tax_total": "25.20",
+        "total": "205.20"
+      }
+    },
+    {
+      "id": "G10",
+      "title": "Document discount spread by amount: 40 over 100 and 300",
+      "input": {
+        "prices_include_vat": false,
+        "document_discount": "40.00",
+        "lines": [
+          {
+            "unit_price": "100.00",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          },
+          {
+            "unit_price": "300.00",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "line_amount": "100.00",
+            "discount_amount": "10.00",
+            "tax_rate": "14",
+            "net": "90.00",
+            "tax": "12.60",
+            "gross": "102.60"
+          },
+          {
+            "line_amount": "300.00",
+            "discount_amount": "30.00",
+            "tax_rate": "14",
+            "net": "270.00",
+            "tax": "37.80",
+            "gross": "307.80"
+          }
+        ],
+        "subtotal": "400.00",
+        "discount_total": "40.00",
+        "net_total": "360.00",
+        "tax_total": "50.40",
+        "total": "410.40"
+      }
+    },
+    {
+      "id": "G11",
+      "title": "Document discount with leftover piasters: 10 over three lines, prices with VAT",
+      "input": {
+        "prices_include_vat": true,
+        "document_discount": "10.00",
+        "lines": [
+          {
+            "unit_price": "100.00",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          },
+          {
+            "unit_price": "100.00",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          },
+          {
+            "unit_price": "100.00",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "line_amount": "100.00",
+            "discount_amount": "3.34",
+            "tax_rate": "14",
+            "net": "84.79",
+            "tax": "11.87",
+            "gross": "96.66"
+          },
+          {
+            "line_amount": "100.00",
+            "discount_amount": "3.33",
+            "tax_rate": "14",
+            "net": "84.80",
+            "tax": "11.87",
+            "gross": "96.67"
+          },
+          {
+            "line_amount": "100.00",
+            "discount_amount": "3.33",
+            "tax_rate": "14",
+            "net": "84.80",
+            "tax": "11.87",
+            "gross": "96.67"
+          }
+        ],
+        "subtotal": "300.00",
+        "discount_total": "10.00",
+        "net_total": "254.39",
+        "tax_total": "35.61",
+        "total": "290.00"
+      }
+    },
+    {
+      "id": "G12",
+      "title": "Document discount over standard and zero-rated lines, prices with VAT",
+      "input": {
+        "prices_include_vat": true,
+        "document_discount": "21.40",
+        "lines": [
+          {
+            "unit_price": "114.00",
+            "quantity": 1,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          },
+          {
+            "unit_price": "100.00",
+            "quantity": 1,
+            "tax_rate": "0",
+            "line_discount": "0.00"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "line_amount": "114.00",
+            "discount_amount": "11.40",
+            "tax_rate": "14",
+            "net": "90.00",
+            "tax": "12.60",
+            "gross": "102.60"
+          },
+          {
+            "line_amount": "100.00",
+            "discount_amount": "10.00",
+            "tax_rate": "0",
+            "net": "90.00",
+            "tax": "0.00",
+            "gross": "90.00"
+          }
+        ],
+        "subtotal": "214.00",
+        "discount_total": "21.40",
+        "net_total": "180.00",
+        "tax_total": "12.60",
+        "total": "192.60"
+      }
+    },
+    {
+      "id": "G13",
+      "title": "Large values: 12 x 18999.99 with VAT",
+      "input": {
+        "prices_include_vat": true,
+        "document_discount": "0.00",
+        "lines": [
+          {
+            "unit_price": "18999.99",
+            "quantity": 12,
+            "tax_rate": "14",
+            "line_discount": "0.00"
+          }
+        ]
+      },
+      "expected": {
+        "lines": [
+          {
+            "line_amount": "227999.88",
+            "discount_amount": "0.00",
+            "tax_rate": "14",
+            "net": "199999.89",
+            "tax": "27999.99",
+            "gross": "227999.88"
+          }
+        ],
+        "subtotal": "227999.88",
+        "discount_total": "0.00",
+        "net_total": "199999.89",
+        "tax_total": "27999.99",
+        "total": "227999.88"
+      }
+    }
+  ],
+  "returns": [
+    {
+      "id": "R01",
+      "title": "Full return of a 2-unit line",
+      "original": {
+        "quantity": 2,
+        "net": "200.00",
+        "tax": "28.00",
+        "gross": "228.00"
+      },
+      "expected": [
+        {
+          "quantity": 2,
+          "net": "200.00",
+          "tax": "28.00",
+          "gross": "228.00"
+        }
+      ]
+    },
+    {
+      "id": "R02",
+      "title": "Three single returns of a 3-unit line add back exactly",
+      "original": {
+        "quantity": 3,
+        "net": "100.00",
+        "tax": "14.00",
+        "gross": "114.00"
+      },
+      "expected": [
+        {
+          "quantity": 1,
+          "net": "33.33",
+          "tax": "4.67",
+          "gross": "38.00"
+        },
+        {
+          "quantity": 1,
+          "net": "33.33",
+          "tax": "4.67",
+          "gross": "38.00"
+        },
+        {
+          "quantity": 1,
+          "net": "33.34",
+          "tax": "4.66",
+          "gross": "38.00"
+        }
+      ]
+    },
+    {
+      "id": "R03",
+      "title": "Partial then the rest",
+      "original": {
+        "quantity": 5,
+        "net": "87.72",
+        "tax": "12.28",
+        "gross": "100.00"
+      },
+      "expected": [
+        {
+          "quantity": 2,
+          "net": "35.09",
+          "tax": "4.91",
+          "gross": "40.00"
+        },
+        {
+          "quantity": 3,
+          "net": "52.63",
+          "tax": "7.37",
+          "gross": "60.00"
+        }
+      ]
+    }
+  ]
+}

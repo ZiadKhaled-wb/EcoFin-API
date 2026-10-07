@@ -48,7 +48,8 @@ INSERT INTO t.no_permission_ok VALUES
   ('get_subscription_status', 'read-only status for the session''s own shop'),
   ('require_module', 'read-only module check for the session''s own shop'),
   ('get_shop_settings', 'P03: read-only settings of the session''s own shop; any employee (POS needs receipt, VAT, discount rules)'),
-  ('list_installment_policies', 'P03: read-only; checks app.has_permission so an expired (read-only) shop can still read');
+  ('list_installment_policies', 'P03: read-only; checks app.has_permission so an expired (read-only) shop can still read'),
+  ('list_tax_classes', 'T01: read-only tax classes of the session''s own shop; any employee (POS, product forms)');
 
 -- ---------------------------------------------------------------- catalog helpers (plpgsql, so a
 -- privilege function never runs on rows of another kind or schema before the filter)

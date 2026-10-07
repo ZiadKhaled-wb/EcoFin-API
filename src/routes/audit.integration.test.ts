@@ -73,6 +73,18 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     }[];
   }
   const code = (res: request.Response) => ErrorResponse.parse(res.body).error.code;
+  const taxClassBody = () => ({
+    name: `F07 ${STAMP}-${ipCounter}`,
+    kind: 'standard',
+    rate: '5',
+    eta_tax_type: 'T1',
+    eta_subtype: 'V010',
+  });
+  async function newTaxClass(token: string) {
+    const { res } = await send('post', '/api/tax-classes', { token, body: taxClassBody() });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return (res.body as { id: string }).id;
+  }
 
   async function createEmployee(email: string, password: string) {
     const user = await service.auth.admin.createUser({ email, password, email_confirm: true });
@@ -121,6 +133,48 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     'POST /api/employees/:employeeId/invite': () => staffAudit('invite'),
     'POST /api/employees/:employeeId/password-reset': () => staffAudit('reset'),
     'POST /api/auth/password-reset/complete': () => staffAudit('complete'),
+    'POST /api/tax-classes': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', '/api/tax-classes', {
+          token: owner.accessToken,
+          body: taxClassBody(),
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'PATCH /api/tax-classes/:id': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newTaxClass(owner.accessToken);
+      return {
+        sent: await send('patch', `/api/tax-classes/${id}`, {
+          token: owner.accessToken,
+          body: { rate: '6' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/tax-classes/:id/archive': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newTaxClass(owner.accessToken);
+      return {
+        sent: await send('post', `/api/tax-classes/${id}/archive`, { token: owner.accessToken }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/tax-classes/:id/restore': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newTaxClass(owner.accessToken);
+      expect(
+        (await send('post', `/api/tax-classes/${id}/archive`, { token: owner.accessToken })).res
+          .status,
+      ).toBe(200);
+      return {
+        sent: await send('post', `/api/tax-classes/${id}/restore`, { token: owner.accessToken }),
+        org: SHOP_ONE,
+      };
+    },
     'PATCH /api/settings': async () => {
       const owner = await login('owner.one@ecotech.test');
       return {

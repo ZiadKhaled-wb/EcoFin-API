@@ -111,6 +111,10 @@ export const errorCodeHttpStatus = {
   POLICY_INVALID: 400,
   TAX_CLASS_NOT_FOUND: 404,
   DISCOUNT_ABOVE_CAP: 403,
+  // T01 VAT engine
+  TAX_CLASS_NAME_TAKEN: 409,
+  TAX_CLASS_IN_USE: 409,
+  TAX_DISCOUNT_TOO_LARGE: 400,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

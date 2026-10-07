@@ -780,6 +780,46 @@ export const openApiSpec = {
                 },
             },
         },
+        '/api/tax-classes': {
+            get: {
+                tags: ['Tax'],
+                summary: 'Tax classes of the shop (T01)',
+                description: 'Any employee. Archived classes last. Rates are decimal strings. Schema: TaxClassList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'TaxClassList', content: { 'application/json': { schema: { type: 'array', items: { type: 'object' } } } } } },
+            },
+            post: {
+                tags: ['Tax'],
+                summary: 'Create a tax class (catalog.manage)',
+                description: 'TaxClassCreateBody. Zero-rated and exempt classes are 0%. Errors: TAX_CLASS_NAME_TAKEN, NAME_REQUIRED, VALIDATION_FAILED.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 201: { description: 'TaxClass' }, 400: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/tax-classes/{id}': {
+            patch: {
+                tags: ['Tax'],
+                summary: 'Change a tax class (catalog.manage)',
+                description: 'TaxClassUpdateBody. A new rate applies to new documents only; issued lines keep their snapshot.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'TaxClass' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/tax-classes/{id}/archive': {
+            post: {
+                tags: ['Tax'],
+                summary: 'Archive a tax class (catalog.manage); /restore brings it back',
+                description: 'The default class, the delivery fee class and a class used by active products answer TAX_CLASS_IN_USE.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'TaxClass' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/settings/installment-policies': {
             get: {
                 tags: ['Settings'],

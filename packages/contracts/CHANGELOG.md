@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.0
+
+- T01 VAT engine: computeDocumentTax and returnLineTax (same results as the SQL engine on the golden cases), TaxClass schemas and bodies, TaxKind. ShopSettings gains installment_markup_vat, delivery_fee_tax_class_id, deposit_vat_timing. Error codes TAX_CLASS_NAME_TAKEN, TAX_CLASS_IN_USE, TAX_DISCOUNT_TOO_LARGE.
+
 ## 0.9.0
 
 - P03 shop settings: ShopSettings, ShopSettingsUpdateBody, InstallmentPolicy(Body/List), Percent, InstallmentFrequency (adds daily), receipt fields, discount caps, credit weights, legal referral days. Error codes SETTINGS_INVALID, POLICY_INVALID, TAX_CLASS_NOT_FOUND, DISCOUNT_ABOVE_CAP.

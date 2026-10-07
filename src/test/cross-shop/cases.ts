@@ -513,3 +513,73 @@ for (const [method, path, body] of [
       }
     },
   });
+
+// T01 tax classes: a foreign header is refused; another shop's class id is "not found".
+crossShopCase({
+  method: 'GET',
+  path: '/api/tax-classes',
+  name: 'tax classes list is scoped to the caller shop',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/tax-classes', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const b = await h.login(OWNER_B);
+    const own = await h.call('GET', '/api/tax-classes', { token: a.accessToken });
+    const theirs = await h.call('GET', '/api/tax-classes', { token: b.accessToken });
+    const ownIds = new Set((own.res.body as { id: string }[]).map((c) => c.id));
+    h.expect((theirs.res.body as { id: string }[]).some((c) => ownIds.has(c.id))).toBe(false);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/tax-classes',
+  name: 'tax class create refuses a foreign header and an injected tenant',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = {
+      name: 'Foreign',
+      kind: 'standard',
+      rate: '5',
+      eta_tax_type: 'T1',
+      eta_subtype: 'V010',
+    };
+    const foreign = await h.call('POST', '/api/tax-classes', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    const injected = await h.call('POST', '/api/tax-classes', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+  },
+});
+for (const [method, suffix, body] of [
+  ['PATCH', '', { rate: '10' }],
+  ['POST', '/archive', undefined],
+  ['POST', '/restore', undefined],
+] as const)
+  crossShopCase({
+    method,
+    path: '/api/tax-classes/:id' + suffix,
+    name: `${method} tax class ${suffix} refuses another shop's class`,
+    async run(h) {
+      const b = await h.login(OWNER_B);
+      const theirs = await h.call('GET', '/api/tax-classes', { token: b.accessToken });
+      const id = (theirs.res.body as { id: string }[])[0]!.id;
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call(method, `/api/tax-classes/${id}${suffix}`, {
+        token: a.accessToken,
+        ...(body === undefined ? {} : { body }),
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('TAX_CLASS_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    },
+  });
