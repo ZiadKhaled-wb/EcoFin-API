@@ -6,6 +6,8 @@
 
 ## How to run when the environment is fixed
 
+C01 plan: [docs/testing/plans/C01.md](plans/C01.md)
+
 All commands run from the repo root with the Windows network fix: prefix npm/npx commands with `export NODE_OPTIONS=--no-network-family-autoselection;` (Git Bash) or `$env:NODE_OPTIONS = "--no-network-family-autoselection"` (PowerShell).
 
 ### Prerequisites

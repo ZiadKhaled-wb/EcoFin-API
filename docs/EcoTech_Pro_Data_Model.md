@@ -506,6 +506,7 @@ Each one derives the org and employee from `auth.uid()`, checks a permission, lo
 |---|---|
 | Platform | `provision_organization` (service role), `accept_invite`, `update_org_settings`, `publish_installment_policy` (P03, plus `get_shop_settings`, `list_installment_policies`; helpers `app.current_installment_policy`, `app.discount_cap_pct`, `app.check_discount`) |
 | Tax (T01, D41) | `list_tax_classes`, `create_tax_class`, `update_tax_class`, `set_tax_class_archived`; engine `app.compute_document_tax` (called by every posting function), `app.return_line_tax` |
+| Categories (C01) | `list_categories`, `create_category`, `update_category`, `set_category_archived`; filter helper `app.category_with_children` |
 | Inventory | `post_stock_adjustment`, `post_stock_count`, `send_transfer`, `receive_transfer` |
 | Purchasing | `approve_purchase_invoice`, `reject_purchase_invoice`, `post_supplier_payment`, `post_purchase_return` |
 | Cash | `open_shift`, `close_shift`, `post_cash_transfer`, `settle_collector_wallet`, `post_expense`, `close_day` |
