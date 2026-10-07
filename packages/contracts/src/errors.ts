@@ -121,6 +121,12 @@ export const errorCodeHttpStatus = {
   CATEGORY_IN_USE: 409,
   CATEGORY_DEPTH: 400,
   CATEGORY_PARENT_ARCHIVED: 409,
+  // C02 products
+  PRODUCT_NOT_FOUND: 404,
+  PRODUCT_SKU_TAKEN: 409,
+  PRODUCT_BARCODE_TAKEN: 409,
+  PRODUCT_SERIAL_LOCKED: 409,
+  PRODUCT_CATEGORY_ARCHIVED: 409,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;
