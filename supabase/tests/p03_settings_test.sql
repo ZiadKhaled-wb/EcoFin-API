@@ -13,6 +13,16 @@ CREATE FUNCTION t.id(s text) RETURNS uuid LANGUAGE sql AS $$ SELECT id FROM t.id
 -- The app.* helpers have no grants; sales functions (definers) call them. These wrappers do the same.
 CREATE FUNCTION t.check_discount(p numeric) RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path='' AS $$ SELECT app.check_discount(p) $$;
 CREATE FUNCTION t.policy_version(o uuid) RETURNS integer LANGUAGE sql SECURITY DEFINER SET search_path='' AS $$ SELECT (app.current_installment_policy(o)).version $$;
+-- An imported contract (is_migrated: no sale or order needed) with real customer, branch and policy.
+CREATE FUNCTION t.ok_contract(o uuid) RETURNS public.creditor_model LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE v_customer uuid; v_creditor public.creditor_model;
+BEGIN
+    INSERT INTO public.customers(organization_id,full_name) VALUES(o,'P04 customer') RETURNING id INTO v_customer;
+    INSERT INTO public.contracts(organization_id,number,customer_id,branch_id,policy_id,creditor,cash_price,financed_amount,markup_pct,markup_amount,total_payable,installments_count,frequency,first_due_date,idempotency_key,is_migrated)
+    VALUES(o,'P04-OK-1',v_customer,(SELECT id FROM public.branches WHERE organization_id=o AND is_main),(SELECT id FROM public.installment_policies WHERE organization_id=o ORDER BY version DESC LIMIT 1),'in_house',100,100,0,0,100,1,'monthly',current_date,'p04-allowed-0001',true)
+    RETURNING creditor INTO v_creditor;
+    RETURN v_creditor;
+END $$;
 CREATE FUNCTION t.try_contract(o uuid) RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path='' AS $$
     INSERT INTO public.contracts(organization_id,number,customer_id,branch_id,policy_id,creditor,cash_price,financed_amount,markup_pct,markup_amount,total_payable,installments_count,frequency,first_due_date,idempotency_key)
     VALUES(o,'BLOCKED','a0300000-0000-4000-8000-000000000099','a0300000-0000-4000-8000-000000000099','a0300000-0000-4000-8000-000000000099','in_house',100,100,0,0,100,1,'monthly',current_date,'disabled-0001')
@@ -50,6 +60,7 @@ SELECT t.expect('profile updates legal fields and switch', (public.get_shop_prof
 SELECT t.error('settings endpoint cannot edit tax registration',$q$SELECT public.update_org_settings('{"tax_registration_no":"BYPASS"}')$q$,'SETTINGS_INVALID');
 SELECT t.error('disabled installments reject contract insert',format('SELECT t.try_contract(%L)',t.org('a')),'INSTALLMENTS_DISABLED');
 SELECT public.update_org_profile('{"installments_enabled":true}');
+SELECT t.expect('enabled installments accept a contract that stores the shop creditor', t.ok_contract(t.org('a'))=(SELECT creditor_model FROM public.organizations WHERE id=t.org('a')));
 SELECT t.expect('settings read back',(SELECT s->>'name'='Shop A2' AND s->>'address'='Cairo' AND s->>'purchase_approval_threshold'='25000.50' AND s#>>'{receipt_fields,customer}'='false' AND s#>>'{receipt_fields,logo}'='true' AND (s#>>'{legal_referral_days,weekly}')::int=49 AND (s#>>'{legal_referral_days,daily}')::int=35 AND s->>'default_tax_class_id'=:'tax_a_id' FROM public.get_shop_settings() s));
 SELECT public.update_org_settings(jsonb_build_object('name','Shop A2','address','Cairo'));
 SELECT t.error('unknown key',$q$SELECT public.update_org_settings('{"organization_id":"x"}')$q$,'SETTINGS_INVALID');

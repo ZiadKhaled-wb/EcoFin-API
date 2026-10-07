@@ -72,7 +72,10 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/categories/:id/restore',
       ]),
     );
-    expect(keys).toHaveLength(59);
+    expect(keys).toEqual(
+      expect.arrayContaining(['GET /api/settings/profile', 'PATCH /api/settings/profile']),
+    );
+    expect(keys).toHaveLength(61);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {
