@@ -272,6 +272,7 @@ INSERT INTO t.replay_tested VALUES ('public.admin_record_subscription_payment','
 INSERT INTO t.replay_tested VALUES
  ('public.post_stock_adjustment','i02_stock_adjustments_test.sql: same key -> same adjustment, stock unchanged'),
  ('public.create_stock_count','i02_stock_adjustments_test.sql: same key -> same count'),
+ ('public.create_stock_transfer','i03_transfers_test.sql: same key -> same transfer'),
  ('public.post_stock_count','i02_stock_adjustments_test.sql: same key -> same adjustment, nothing posted twice; key reused for another count -> IDEMPOTENCY_CONFLICT');
 CREATE TABLE t.key_functions AS
 SELECT n.nspname || '.' || p.proname AS fn

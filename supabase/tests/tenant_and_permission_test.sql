@@ -380,6 +380,18 @@ INSERT INTO t.denial VALUES
 INSERT INTO t.denial VALUES
  ('list_stock','list_stock','stock.view',$$SELECT public.list_stock()$$),
  ('list_stock_movements','list_stock_movements','stock.view',$$SELECT public.list_stock_movements((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' ORDER BY id LIMIT 1))$$);
+-- I03: a third branch of shop one as the destination (the set_branch_active case deactivates 012);
+-- the I02 adjustment case gave the product stock in 011 before these run.
+INSERT INTO public.branches(id,organization_id,code,name) VALUES('d2000000-0000-0000-0000-0000000001f3','d1000000-0000-0000-0000-000000000001','T3F','Transfer target');
+INSERT INTO t.denial VALUES
+ ('cancel_stock_transfer','stock_transfer_0_cancel','stock.transfer_send',$$SELECT public.cancel_stock_transfer((public.create_stock_transfer('d2000000-0000-0000-0000-000000000011','d2000000-0000-0000-0000-0000000001f3',NULL,jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND NOT is_serialized AND archived_at IS NULL ORDER BY id LIMIT 1),'quantity',1)),'denial-transfer-cancel')->>'id')::uuid)$$),
+ ('create_stock_transfer','stock_transfer_1_create','stock.transfer_send',$$SELECT public.create_stock_transfer('d2000000-0000-0000-0000-000000000011','d2000000-0000-0000-0000-0000000001f3',NULL,jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND NOT is_serialized AND archived_at IS NULL ORDER BY id LIMIT 1),'quantity',1)),'denial-transfer-1')$$),
+ ('update_stock_transfer','stock_transfer_2_update','stock.transfer_send',$$SELECT public.update_stock_transfer((SELECT id FROM public.stock_transfers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-transfer-1'),'Denial',jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND NOT is_serialized AND archived_at IS NULL ORDER BY id LIMIT 1),'quantity',1)))$$),
+ ('send_stock_transfer','stock_transfer_3_send','stock.transfer_send',$$SELECT public.send_stock_transfer((SELECT id FROM public.stock_transfers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-transfer-1'))$$),
+ ('receive_stock_transfer','stock_transfer_4_receive','stock.transfer_receive',$$SELECT public.receive_stock_transfer((SELECT id FROM public.stock_transfers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-transfer-1'),'[]')$$),
+ ('get_stock_transfer','stock_transfer_5_get','stock.view',$$SELECT public.get_stock_transfer((SELECT id FROM public.stock_transfers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-transfer-1'))$$),
+ ('list_stock_transfers','stock_transfer_6_list','stock.view',$$SELECT public.list_stock_transfers()$$),
+ ('list_transfer_destinations','stock_transfer_7_destinations','stock.transfer_send',$$SELECT public.list_transfer_destinations()$$);
 -- A local database may hold open counts from the integration tests; this file rolls back anyway.
 UPDATE public.stock_counts SET status = 'cancelled' WHERE organization_id = 'd1000000-0000-0000-0000-000000000001' AND status = 'open';
 -- I02: case names order the calls (a count is created, counted, posted with every other line counted

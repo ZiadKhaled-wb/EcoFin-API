@@ -17,6 +17,7 @@ import {
   StockCountLine,
   StockList,
   StockMovementList,
+  StockTransfer,
 } from '@ziadkhaled-wb/contracts';
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
@@ -259,12 +260,75 @@ describe.skipIf(!RUN)('I01 stock view against local stack', () => {
     ]);
   });
 
+  it('I03: a transfer is never counted in both branches or in neither', async () => {
+    const created = await post('/api/products', {
+      name_ar: 'شاشة I03',
+      sku: `I03-SC-${STAMP}`,
+      cash_price: '50.00',
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const product = Product.parse(created.body);
+    const found = await send(
+      'post',
+      '/api/stock/adjustments',
+      { branch_id: main, reason: 'found', lines: [{ product_id: product.id, quantity: 6 }] },
+      `i03-found-${STAMP}`,
+    );
+    expect(found.status, JSON.stringify(found.body)).toBe(201);
+    const branch = await post('/api/branches', { name: 'I03 second', code: 'I3B' });
+    expect(branch.status, JSON.stringify(branch.body)).toBe(201);
+    const second = branch.body.id as string;
+
+    const body = {
+      from_branch_id: main,
+      to_branch_id: second,
+      lines: [{ product_id: product.id, quantity: 6 }],
+    };
+    const draft = await send('post', '/api/stock/transfers', body, `i03-tr-${STAMP}`);
+    expect(draft.status, JSON.stringify(draft.body)).toBe(201);
+    const transfer = StockTransfer.parse(draft.body);
+    expect(transfer.status).toBe('draft');
+    const sent = await send('post', `/api/stock/transfers/${transfer.id}/send`, {});
+    expect(StockTransfer.parse(sent.body).status).toBe('sent');
+
+    const rows = async () =>
+      StockList.parse((await call(`/api/stock?search=I03-SC-${STAMP}`)).body).items;
+    const at = (items: Awaited<ReturnType<typeof rows>>, b: string) =>
+      items.find((r) => r.branch_id === b)!;
+    let items = await rows();
+    // In transit: gone from main, not yet on hand in second, shown as in transit there.
+    expect([
+      at(items, main).on_hand,
+      at(items, second).on_hand,
+      at(items, second).in_transit,
+    ]).toEqual([0, 0, 6]);
+
+    const lineId = StockTransfer.parse(sent.body).lines[0]!.id;
+    const received = await send('post', `/api/stock/transfers/${transfer.id}/receive`, {
+      lines: [{ line_id: lineId, qty_received: 5, reason: 'loss' }],
+    });
+    expect(received.status, JSON.stringify(received.body)).toBe(200);
+    const done = StockTransfer.parse(received.body);
+    expect(done.status).toBe('partially_received');
+    expect(done.adjustments.map((a) => a.reason)).toEqual(['loss']);
+    items = await rows();
+    expect([
+      at(items, main).on_hand,
+      at(items, second).on_hand,
+      at(items, second).in_transit,
+    ]).toEqual([0, 5, 0]);
+    const cancel = await send('post', `/api/stock/transfers/${transfer.id}/cancel`, {});
+    expect(cancel.status).toBe(409);
+    expect(ErrorResponse.parse(cancel.body).error.code).toBe('TRANSFER_ALREADY_SENT');
+  });
+
   it('refuses a role without stock.view', async () => {
     for (const path of [
       '/api/stock',
       `/api/stock/movements?product_id=${main}`,
       '/api/stock/adjustments',
       '/api/stock/counts',
+      '/api/stock/transfers',
     ]) {
       const res = await call(path, collector);
       expect(res.status).toBe(403);

@@ -11,6 +11,11 @@ import {
   StockCountScanBody,
   StockList,
   StockListQuery,
+  StockTransfer,
+  StockTransferCreateBody,
+  StockTransferListQuery,
+  StockTransferReceiveBody,
+  StockTransferUpdateBody,
   StockMovementList,
   StockMovementsQuery,
   StockRow,
@@ -256,5 +261,89 @@ describe('I02 adjustment and count contracts', () => {
     };
     expect(StockCountDetail.parse(detail)).toEqual(detail);
     expect(StockCountDetail.safeParse({ ...detail, status: 'draft' }).success).toBe(false);
+  });
+});
+
+describe('I03 transfer contracts', () => {
+  const OTHER = 'a0800000-0000-4000-8000-000000000002';
+  const body = {
+    from_branch_id: ID,
+    to_branch_id: OTHER,
+    lines: [{ product_id: ID, quantity: 2 }],
+  };
+
+  it('a draft: two different branches, positive quantities, no duplicates, strict', () => {
+    expect(StockTransferCreateBody.parse({ ...body, notes: '  ' })).toEqual({
+      ...body,
+      notes: undefined,
+    });
+    expect(StockTransferCreateBody.safeParse({ ...body, to_branch_id: ID }).success).toBe(false);
+    expect(
+      StockTransferCreateBody.safeParse({ ...body, lines: [{ product_id: ID, quantity: 0 }] })
+        .success,
+    ).toBe(false);
+    expect(
+      StockTransferCreateBody.safeParse({ ...body, lines: [...body.lines, ...body.lines] }).success,
+    ).toBe(false);
+    expect(StockTransferCreateBody.safeParse({ ...body, organization_id: ID }).success).toBe(false);
+    expect(StockTransferUpdateBody.safeParse({ lines: body.lines }).success).toBe(true);
+    expect(StockTransferUpdateBody.safeParse({ lines: [] }).success).toBe(false);
+  });
+
+  it('a receipt lists only the shortages, each with loss or damage', () => {
+    expect(StockTransferReceiveBody.parse({})).toEqual({ lines: [] });
+    const short = { line_id: ID, qty_received: 1, reason: 'loss' };
+    expect(StockTransferReceiveBody.safeParse({ lines: [short] }).success).toBe(true);
+    expect(
+      StockTransferReceiveBody.safeParse({ lines: [{ ...short, reason: 'gift' }] }).success,
+    ).toBe(false);
+    expect(StockTransferReceiveBody.safeParse({ lines: [short, short] }).success).toBe(false);
+    expect(
+      StockTransferReceiveBody.safeParse({ lines: [{ ...short, qty_received: -1 }] }).success,
+    ).toBe(false);
+  });
+
+  it('a transfer with lines and its receipt adjustments', () => {
+    const transfer = {
+      id: ID,
+      number: 'MAIN-TR-26-000001',
+      from_branch_id: ID,
+      to_branch_id: OTHER,
+      from_branch_name: 'Main',
+      to_branch_name: 'Second',
+      status: 'partially_received',
+      notes: null,
+      created_at: '2026-10-10T08:00:00.000Z',
+      created_by_name: 'Keeper',
+      sent_at: '2026-10-10T08:05:00.000Z',
+      sent_by_name: 'Keeper',
+      received_at: '2026-10-10T09:00:00.000Z',
+      received_by_name: 'Receiver',
+      lines_count: 1,
+      quantity_sent: 6,
+      quantity_received: 5,
+      adjustments: [{ id: ID, number: 'I2-SA-26-000001', reason: 'loss' }],
+      lines: [
+        {
+          id: ID,
+          product_id: ID,
+          name_ar: 'كابل',
+          name_en: null,
+          sku: 'CB',
+          is_serialized: false,
+          unit_id: null,
+          serial: null,
+          qty_sent: 6,
+          qty_received: 5,
+          discrepancy_reason: 'loss',
+        },
+      ],
+    };
+    expect(StockTransfer.parse(transfer)).toEqual(transfer);
+    expect(StockTransferListQuery.parse({ status: 'sent' })).toMatchObject({
+      status: 'sent',
+      page: 1,
+    });
+    expect(StockTransferListQuery.safeParse({ status: 'lost' }).success).toBe(false);
   });
 });

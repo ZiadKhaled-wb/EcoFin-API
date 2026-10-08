@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.0
+
+- I03 branch transfers: TransferStatus, TransferDiscrepancyReason, StockTransferLineBody, StockTransferCreateBody, StockTransferUpdateBody, StockTransferReceiveLine, StockTransferReceiveBody, StockTransferLine, StockTransferSummary, StockTransfer, StockTransferList, StockTransferListQuery (transfers carry from/to branch names), TransferDestination(List). Error codes STOCK_TRANSFER_NOT_FOUND (404), TRANSFER_SAME_BRANCH (400), TRANSFER_NOT_SENT, TRANSFER_ALREADY_SENT (409).
+
 ## 0.16.0
 
 - I02 stock adjustments and counts: AdjustmentReason, ManualAdjustmentReason, StockAdjustmentCreateBody (reason sets the direction, other needs a note), StockAdjustment(Line/Summary/List/ListQuery), StockDocumentIdParams, StockCountStatus, StockCount, StockCountList(Query), StockCountLine, StockCountDetail(Query), StockCountLineFilter, StockCountCreateBody, StockCountLinesBody, StockCountScanBody, StockCountPostBody. StockMovement gains source_number and reason. Error codes STOCK_ADJUSTMENT_NOT_FOUND, STOCK_COUNT_NOT_FOUND, UNIT_NOT_FOUND (404), STOCK_COUNT_OPEN, STOCK_COUNT_INCOMPLETE (409), STOCK_COUNT_PRODUCT_OUT_OF_SCOPE (422), ADJUSTMENT_SIGN_INVALID (400).

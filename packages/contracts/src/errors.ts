@@ -135,6 +135,11 @@ export const errorCodeHttpStatus = {
   STOCK_COUNT_INCOMPLETE: 409,
   STOCK_COUNT_PRODUCT_OUT_OF_SCOPE: 422,
   ADJUSTMENT_SIGN_INVALID: 400,
+  // I03 branch transfers
+  STOCK_TRANSFER_NOT_FOUND: 404,
+  TRANSFER_SAME_BRANCH: 400,
+  TRANSFER_NOT_SENT: 409,
+  TRANSFER_ALREADY_SENT: 409,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

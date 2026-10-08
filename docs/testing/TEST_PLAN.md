@@ -257,3 +257,7 @@ See [I01 plan](plans/I01.md). Covers the Done when (every number equals its ledg
 ## I02 — stock adjustments and counts (EC-48)
 
 See [I02 plan](plans/I02.md). Covers the Done when (a posted count makes the stock equal the counted numbers and leaves ledger entries with the reason) and the D48 rules.
+
+## I03 — branch transfers (EC-49)
+
+See [I03 plan](plans/I03.md). Covers the Done when (stock is never counted in both branches or in neither; in-transit stock shows in I01) and the D49 rules.
