@@ -380,6 +380,19 @@ INSERT INTO t.denial VALUES
 INSERT INTO t.denial VALUES
  ('list_stock','list_stock','stock.view',$$SELECT public.list_stock()$$),
  ('list_stock_movements','list_stock_movements','stock.view',$$SELECT public.list_stock_movements((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' ORDER BY id LIMIT 1))$$);
+-- I02: case names order the calls (a count is created, counted, posted with every other line counted
+-- as expected; cancel uses its own count).
+INSERT INTO t.denial VALUES
+ ('post_stock_adjustment','stock_adjustment_1_post','stock.adjust',$$SELECT public.post_stock_adjustment('d2000000-0000-0000-0000-000000000011','found',NULL,jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND NOT is_serialized AND archived_at IS NULL ORDER BY id LIMIT 1),'quantity',1)),'denial-adjustment-1')$$),
+ ('get_stock_adjustment','stock_adjustment_2_get','stock.view',$$SELECT public.get_stock_adjustment((SELECT id FROM public.stock_adjustments WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-adjustment-1'))$$),
+ ('list_stock_adjustments','stock_adjustment_3_list','stock.view',$$SELECT public.list_stock_adjustments()$$),
+ ('cancel_stock_count','stock_count_0_cancel','stock.count',$$SELECT public.cancel_stock_count((public.create_stock_count('d2000000-0000-0000-0000-000000000011',NULL,'denial-count-cancel')->>'id')::uuid)$$),
+ ('create_stock_count','stock_count_1_create','stock.count',$$SELECT public.create_stock_count('d2000000-0000-0000-0000-000000000011',NULL,'denial-count-main')$$),
+ ('save_stock_count_lines','stock_count_2_save','stock.count',$$SELECT public.save_stock_count_lines((SELECT id FROM public.stock_counts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-count-main'),jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND NOT is_serialized AND archived_at IS NULL ORDER BY id LIMIT 1),'counted_qty',1)))$$),
+ ('scan_stock_count','stock_count_3_scan','stock.count',$$SELECT public.scan_stock_count((SELECT id FROM public.stock_counts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-count-main'),(SELECT sku FROM public.products WHERE id=(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND NOT is_serialized AND archived_at IS NULL ORDER BY id LIMIT 1)))$$),
+ ('get_stock_count','stock_count_4_get','stock.count',$$SELECT public.get_stock_count((SELECT id FROM public.stock_counts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-count-main'))$$),
+ ('list_stock_counts','stock_count_5_list','stock.count',$$SELECT public.list_stock_counts()$$),
+ ('post_stock_count','stock_count_6_post','stock.count',$$SELECT public.save_stock_count_lines((SELECT id FROM public.stock_counts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-count-main'),(SELECT jsonb_agg(jsonb_build_object('product_id',l.product_id,'unit_id',l.unit_id,'counted_qty',l.expected_qty)) FROM public.stock_count_lines l WHERE l.count_id=(SELECT id FROM public.stock_counts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-count-main') AND l.counted_qty IS NULL)),public.post_stock_count((SELECT id FROM public.stock_counts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-count-main'),false,'denial-count-post')$$);
 INSERT INTO t.denial VALUES
  ('update_org_profile','update_org_profile','org.profile_manage',$$SELECT public.update_org_profile('{"legal_name":"Denied"}')$$);
 CREATE TABLE t.write_functions AS

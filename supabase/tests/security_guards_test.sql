@@ -57,7 +57,11 @@ INSERT INTO t.no_permission_ok VALUES
   ('lookup_product', 'C02: read-only POS lookup by barcode or SKU, active products of the session''s own shop; any employee'),
   ('list_product_units', 'C03: read-only serials of a product''s units in the caller''s accessible branches (labels); any employee'),
   ('list_stock', 'I01: read-only stock view; checks app.has_permission(stock.view) so an expired (read-only) shop can still read'),
-  ('list_stock_movements', 'I01: read-only movement drill-down; checks app.has_permission(stock.view) so an expired shop can still read');
+  ('list_stock_movements', 'I01: read-only movement drill-down; checks app.has_permission(stock.view) so an expired shop can still read'),
+  ('list_stock_adjustments', 'I02: read-only adjustments list; checks app.has_permission(stock.view) so an expired shop can still read'),
+  ('get_stock_adjustment', 'I02: read-only adjustment with lines; checks app.has_permission(stock.view) so an expired shop can still read'),
+  ('list_stock_counts', 'I02: read-only counts list; checks app.has_permission(stock.count) so an expired shop can still read'),
+  ('get_stock_count', 'I02: read-only count with its lines; checks app.has_permission(stock.count) so an expired shop can still read');
 
 -- ---------------------------------------------------------------- catalog helpers (plpgsql, so a
 -- privilege function never runs on rows of another kind or schema before the filter)
