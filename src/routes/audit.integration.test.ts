@@ -323,6 +323,17 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         status: 201,
       };
     },
+    'PUT /api/stock/min-levels/:id': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newProduct(owner.accessToken);
+      return {
+        sent: await send('put', `/api/stock/min-levels/${id}`, {
+          token: owner.accessToken,
+          body: { branch_id: BR1, min_stock: 4 },
+        }),
+        org: SHOP_ONE,
+      };
+    },
     // I05: an export reads but is audited (with the filters and the row count).
     'POST /api/stock/movements/export': async () => {
       const owner = await login('owner.one@ecotech.test');

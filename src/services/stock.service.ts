@@ -1,4 +1,6 @@
 import {
+  BranchMinLevels,
+  LowStockSummary,
   StockAdjustment,
   StockAdjustmentList,
   StockCount,
@@ -11,6 +13,8 @@ import {
   StockTransfer,
   StockTransferList,
   TransferDestinationList,
+  type BranchMinLevelBody,
+  type LowStockSummaryQuery,
   type StockAdjustmentCreateBody,
   type StockAdjustmentListQuery,
   type StockCountCreateBody,
@@ -94,6 +98,42 @@ export async function exportStockMovements(
   const { data, error } = await ctx.db.rpc('export_stock_movements', movementFilters(body));
   if (error) fail(error);
   return StockMovementExport.parse(data);
+}
+
+/** I06: the dashboard card: low products per branch and the biggest shortages. */
+export async function lowStockSummary(
+  ctx: RequestContext,
+  query: LowStockSummaryQuery,
+): Promise<LowStockSummary> {
+  const { data, error } = await ctx.db.rpc('low_stock_summary', { p_limit: query.limit });
+  if (error) fail(error);
+  return LowStockSummary.parse(data);
+}
+
+/** I06: a product's min level in each of the caller's branches and where it comes from. */
+export async function listBranchMinLevels(
+  ctx: RequestContext,
+  productId: string,
+): Promise<BranchMinLevels> {
+  const { data, error } = await ctx.db.rpc('list_branch_min_levels', { p_product_id: productId });
+  if (error) fail(error);
+  return BranchMinLevels.parse(data);
+}
+
+/** I06: sets a branch's min level for the product, or removes it (null); audited in SQL. */
+export async function setBranchMinLevel(
+  ctx: RequestContext,
+  productId: string,
+  body: BranchMinLevelBody,
+): Promise<BranchMinLevels> {
+  const { data, error } = await ctx.db.rpc('set_branch_min_level', {
+    p_product_id: productId,
+    p_branch_id: body.branch_id,
+    // Left out (SQL default NULL) removes the override.
+    ...(body.min_stock === null ? {} : { p_min_stock: body.min_stock }),
+  });
+  if (error) fail(error);
+  return BranchMinLevels.parse(data);
 }
 
 /** I02: posts an adjustment; the same idempotency key again returns the first one. */

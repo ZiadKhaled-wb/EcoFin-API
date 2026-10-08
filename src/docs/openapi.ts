@@ -982,6 +982,37 @@ export const openApiSpec = {
                 responses: { 200: { description: 'StockMovementList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/stock/low-summary': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'Low-stock dashboard card (stock.view)',
+                description: 'I06 (D52). Low products per active branch of the caller and the biggest shortages (min level − available), 1-20 items (limit, default 5). A product is low when available < its min level: the branch override, else the product min stock, else the shop global minimum; never for an archived product or a deactivated branch. Schema: LowStockSummaryQuery → LowStockSummary.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 20, default: 5 } },
+                ],
+                responses: { 200: { description: 'LowStockSummary' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/min-levels/{id}': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'A product min level in each of the caller branches (stock.view)',
+                description: 'I06 (D52). Per branch: the override (min_stock, null when none), the level in use and where it comes from (branch, product, shop). Errors: PRODUCT_NOT_FOUND. Schema: BranchMinLevels.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'BranchMinLevels' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            put: {
+                tags: ['Inventory'],
+                summary: 'Set or remove a branch min level for a product (catalog.manage)',
+                description: 'I06 (D52, user decision). min_stock 0-1 000 000 (0 = never low in that branch) or null to fall back to the product or shop level. Needs the branch (BRANCH_DENIED, BRANCH_INACTIVE); audited as stock.min_level_set with before and after. Errors: PRODUCT_NOT_FOUND, BRANCH_NOT_FOUND, VALIDATION_FAILED, SUBSCRIPTION_EXPIRED. Schema: BranchMinLevelBody → BranchMinLevels.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'BranchMinLevels' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/stock/movements/export': {
             post: {
                 tags: ['Inventory'],

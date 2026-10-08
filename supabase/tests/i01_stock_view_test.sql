@@ -139,9 +139,9 @@ SELECT t.expect('search by name, SKU prefix and exact barcode',
   (SELECT (j->>'total')::int=2 FROM (SELECT public.list_stock(p_search=>'تلفزيون') j) x)
   AND (SELECT (j->>'total')::int=2 FROM (SELECT public.list_stock(p_search=>'i01-cb') j) x)
   AND (SELECT (j->>'total')::int=2 FROM (SELECT public.list_stock(p_search=>(SELECT barcode FROM public.products WHERE id=t.id('cable')))j) x));
-SELECT t.expect('low only: available below the min level',
+SELECT t.expect('low only: available below the min level (I06: an archived product is never low)',
   (SELECT array_agg(r->>'sku'||'@'||(CASE WHEN r->>'branch_id'=t.id('main')::text THEN 'main' ELSE 'second' END) ORDER BY o)
-   =ARRAY['I01-TV@second','I01-CB@main','I01-CB@second','I01-EM@main','I01-EM@second','I01-OLD@main']
+   =ARRAY['I01-TV@second','I01-CB@main','I01-CB@second','I01-EM@main','I01-EM@second']
    FROM jsonb_array_elements(public.list_stock(p_low_only=>true)->'items') WITH ORDINALITY x(r,o)),
   (SELECT string_agg(r->>'sku'||':'||(r->>'available')||'<'||(r->>'min_level'),', ') FROM jsonb_array_elements(public.list_stock(p_low_only=>true,p_limit=>100)->'items') r));
 SELECT t.expect('paging keeps the full total',

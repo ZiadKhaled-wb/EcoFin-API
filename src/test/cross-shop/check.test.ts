@@ -88,6 +88,9 @@ describe('cross-shop route check (D19)', () => {
         'GET /api/stock',
         'GET /api/stock/movements',
         'POST /api/stock/movements/export',
+        'GET /api/stock/low-summary',
+        'GET /api/stock/min-levels/:id',
+        'PUT /api/stock/min-levels/:id',
         'GET /api/stock/adjustments',
         'GET /api/stock/adjustments/:id',
         'POST /api/stock/adjustments',
@@ -112,7 +115,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/units',
       ]),
     );
-    expect(keys).toHaveLength(94);
+    expect(keys).toHaveLength(97);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

@@ -23,6 +23,10 @@ import {
   STOCK_MOVEMENT_EXPORT_LIMIT,
   ExportTooLargeDetail,
   StockRow,
+  BranchMinLevelBody,
+  BranchMinLevels,
+  LowStockSummary,
+  LowStockSummaryQuery,
 } from './stock.js';
 
 const ID = 'a0800000-0000-4000-8000-000000000001';
@@ -42,6 +46,7 @@ const row = {
   damaged: 1,
   in_transit: 0,
   min_level: 3,
+  min_source: 'shop',
   low: false,
 };
 
@@ -398,5 +403,58 @@ describe('I03 transfer contracts', () => {
       page: 1,
     });
     expect(StockTransferListQuery.safeParse({ status: 'lost' }).success).toBe(false);
+  });
+});
+
+describe('I06 low-stock contracts', () => {
+  it('a stock row says where its min level comes from', () => {
+    expect(StockRow.parse({ ...row, min_source: 'branch' }).min_source).toBe('branch');
+    expect(StockRow.safeParse({ ...row, min_source: 'global' }).success).toBe(false);
+  });
+
+  it('a branch level: 0 to 1 000 000, or null to remove it', () => {
+    expect(BranchMinLevelBody.parse({ branch_id: ID, min_stock: 0 })).toEqual({
+      branch_id: ID,
+      min_stock: 0,
+    });
+    expect(BranchMinLevelBody.parse({ branch_id: ID, min_stock: null }).min_stock).toBeNull();
+    for (const min_stock of [-1, 1_000_001, 1.5, '3'])
+      expect(BranchMinLevelBody.safeParse({ branch_id: ID, min_stock }).success).toBe(false);
+    expect(BranchMinLevelBody.safeParse({ branch_id: ID }).success).toBe(false);
+    expect(
+      BranchMinLevelBody.safeParse({ branch_id: ID, min_stock: 1, organization_id: ID }).success,
+    ).toBe(false);
+    expect(
+      BranchMinLevels.parse({
+        product_id: ID,
+        product_min_stock: 0,
+        shop_min_stock: 3,
+        branches: [{ branch_id: ID, min_stock: null, min_level: 3, min_source: 'shop' }],
+      }).branches[0]!.min_source,
+    ).toBe('shop');
+  });
+
+  it('the dashboard summary: limit 1-20 (default 5), positive shortages', () => {
+    expect(LowStockSummaryQuery.parse({})).toEqual({ limit: 5 });
+    expect(LowStockSummaryQuery.parse({ limit: '20' })).toEqual({ limit: 20 });
+    expect(LowStockSummaryQuery.safeParse({ limit: '21' }).success).toBe(false);
+    const item = {
+      product_id: ID,
+      name_ar: 'كابل',
+      name_en: null,
+      sku: 'CB-1',
+      branch_id: ID,
+      available: 2,
+      min_level: 10,
+      shortage: 8,
+    };
+    expect(
+      LowStockSummary.parse({ total: 1, branches: [{ branch_id: ID, low: 1 }], items: [item] })
+        .items,
+    ).toHaveLength(1);
+    expect(
+      LowStockSummary.safeParse({ total: 1, branches: [], items: [{ ...item, shortage: 0 }] })
+        .success,
+    ).toBe(false);
   });
 });

@@ -354,6 +354,85 @@ crossShopCase({
     h.expect(injected.res.status).toBe(400);
   },
 });
+// I06 low stock: shop A aims at shop B's product and branch; the summary never shows shop B.
+crossShopCase({
+  method: 'GET',
+  path: '/api/stock/low-summary',
+  name: 'the low-stock summary refuses a foreign shop header and an org query key',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const own = await h.call('GET', '/api/stock/low-summary', { token: a.accessToken });
+    h.expect(own.res.status).toBe(200);
+    const branches = (own.res.body as { branches: { branch_id: string }[] }).branches;
+    h.expect(branches.some((b) => b.branch_id === SHOP_B_BR1)).toBe(false);
+    const header = await h.call('GET', '/api/stock/low-summary', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/stock/low-summary', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/stock/min-levels/:id',
+  name: "min levels refuse another shop's product",
+  async run(h) {
+    const product = await shopBProduct(h, 'minread');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', `/api/stock/min-levels/${product.id}`, {
+      token: a.accessToken,
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('PRODUCT_NOT_FOUND');
+    const header = await h.call('GET', `/api/stock/min-levels/${product.id}`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+  },
+});
+crossShopCase({
+  method: 'PUT',
+  path: '/api/stock/min-levels/:id',
+  name: "setting a min level refuses another shop's product and branch",
+  async run(h) {
+    const product = await shopBProduct(h, 'minset');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('PUT', `/api/stock/min-levels/${product.id}`, {
+      token: a.accessToken,
+      body: { branch_id: SHOP_A_BR1, min_stock: 5 },
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('PRODUCT_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, foreign.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    const own = await h.call('POST', '/api/products', {
+      token: a.accessToken,
+      body: { name_ar: 'Cross-shop min', sku: `XS-MIN-${Date.now()}`, cash_price: '10.00' },
+    });
+    h.expect(own.res.status).toBe(201);
+    const branch = await h.call(
+      'PUT',
+      `/api/stock/min-levels/${(own.res.body as { id: string }).id}`,
+      {
+        token: a.accessToken,
+        body: { branch_id: SHOP_B_BR1, min_stock: 5 },
+      },
+    );
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    const injected = await h.call('PUT', `/api/stock/min-levels/${product.id}`, {
+      token: a.accessToken,
+      body: { branch_id: SHOP_A_BR1, min_stock: 5, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+  },
+});
 // I02 adjustments and counts: shop B's documents are made the real way, then shop A aims at them.
 const key = (tag: string) => `xs-${tag}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 async function shopBAdjustment(h: CrossShopHarness) {
