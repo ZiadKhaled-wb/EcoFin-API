@@ -96,6 +96,17 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     sku: `F07-${STAMP}-${ipCounter}`,
     cash_price: '10.00',
   });
+  /** An open count of a new, empty category in BR1 (the request itself is returned). */
+  async function newCount(token: string) {
+    const category = await newCategory(token);
+    const sent = await send('post', '/api/stock/counts', {
+      token,
+      key: `f07-count-${STAMP}-${ipCounter}`,
+      body: { branch_id: BR1, category_id: category },
+    });
+    expect(sent.res.status, JSON.stringify(sent.res.body)).toBe(201);
+    return sent;
+  }
   async function newProduct(token: string) {
     const { res } = await send('post', '/api/products', { token, body: productBody() });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
@@ -274,6 +285,48 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       ).toBe(200);
       return {
         sent: await send('post', `/api/products/${id}/restore`, { token: owner.accessToken }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/stock/adjustments': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newProduct(owner.accessToken);
+      return {
+        sent: await send('post', '/api/stock/adjustments', {
+          token: owner.accessToken,
+          key: `f07-adj-${STAMP}-${ipCounter}`,
+          body: { branch_id: BR1, reason: 'found', lines: [{ product_id: id, quantity: 1 }] },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    // Counts use a fresh (empty) category each, so they never overlap an open count of the branch.
+    'POST /api/stock/counts': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await newCount(owner.accessToken),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'POST /api/stock/counts/:id/post': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = (await newCount(owner.accessToken)).res.body.id as string;
+      return {
+        sent: await send('post', `/api/stock/counts/${id}/post`, {
+          token: owner.accessToken,
+          key: `f07-post-${STAMP}-${ipCounter}`,
+          body: {},
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/stock/counts/:id/cancel': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = (await newCount(owner.accessToken)).res.body.id as string;
+      return {
+        sent: await send('post', `/api/stock/counts/${id}/cancel`, { token: owner.accessToken }),
         org: SHOP_ONE,
       };
     },

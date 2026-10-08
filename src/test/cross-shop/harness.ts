@@ -49,6 +49,8 @@ export interface CallOptions {
   body?: object;
   /** Raw query string without '?', e.g. `orgId=...`. */
   query?: string;
+  /** Sent as the Idempotency-Key header (stock and money writes). */
+  idempotencyKey?: string;
 }
 
 export interface CrossShopHarness {
@@ -62,7 +64,7 @@ export interface CrossShopHarness {
   call(method: string, path: string, options?: CallOptions): Promise<{ res: Response; ip: string }>;
   /** error.code of a contract error response. */
   code(res: Response): string;
-  /** audit_log rows in `orgId` written from `ip` (service-role read, test only). */
+  /** audit_log rows in `orgId` written from `ip` since its latest call (service-role read, test only). */
   auditRowsFrom(orgId: string, ip: string): Promise<number>;
   /** An employee's permission overrides, branch ids and active flag (service-role read, test only). */
   accessOf(

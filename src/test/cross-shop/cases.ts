@@ -313,6 +313,185 @@ crossShopCase({
     h.expect(header.res.status).toBe(403);
   },
 });
+// I02 adjustments and counts: shop B's documents are made the real way, then shop A aims at them.
+const key = (tag: string) => `xs-${tag}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+async function shopBAdjustment(h: CrossShopHarness) {
+  const product = await shopBProduct(h, 'adjustment');
+  const posted = await h.call('POST', '/api/stock/adjustments', {
+    token: product.token,
+    idempotencyKey: key('adj'),
+    body: {
+      branch_id: SHOP_B_BR1,
+      reason: 'found',
+      lines: [{ product_id: product.id, quantity: 1 }],
+    },
+  });
+  h.expect(posted.res.status, JSON.stringify(posted.res.body)).toBe(201);
+  return (posted.res.body as { id: string }).id;
+}
+/** An open count of shop B over a new, empty category (never overlaps another open count). */
+async function shopBCount(h: CrossShopHarness) {
+  const b = await h.login(OWNER_B);
+  const category = await h.call('POST', '/api/categories', {
+    token: b.accessToken,
+    body: { name: key('count') },
+  });
+  h.expect(category.res.status, JSON.stringify(category.res.body)).toBe(201);
+  const created = await h.call('POST', '/api/stock/counts', {
+    token: b.accessToken,
+    idempotencyKey: key('count'),
+    body: { branch_id: SHOP_B_BR1, category_id: (category.res.body as { id: string }).id },
+  });
+  h.expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+  return (created.res.body as { id: string }).id;
+}
+
+for (const path of ['/api/stock/adjustments', '/api/stock/counts']) {
+  crossShopCase({
+    method: 'GET',
+    path,
+    name: `${path} refuses a foreign header, another shop's branch and an org query key`,
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call('GET', path, { token: a.accessToken, orgId: SHOP_B });
+      h.expect(foreign.res.status).toBe(403);
+      const branch = await h.call('GET', path, {
+        token: a.accessToken,
+        query: 'branch_id=' + SHOP_B_BR1,
+      });
+      h.expect(branch.res.status).toBe(404);
+      h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+      const injected = await h.call('GET', path, {
+        token: a.accessToken,
+        query: 'organization_id=' + SHOP_B,
+      });
+      h.expect(injected.res.status).toBe(400);
+    },
+  });
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/stock/adjustments/:id',
+  name: "adjustment read rejects another shop's id",
+  async run(h) {
+    const id = await shopBAdjustment(h);
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', `/api/stock/adjustments/${id}`, { token: a.accessToken });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('STOCK_ADJUSTMENT_NOT_FOUND');
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/stock/adjustments',
+  name: "adjustment refuses another shop's product, branch, header and an org body key",
+  async run(h) {
+    const product = await shopBProduct(h, 'adjust-post');
+    const a = await h.login(OWNER_A);
+    const body = {
+      branch_id: SHOP_A_BR1,
+      reason: 'found',
+      lines: [{ product_id: product.id, quantity: 1 }],
+    };
+    const foreignProduct = await h.call('POST', '/api/stock/adjustments', {
+      token: a.accessToken,
+      idempotencyKey: key('a1'),
+      body,
+    });
+    h.expect(foreignProduct.res.status).toBe(404);
+    h.expect(h.code(foreignProduct.res)).toBe('PRODUCT_NOT_FOUND');
+    const foreignBranch = await h.call('POST', '/api/stock/adjustments', {
+      token: a.accessToken,
+      idempotencyKey: key('a2'),
+      body: { ...body, branch_id: SHOP_B_BR1 },
+    });
+    h.expect(foreignBranch.res.status).toBe(404);
+    h.expect(h.code(foreignBranch.res)).toBe('BRANCH_NOT_FOUND');
+    const header = await h.call('POST', '/api/stock/adjustments', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      idempotencyKey: key('a3'),
+      body: { ...body, branch_id: SHOP_B_BR1 },
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/stock/adjustments', {
+      token: a.accessToken,
+      idempotencyKey: key('a4'),
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    for (const sent of [foreignProduct, foreignBranch, header, injected]) {
+      h.expect(await h.auditRowsFrom(SHOP_B, sent.ip)).toBe(0);
+    }
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/stock/counts',
+  name: "count create refuses another shop's branch, header and an org body key",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const branch = await h.call('POST', '/api/stock/counts', {
+      token: a.accessToken,
+      idempotencyKey: key('c1'),
+      body: { branch_id: SHOP_B_BR1 },
+    });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    const header = await h.call('POST', '/api/stock/counts', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      idempotencyKey: key('c2'),
+      body: { branch_id: SHOP_B_BR1 },
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/stock/counts', {
+      token: a.accessToken,
+      idempotencyKey: key('c3'),
+      body: { branch_id: SHOP_A_BR1, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, branch.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, header.ip)).toBe(0);
+  },
+});
+
+for (const [method, suffix, body] of [
+  ['GET', '', undefined],
+  ['PUT', '/lines', 'lines'],
+  ['POST', '/scan', { code: 'XS-SCAN' }],
+  ['POST', '/post', {}],
+  ['POST', '/cancel', undefined],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/stock/counts/:id${suffix}`,
+    name: `${method} count${suffix} rejects another shop's id and leaves it open`,
+    async run(h) {
+      const id = await shopBCount(h);
+      const product = body === 'lines' ? await shopBProduct(h, 'count-line') : undefined;
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call(method, `/api/stock/counts/${id}${suffix}`, {
+        token: a.accessToken,
+        idempotencyKey: key('cx'),
+        ...(body === 'lines'
+          ? { body: { lines: [{ product_id: product?.id, counted_qty: 1 }] } }
+          : body
+            ? { body }
+            : {}),
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('STOCK_COUNT_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+      const b = await h.login(OWNER_B);
+      const still = await h.call('GET', `/api/stock/counts/${id}`, { token: b.accessToken });
+      h.expect((still.res.body as { status: string }).status).toBe('open');
+    },
+  });
+}
 crossShopCase({
   method: 'GET',
   path: '/api/auth/me',

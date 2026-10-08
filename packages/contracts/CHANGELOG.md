@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.16.0
+
+- I02 stock adjustments and counts: AdjustmentReason, ManualAdjustmentReason, StockAdjustmentCreateBody (reason sets the direction, other needs a note), StockAdjustment(Line/Summary/List/ListQuery), StockDocumentIdParams, StockCountStatus, StockCount, StockCountList(Query), StockCountLine, StockCountDetail(Query), StockCountLineFilter, StockCountCreateBody, StockCountLinesBody, StockCountScanBody, StockCountPostBody. StockMovement gains source_number and reason. Error codes STOCK_ADJUSTMENT_NOT_FOUND, STOCK_COUNT_NOT_FOUND, UNIT_NOT_FOUND (404), STOCK_COUNT_OPEN, STOCK_COUNT_INCOMPLETE (409), STOCK_COUNT_PRODUCT_OUT_OF_SCOPE (422), ADJUSTMENT_SIGN_INVALID (400).
+
 ## 0.15.0
 
 - I01 stock view: StockRow, StockList, StockListQuery (branch, category, subcategories, search, low_only); StockMovement, StockMovementList, StockMovementsQuery (drill-down), StockMovementType, StockState.

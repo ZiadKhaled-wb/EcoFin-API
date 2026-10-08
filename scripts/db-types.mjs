@@ -62,6 +62,13 @@ generated = generated.replace(
 generated = generated.replace(/"?list_employees"?:\s*\{[\s\S]*?Returns:/, (signature) =>
   signature.replace(/("?p_role"?:\s*Database[^,;\n}]+)/, '$1 | null'),
 );
+// I02: a count without a category covers the whole branch; an adjustment note is optional.
+generated = generated.replace(/"?create_stock_count"?:\s*\{[\s\S]*?Returns:/, (signature) =>
+  signature.replace(/("?p_category_id"?:\s*string)(?! \| null)/g, '$1 | null'),
+);
+generated = generated.replace(/"?post_stock_adjustment"?:\s*\{[\s\S]*?Returns:/, (signature) =>
+  signature.replace(/("?p_note"?:\s*string)(?! \| null)/g, '$1 | null'),
+);
 const formatted = await prettier.format(`${HEADER}\n${generated}`, { ...config, filepath: target });
 writeFileSync(target, formatted);
 console.log(`db:types: wrote ${target}`);

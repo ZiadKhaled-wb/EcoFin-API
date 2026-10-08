@@ -2,6 +2,8 @@
 // shop's product gets ledger movements; GET /api/stock shows on hand / available / low that equal
 // the ledger, filters by branch and low stock, and the drill-down lists the movements with the
 // running balance. A collector (no stock.view) is refused.
+// I02: an adjustment through the API (idempotent), a count (scan, save, post) after which the
+// stock equals the counted numbers, and the ledger rows carry the adjustment's number and reason.
 import { beforeAll, describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -9,6 +11,10 @@ import {
   AuthLoginResponse,
   ErrorResponse,
   Product,
+  StockAdjustment,
+  StockCount,
+  StockCountDetail,
+  StockCountLine,
   StockList,
   StockMovementList,
 } from '@ziadkhaled-wb/contracts';
@@ -43,6 +49,15 @@ describe.skipIf(!RUN)('I01 stock view against local stack', () => {
       .set('Authorization', 'Bearer ' + owner)
       .set('x-org-id', org)
       .send(body);
+  const send = (method: 'post' | 'put', path: string, body: object, key?: string) => {
+    const r = request(app)
+      [method](path)
+      .set('X-Forwarded-For', `198.18.14.${(++ip % 250) + 1}`)
+      .set('Authorization', 'Bearer ' + owner)
+      .set('x-org-id', org);
+    if (key) r.set('Idempotency-Key', key);
+    return r.send(body);
+  };
   async function login(email: string) {
     const r = await request(app)
       .post('/api/auth/login')
@@ -163,8 +178,94 @@ describe.skipIf(!RUN)('I01 stock view against local stack', () => {
     expect((await call('/api/stock/movements')).status).toBe(400);
   });
 
+  it('I02: adjusts, counts and posts so the stock equals the counted numbers', async () => {
+    const created = await post('/api/products', {
+      name_ar: 'كابل I02',
+      sku: `I02-CB-${STAMP}`,
+      cash_price: '5.00',
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const product = Product.parse(created.body);
+    const body = {
+      branch_id: main,
+      reason: 'found',
+      lines: [{ product_id: product.id, quantity: 7 }],
+    };
+
+    expect((await send('post', '/api/stock/adjustments', body)).status).toBe(400); // no key
+    const adj = await send('post', '/api/stock/adjustments', body, `i02-adj-${STAMP}`);
+    expect(adj.status, JSON.stringify(adj.body)).toBe(201);
+    const adjustment = StockAdjustment.parse(adj.body);
+    const again = await send('post', '/api/stock/adjustments', body, `i02-adj-${STAMP}`);
+    expect(StockAdjustment.parse(again.body).id).toBe(adjustment.id);
+    const wrongWay = await send(
+      'post',
+      '/api/stock/adjustments',
+      { ...body, reason: 'damage' },
+      `i02-adj-bad-${STAMP}`,
+    );
+    expect(wrongWay.status).toBe(400);
+    const tooMuch = await send(
+      'post',
+      '/api/stock/adjustments',
+      { ...body, reason: 'loss', lines: [{ product_id: product.id, quantity: -8 }] },
+      `i02-adj-oos-${STAMP}`,
+    );
+    expect(tooMuch.status).toBe(409);
+    expect(ErrorResponse.parse(tooMuch.body).error.code).toBe('OUT_OF_STOCK');
+
+    const opened = await send(
+      'post',
+      '/api/stock/counts',
+      { branch_id: main },
+      `i02-count-${STAMP}`,
+    );
+    expect(opened.status, JSON.stringify(opened.body)).toBe(201);
+    const count = StockCount.parse(opened.body);
+    const scanned = await send('post', `/api/stock/counts/${count.id}/scan`, {
+      code: product.barcode,
+    });
+    expect(StockCountLine.parse(scanned.body)).toMatchObject({ counted_qty: 1, expected_qty: 7 });
+    const saved = await send('put', `/api/stock/counts/${count.id}/lines`, {
+      lines: [{ product_id: product.id, counted_qty: 5 }],
+    });
+    expect(StockCount.parse(saved.body)).toMatchObject({ lines_counted: 1, quantity_out: 2 });
+    const different = StockCountDetail.parse(
+      (await call(`/api/stock/counts/${count.id}?filter=different`)).body,
+    );
+    expect(different.lines.items.map((l) => [l.product_id, l.difference])).toEqual([
+      [product.id, -2],
+    ]);
+    const posted = await send(
+      'post',
+      `/api/stock/counts/${count.id}/post`,
+      { uncounted_as_zero: true },
+      `i02-post-${STAMP}`,
+    );
+    expect(posted.status, JSON.stringify(posted.body)).toBe(200);
+    expect(StockCount.parse(posted.body)).toMatchObject({ status: 'posted' });
+
+    // Done when: the stock equals the counted number and the ledger rows carry the reason.
+    const stock = StockList.parse(
+      (await call(`/api/stock?branch_id=${main}&search=I02-CB-${STAMP}`)).body,
+    );
+    expect(stock.items[0]?.on_hand).toBe(5);
+    const moves = StockMovementList.parse(
+      (await call(`/api/stock/movements?product_id=${product.id}`)).body,
+    );
+    expect(moves.items.map((m) => [m.quantity, m.reason, m.source_number])).toEqual([
+      [-2, 'count', StockCount.parse(posted.body).adjustment_number],
+      [7, 'found', adjustment.number],
+    ]);
+  });
+
   it('refuses a role without stock.view', async () => {
-    for (const path of ['/api/stock', `/api/stock/movements?product_id=${main}`]) {
+    for (const path of [
+      '/api/stock',
+      `/api/stock/movements?product_id=${main}`,
+      '/api/stock/adjustments',
+      '/api/stock/counts',
+    ]) {
       const res = await call(path, collector);
       expect(res.status).toBe(403);
       expect(ErrorResponse.parse(res.body).error.code).toBe('PERMISSION_DENIED');

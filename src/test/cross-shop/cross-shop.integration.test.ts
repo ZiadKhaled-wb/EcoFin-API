@@ -16,8 +16,11 @@ const RUN = process.env['RUN_INTEGRATION'] === '1';
 const SEED_PASSWORD = 'LocalDev-Only-2026!';
 
 // 203.0.113.0/24 (TEST-NET-3); auth.integration.test.ts uses 198.51.100.0/24.
+// Only 250 addresses, and the local database keeps audit rows between runs, so an address is
+// reused: auditRowsFrom counts only rows written since that address's latest call.
 let ipCounter = 0;
 const nextIp = () => `203.0.113.${(ipCounter++ % 250) + 1}`;
+const ipSince = new Map<string, string>();
 
 describe.skipIf(!RUN)('F05 cross-shop suite against local Supabase', () => {
   let h: CrossShopHarness;
@@ -31,6 +34,8 @@ describe.skipIf(!RUN)('F05 cross-shop suite against local Supabase', () => {
 
     const call: CrossShopHarness['call'] = async (method, path, options = {}) => {
       const ip = nextIp();
+      // One second of slack for the database clock.
+      ipSince.set(ip, new Date(Date.now() - 1000).toISOString());
       const url = options.query ? `${path}?${options.query}` : path;
       const agent = request(app);
       let r =
@@ -46,6 +51,7 @@ describe.skipIf(!RUN)('F05 cross-shop suite against local Supabase', () => {
       r = r.set('X-Forwarded-For', ip);
       if (options.token) r = r.set('Authorization', `Bearer ${options.token}`);
       if (options.orgId) r = r.set('x-org-id', options.orgId);
+      if (options.idempotencyKey) r = r.set('Idempotency-Key', options.idempotencyKey);
       const res = options.body ? await r.send(options.body) : await r;
       return { res, ip };
     };
@@ -66,7 +72,8 @@ describe.skipIf(!RUN)('F05 cross-shop suite against local Supabase', () => {
           .from('audit_log')
           .select('id', { count: 'exact', head: true })
           .eq('organization_id', orgId)
-          .eq('ip', ip);
+          .eq('ip', ip)
+          .gte('created_at', ipSince.get(ip) ?? new Date(0).toISOString());
         if (error) throw new Error(error.message);
         return count ?? 0;
       },
