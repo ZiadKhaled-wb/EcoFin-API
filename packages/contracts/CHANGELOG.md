@@ -2,7 +2,7 @@
 
 ## 0.17.0
 
-- I03 branch transfers: TransferStatus, TransferDiscrepancyReason, StockTransferLineBody, StockTransferCreateBody, StockTransferUpdateBody, StockTransferReceiveLine, StockTransferReceiveBody, StockTransferLine, StockTransferSummary, StockTransfer, StockTransferList, StockTransferListQuery. Error codes STOCK_TRANSFER_NOT_FOUND (404), TRANSFER_SAME_BRANCH (400), TRANSFER_NOT_SENT, TRANSFER_ALREADY_SENT (409).
+- I03 branch transfers: TransferStatus, TransferDiscrepancyReason, StockTransferLineBody, StockTransferCreateBody, StockTransferUpdateBody, StockTransferReceiveLine, StockTransferReceiveBody, StockTransferLine, StockTransferSummary, StockTransfer, StockTransferList, StockTransferListQuery (transfers carry from/to branch names), TransferDestination(List). Error codes STOCK_TRANSFER_NOT_FOUND (404), TRANSFER_SAME_BRANCH (400), TRANSFER_NOT_SENT, TRANSFER_ALREADY_SENT (409).
 
 ## 0.16.0
 

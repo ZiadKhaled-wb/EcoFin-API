@@ -438,6 +438,9 @@ export const StockTransferSummary = z.object({
   number: z.string(),
   from_branch_id: Uuid,
   to_branch_id: Uuid,
+  /** Names too: a receiver may not work in the source branch. */
+  from_branch_name: z.string(),
+  to_branch_name: z.string(),
   status: TransferStatus,
   notes: z.string().nullable(),
   created_at: IsoTimestamp,
@@ -463,3 +466,9 @@ export const StockTransferListQuery = PaginationQuery.extend({
   status: TransferStatus.optional(),
 }).strict();
 export type StockTransferListQuery = z.infer<typeof StockTransferListQuery>;
+
+/** `GET /api/stock/transfers/destinations` (stock.transfer_send): every active branch of the shop. */
+export const TransferDestination = z.object({ id: Uuid, code: z.string(), name: z.string() });
+export type TransferDestination = z.infer<typeof TransferDestination>;
+export const TransferDestinationList = z.array(TransferDestination);
+export type TransferDestinationList = z.infer<typeof TransferDestinationList>;

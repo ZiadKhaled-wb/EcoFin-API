@@ -9,6 +9,7 @@ import {
   StockMovementList,
   StockTransfer,
   StockTransferList,
+  TransferDestinationList,
   type StockAdjustmentCreateBody,
   type StockAdjustmentListQuery,
   type StockCountCreateBody,
@@ -309,4 +310,13 @@ export async function getTransfer(ctx: RequestContext, id: string): Promise<Stoc
   const { data, error } = await ctx.db.rpc('get_stock_transfer', { p_id: id });
   if (error) fail(error);
   return StockTransfer.parse(data);
+}
+
+/** Where a transfer can go: every active branch of the shop (stock.transfer_send). */
+export async function listTransferDestinations(
+  ctx: RequestContext,
+): Promise<TransferDestinationList> {
+  const { data, error } = await ctx.db.rpc('list_transfer_destinations');
+  if (error) fail(error);
+  return TransferDestinationList.parse(data);
 }

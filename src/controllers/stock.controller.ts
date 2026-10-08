@@ -102,3 +102,6 @@ export async function receiveTransfer(req: Request, res: Response) {
     await service.receiveTransfer(getCtx(req), idOf(req), req.body as StockTransferReceiveBody),
   );
 }
+export async function transferDestinations(req: Request, res: Response) {
+  res.json(await service.listTransferDestinations(getCtx(req)));
+}

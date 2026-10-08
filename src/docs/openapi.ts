@@ -1142,6 +1142,16 @@ export const openApiSpec = {
                 responses: { 201: { description: 'StockTransfer' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/stock/transfers/destinations': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'Where a transfer can go (stock.transfer_send)',
+                description: 'I03. Every active branch of the shop (id, code, name), also those the sender doesn\'t work in. Schema: TransferDestinationList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'TransferDestinationList' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/stock/transfers/{id}': {
             get: {
                 tags: ['Inventory'],

@@ -390,7 +390,8 @@ INSERT INTO t.denial VALUES
  ('send_stock_transfer','stock_transfer_3_send','stock.transfer_send',$$SELECT public.send_stock_transfer((SELECT id FROM public.stock_transfers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-transfer-1'))$$),
  ('receive_stock_transfer','stock_transfer_4_receive','stock.transfer_receive',$$SELECT public.receive_stock_transfer((SELECT id FROM public.stock_transfers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-transfer-1'),'[]')$$),
  ('get_stock_transfer','stock_transfer_5_get','stock.view',$$SELECT public.get_stock_transfer((SELECT id FROM public.stock_transfers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-transfer-1'))$$),
- ('list_stock_transfers','stock_transfer_6_list','stock.view',$$SELECT public.list_stock_transfers()$$);
+ ('list_stock_transfers','stock_transfer_6_list','stock.view',$$SELECT public.list_stock_transfers()$$),
+ ('list_transfer_destinations','stock_transfer_7_destinations','stock.transfer_send',$$SELECT public.list_transfer_destinations()$$);
 -- A local database may hold open counts from the integration tests; this file rolls back anyway.
 UPDATE public.stock_counts SET status = 'cancelled' WHERE organization_id = 'd1000000-0000-0000-0000-000000000001' AND status = 'open';
 -- I02: case names order the calls (a count is created, counted, posted with every other line counted

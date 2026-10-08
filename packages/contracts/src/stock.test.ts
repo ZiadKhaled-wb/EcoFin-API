@@ -309,6 +309,8 @@ describe('I03 transfer contracts', () => {
       number: 'MAIN-TR-26-000001',
       from_branch_id: ID,
       to_branch_id: OTHER,
+      from_branch_name: 'Main',
+      to_branch_name: 'Second',
       status: 'partially_received',
       notes: null,
       created_at: '2026-10-10T08:00:00.000Z',

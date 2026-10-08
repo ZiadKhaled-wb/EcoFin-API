@@ -70,6 +70,10 @@ SELECT public.create_stock_transfer(t.id('main'),t.id('second'),' Weekly refill 
 SELECT t.expect('a draft: TR number in the source branch, notes trimmed, nothing moved',
   :'d1'::jsonb->>'number' ~ '^MAIN-TR-\d{2}-000001$' AND :'d1'::jsonb->>'status'='draft' AND :'d1'::jsonb->>'notes'='Weekly refill'
   AND (:'d1'::jsonb->>'quantity_sent')::int=4 AND t.level('cable','main')=10 AND t.transit('cable','second')=0, :'d1'::text);
+SELECT t.expect('branch names travel with the transfer (a receiver may not work in the source)',
+  :'d1'::jsonb->>'from_branch_name'='Main' AND :'d1'::jsonb->>'to_branch_name'='Second');
+SELECT t.expect('destinations: every active branch of the shop, also those the sender doesn''t work in',
+  (SELECT array_agg(r->>'name' ORDER BY o)=ARRAY['Main','Second'] FROM jsonb_array_elements(public.list_transfer_destinations()) WITH ORDINALITY x(r,o)));
 SELECT t.expect('same key again: the same transfer',
   (public.create_stock_transfer(t.id('main'),t.id('second'),NULL,'[{"product_id":"00000000-0000-0000-0000-000000000000","quantity":1}]','i03-transfer-1')->>'id')=(:'d1'::jsonb->>'id'));
 SELECT t.error('to the same branch',format($q$SELECT public.create_stock_transfer(%L,%L,NULL,'[{"product_id":"%s","quantity":1}]','i03-bad-1')$q$,t.id('main'),t.id('main'),t.id('cable')),'TRANSFER_SAME_BRANCH');
@@ -207,6 +211,7 @@ SELECT t.expect('the receiver (second only) sees the transfers coming in',
   (public.list_stock_transfers()->>'total')::int=4 AND (public.list_stock_transfers(t.id('second'))->>'total')::int=4);
 SELECT t.error('the receiver can''t send from main',format('SELECT public.send_stock_transfer(%L)',:'d1'::jsonb->>'id'),'BRANCH_DENIED');
 SELECT t.as_user('a3000000-0000-0000-8000-000000000005',t.org('a'));
+SELECT t.error('a cashier gets no destinations',$q$SELECT public.list_transfer_destinations()$q$,'PERMISSION_DENIED');
 SELECT t.error('a cashier can''t create a transfer',format($q$SELECT public.create_stock_transfer(%L,%L,NULL,'[{"product_id":"%s","quantity":1}]','i03-cashier')$q$,t.id('main'),t.id('second'),t.id('cable')),'PERMISSION_DENIED');
 SELECT t.error('a cashier can''t receive',format($q$SELECT public.receive_stock_transfer(%L,'[]')$q$,:'d1'::jsonb->>'id'),'PERMISSION_DENIED');
 SELECT t.expect('a cashier (stock.view) reads the transfers of their branch',(public.get_stock_transfer((:'d1'::jsonb->>'id')::uuid)->>'number')=(:'d1'::jsonb->>'number'));
@@ -214,7 +219,9 @@ SELECT t.as_user('a3000000-0000-0000-8000-000000000002',t.org('b'));
 SELECT t.error('shop b: get shop a''s transfer',format('SELECT public.get_stock_transfer(%L)',:'d1'::jsonb->>'id'),'STOCK_TRANSFER_NOT_FOUND');
 SELECT t.error('shop b: send shop a''s transfer',format('SELECT public.send_stock_transfer(%L)',:'d3'::jsonb->>'id'),'STOCK_TRANSFER_NOT_FOUND');
 SELECT t.error('shop b: receive shop a''s transfer',format($q$SELECT public.receive_stock_transfer(%L,'[]')$q$,:'d1'::jsonb->>'id'),'STOCK_TRANSFER_NOT_FOUND');
-SELECT t.expect('shop b: nothing listed',(public.list_stock_transfers()->>'total')::int=0);
+SELECT t.expect('shop b: nothing listed, and only its own branches as destinations',
+  (public.list_stock_transfers()->>'total')::int=0
+  AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(public.list_transfer_destinations()) r WHERE (r->>'id')::uuid IN (t.id('main'),t.id('second'))));
 RESET ROLE;
 SELECT t.expect('audit: created 4, updated 1, sent 2, received 2, cancelled 1',
   (SELECT count(*) FROM public.audit_log WHERE organization_id=t.org('a') AND action='stock_transfer.created')=4
@@ -234,7 +241,7 @@ UPDATE public.organizations SET subscription_end=current_date+30 WHERE id=t.org(
 SELECT t.expect('no anon grants; authenticated may execute the public functions',
   NOT EXISTS (SELECT 1 FROM pg_proc p WHERE p.pronamespace='public'::regnamespace
               AND p.proname IN ('create_stock_transfer','update_stock_transfer','send_stock_transfer','receive_stock_transfer',
-                                'cancel_stock_transfer','list_stock_transfers','get_stock_transfer')
+                                'cancel_stock_transfer','list_stock_transfers','get_stock_transfer','list_transfer_destinations')
               AND (has_function_privilege('anon',p.oid,'EXECUTE') OR NOT has_function_privilege('authenticated',p.oid,'EXECUTE')))
   AND NOT has_function_privilege('authenticated','app.set_transfer_lines(uuid,uuid,public.stock_transfers,jsonb)','EXECUTE'));
 

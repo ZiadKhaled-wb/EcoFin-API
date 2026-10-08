@@ -141,6 +141,15 @@ router.post(
   validate({ body: StockTransferCreateBody }),
   asyncHandler(controller.createTransfer),
 );
+// Before /transfers/:id, so "destinations" is never read as an id.
+router.get(
+  '/transfers/destinations',
+  authenticate,
+  loadRequestContext,
+  requirePermission('stock.transfer_send'),
+  validate(),
+  asyncHandler(controller.transferDestinations),
+);
 router.get(
   '/transfers/:id',
   authenticate,

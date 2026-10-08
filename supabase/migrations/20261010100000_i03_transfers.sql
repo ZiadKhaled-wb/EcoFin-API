@@ -91,6 +91,8 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
 AS $$
     SELECT jsonb_build_object(
         'id', t.id, 'number', t.number, 'from_branch_id', t.from_branch_id, 'to_branch_id', t.to_branch_id,
+        -- Names too: a receiver may not work in the source branch (GET /api/branches lists theirs only).
+        'from_branch_name', fb.name, 'to_branch_name', tb.name,
         'status', t.status, 'notes', t.notes, 'created_at', t.created_at, 'created_by_name', ce.full_name,
         'sent_at', t.sent_at, 'sent_by_name', se.full_name,
         'received_at', t.received_at, 'received_by_name', re.full_name,
@@ -119,6 +121,8 @@ AS $$
             WHERE l.organization_id = p_org AND l.transfer_id = t.id), '[]'::jsonb))
            ELSE '{}'::jsonb END
     FROM public.stock_transfers t
+    JOIN public.branches fb ON fb.id = t.from_branch_id AND fb.organization_id = t.organization_id
+    JOIN public.branches tb ON tb.id = t.to_branch_id AND tb.organization_id = t.organization_id
     LEFT JOIN public.employees ce ON ce.id = t.created_by AND ce.organization_id = t.organization_id
     LEFT JOIN public.employees se ON se.id = t.sent_by AND se.organization_id = t.organization_id
     LEFT JOIN public.employees re ON re.id = t.received_by AND re.organization_id = t.organization_id
@@ -519,6 +523,26 @@ BEGIN
 END;
 $$;
 
+-- Where a transfer can go: every active branch of the shop (id, code, name). A sender works in
+-- some branches only, but sends to any of them. Names only; stock.transfer_send.
+CREATE FUNCTION public.list_transfer_destinations()
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = ''
+AS $$
+BEGIN
+    IF app.current_employee_id() IS NULL THEN
+        RAISE EXCEPTION 'NOT_AN_EMPLOYEE' USING ERRCODE = '42501';
+    END IF;
+    IF NOT app.has_permission('stock.transfer_send') THEN
+        RAISE EXCEPTION 'PERMISSION_DENIED: stock.transfer_send' USING ERRCODE = '42501';
+    END IF;
+    RETURN COALESCE((
+        SELECT jsonb_agg(jsonb_build_object('id', b.id, 'code', b.code, 'name', b.name)
+                         ORDER BY b.is_main DESC, b.code)
+        FROM public.branches b
+        WHERE b.organization_id = app.current_org_id() AND b.is_active AND b.archived_at IS NULL), '[]'::jsonb);
+END;
+$$;
+
 -- 5. Grants ----------------------------------------------------------------------------------------
 
 REVOKE ALL ON FUNCTION app.stock_transfer_json(uuid, uuid, boolean),
@@ -528,10 +552,12 @@ REVOKE ALL ON FUNCTION app.stock_transfer_json(uuid, uuid, boolean),
 REVOKE ALL ON FUNCTION public.create_stock_transfer(uuid, uuid, text, jsonb, text),
     public.update_stock_transfer(uuid, text, jsonb), public.send_stock_transfer(uuid),
     public.receive_stock_transfer(uuid, jsonb), public.cancel_stock_transfer(uuid),
-    public.list_stock_transfers(uuid, text, integer, integer), public.get_stock_transfer(uuid)
+    public.list_stock_transfers(uuid, text, integer, integer), public.get_stock_transfer(uuid),
+    public.list_transfer_destinations()
     FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_stock_transfer(uuid, uuid, text, jsonb, text),
     public.update_stock_transfer(uuid, text, jsonb), public.send_stock_transfer(uuid),
     public.receive_stock_transfer(uuid, jsonb), public.cancel_stock_transfer(uuid),
-    public.list_stock_transfers(uuid, text, integer, integer), public.get_stock_transfer(uuid)
+    public.list_stock_transfers(uuid, text, integer, integer), public.get_stock_transfer(uuid),
+    public.list_transfer_destinations()
     TO authenticated;

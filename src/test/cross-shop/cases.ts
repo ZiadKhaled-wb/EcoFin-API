@@ -556,6 +556,23 @@ crossShopCase({
 });
 
 crossShopCase({
+  method: 'GET',
+  path: '/api/stock/transfers/destinations',
+  name: "transfer destinations list only the caller's shop and refuse a foreign header",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const own = await h.call('GET', '/api/stock/transfers/destinations', { token: a.accessToken });
+    h.expect(own.res.status).toBe(200);
+    h.expect((own.res.body as { id: string }[]).some((b) => b.id === SHOP_B_BR1)).toBe(false);
+    const foreign = await h.call('GET', '/api/stock/transfers/destinations', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+  },
+});
+
+crossShopCase({
   method: 'POST',
   path: '/api/stock/transfers',
   name: "transfer create refuses another shop's branches and products, a foreign header and an org key",

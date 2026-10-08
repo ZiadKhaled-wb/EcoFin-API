@@ -8213,6 +8213,7 @@ export type Database = {
         Returns: Json;
       };
       list_tax_classes: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_transfer_destinations: { Args: Record<PropertyKey, never>; Returns: Json };
       lookup_product: { Args: { p_code: string }; Returns: Json };
       my_permissions: {
         Args: Record<PropertyKey, never>;
