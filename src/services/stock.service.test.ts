@@ -5,6 +5,9 @@ import type { RequestContext } from '../middleware/requestContext';
 import {
   cancelCount,
   createCount,
+  createTransfer,
+  receiveTransfer,
+  transferAction,
   getCount,
   listAdjustments,
   listStock,
@@ -262,5 +265,68 @@ describe('I02 stock service', () => {
     ).rejects.toMatchObject({ code: 'STOCK_COUNT_INCOMPLETE', statusCode: 409 });
     db.queue({ data: null, error: { message: 'DOCUMENT_FINAL: the count is posted' } });
     await expect(cancelCount(ctx, ID)).rejects.toMatchObject({ code: 'DOCUMENT_FINAL' });
+  });
+});
+
+describe('I03 transfer service', () => {
+  const OTHER = 'a0800000-0000-4000-8000-000000000002';
+  const transfer = {
+    id: ID,
+    number: 'MAIN-TR-26-000001',
+    from_branch_id: ID,
+    to_branch_id: OTHER,
+    status: 'draft',
+    notes: null,
+    created_at: '2026-10-10T08:00:00+00:00',
+    created_by_name: 'Keeper',
+    sent_at: null,
+    sent_by_name: null,
+    received_at: null,
+    received_by_name: null,
+    lines_count: 1,
+    quantity_sent: 2,
+    quantity_received: null,
+    adjustments: [],
+    lines: [],
+  };
+
+  it('creates a draft with null notes, unit ids and the key', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: transfer, error: null });
+    await createTransfer(
+      ctx,
+      { from_branch_id: ID, to_branch_id: OTHER, lines: [{ product_id: ID, quantity: 2 }] },
+      'key-12345678',
+    );
+    expect(db.rpc).toHaveBeenCalledWith('create_stock_transfer', {
+      p_from_branch_id: ID,
+      p_to_branch_id: OTHER,
+      p_notes: null,
+      p_lines: [{ product_id: ID, unit_id: null, quantity: 2 }],
+      p_idempotency_key: 'key-12345678',
+    });
+  });
+
+  it('send, cancel and receive call their functions; errors keep their codes', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: { ...transfer, status: 'sent' }, error: null });
+    expect((await transferAction(ctx, ID, 'send')).status).toBe('sent');
+    expect(db.rpc).toHaveBeenLastCalledWith('send_stock_transfer', { p_id: ID });
+    db.queue({ data: null, error: { message: 'TRANSFER_ALREADY_SENT' } });
+    await expect(transferAction(ctx, ID, 'cancel')).rejects.toMatchObject({
+      code: 'TRANSFER_ALREADY_SENT',
+      statusCode: 409,
+    });
+    const lines = [{ line_id: ID, qty_received: 1, reason: 'loss' as const }];
+    db.queue({ data: { ...transfer, status: 'partially_received' }, error: null });
+    await receiveTransfer(ctx, ID, { lines });
+    expect(db.rpc).toHaveBeenLastCalledWith('receive_stock_transfer', { p_id: ID, p_lines: lines });
+    db.queue({
+      data: null,
+      error: { message: 'UNIT_NOT_AVAILABLE: a unit is no longer in stock' },
+    });
+    await expect(transferAction(ctx, ID, 'send')).rejects.toMatchObject({
+      code: 'UNIT_NOT_AVAILABLE',
+    });
   });
 });

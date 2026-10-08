@@ -11,6 +11,10 @@ import {
   StockDocumentIdParams,
   StockListQuery,
   StockMovementsQuery,
+  StockTransferCreateBody,
+  StockTransferListQuery,
+  StockTransferReceiveBody,
+  StockTransferUpdateBody,
 } from '@ziadkhaled-wb/contracts';
 import { authenticate } from '../middleware/auth';
 import { loadRequestContext } from '../middleware/requestContext';
@@ -118,5 +122,63 @@ router.post(
   requirePermission('stock.count'),
   validate({ params: StockDocumentIdParams }),
   asyncHandler(controller.cancelCount),
+);
+// I03 transfers: read with stock.view; draft, send and cancel with stock.transfer_send (source
+// branch), receive with stock.transfer_receive (destination branch); branches are checked in SQL.
+router.get(
+  '/transfers',
+  authenticate,
+  loadRequestContext,
+  requirePermission('stock.view'),
+  validate({ query: StockTransferListQuery }),
+  asyncHandler(controller.listTransfers),
+);
+router.post(
+  '/transfers',
+  authenticate,
+  loadRequestContext,
+  requirePermission('stock.transfer_send'),
+  validate({ body: StockTransferCreateBody }),
+  asyncHandler(controller.createTransfer),
+);
+router.get(
+  '/transfers/:id',
+  authenticate,
+  loadRequestContext,
+  requirePermission('stock.view'),
+  validate({ params: StockDocumentIdParams }),
+  asyncHandler(controller.getTransfer),
+);
+router.put(
+  '/transfers/:id',
+  authenticate,
+  loadRequestContext,
+  requirePermission('stock.transfer_send'),
+  validate({ params: StockDocumentIdParams, body: StockTransferUpdateBody }),
+  asyncHandler(controller.updateTransfer),
+);
+router.post(
+  '/transfers/:id/send',
+  authenticate,
+  loadRequestContext,
+  requirePermission('stock.transfer_send'),
+  validate({ params: StockDocumentIdParams }),
+  asyncHandler(controller.sendTransfer),
+);
+router.post(
+  '/transfers/:id/receive',
+  authenticate,
+  loadRequestContext,
+  requirePermission('stock.transfer_receive'),
+  validate({ params: StockDocumentIdParams, body: StockTransferReceiveBody }),
+  asyncHandler(controller.receiveTransfer),
+);
+router.post(
+  '/transfers/:id/cancel',
+  authenticate,
+  loadRequestContext,
+  requirePermission('stock.transfer_send'),
+  validate({ params: StockDocumentIdParams }),
+  asyncHandler(controller.cancelTransfer),
 );
 export default router;

@@ -8024,6 +8024,7 @@ export type Database = {
       auth_record_password_change: { Args: Record<PropertyKey, never>; Returns: undefined };
       branch_deactivation_check: { Args: { p_branch_id: string }; Returns: Json };
       cancel_stock_count: { Args: { p_count_id: string }; Returns: Json };
+      cancel_stock_transfer: { Args: { p_id: string }; Returns: Json };
       consume_password_reset: { Args: { p_token_hash: string }; Returns: string };
       create_branch: {
         Args: {
@@ -8062,6 +8063,16 @@ export type Database = {
         Args: { p_branch_id: string; p_category_id: string | null; p_idempotency_key: string };
         Returns: Json;
       };
+      create_stock_transfer: {
+        Args: {
+          p_from_branch_id: string;
+          p_idempotency_key: string;
+          p_lines: Json;
+          p_notes: string | null;
+          p_to_branch_id: string;
+        };
+        Returns: Json;
+      };
       create_tax_class: {
         Args: {
           p_eta_subtype: string;
@@ -8086,6 +8097,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      get_stock_transfer: { Args: { p_id: string }; Returns: Json };
       get_subscription_status: { Args: Record<PropertyKey, never>; Returns: Json };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
       jobs_claim: {
@@ -8196,6 +8208,10 @@ export type Database = {
         Args: { p_branch_id?: string; p_limit?: number; p_offset?: number; p_product_id: string };
         Returns: Json;
       };
+      list_stock_transfers: {
+        Args: { p_branch_id?: string; p_limit?: number; p_offset?: number; p_status?: string };
+        Returns: Json;
+      };
       list_tax_classes: { Args: Record<PropertyKey, never>; Returns: Json };
       lookup_product: { Args: { p_code: string }; Returns: Json };
       my_permissions: {
@@ -8231,6 +8247,7 @@ export type Database = {
         Returns: Json;
       };
       publish_installment_policy: { Args: { p_policy: Json }; Returns: string };
+      receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
       register_file: {
         Args: {
           p_entity_id: string | null;
@@ -8252,6 +8269,7 @@ export type Database = {
       };
       save_stock_count_lines: { Args: { p_count_id: string; p_lines: Json }; Returns: Json };
       scan_stock_count: { Args: { p_code: string; p_count_id: string }; Returns: Json };
+      send_stock_transfer: { Args: { p_id: string }; Returns: Json };
       session_context: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -8336,6 +8354,10 @@ export type Database = {
       update_org_settings: { Args: { p_changes: Json }; Returns: undefined };
       update_org_settings_p03: { Args: { p_changes: Json }; Returns: undefined };
       update_product: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
+      update_stock_transfer: {
+        Args: { p_id: string; p_lines: Json; p_notes: string | null };
+        Returns: Json;
+      };
       update_tax_class: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
     };
     Enums: {

@@ -97,9 +97,16 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/stock/counts/:id/scan',
         'POST /api/stock/counts/:id/post',
         'POST /api/stock/counts/:id/cancel',
+        'GET /api/stock/transfers',
+        'POST /api/stock/transfers',
+        'GET /api/stock/transfers/:id',
+        'PUT /api/stock/transfers/:id',
+        'POST /api/stock/transfers/:id/send',
+        'POST /api/stock/transfers/:id/receive',
+        'POST /api/stock/transfers/:id/cancel',
       ]),
     );
-    expect(keys).toHaveLength(81);
+    expect(keys).toHaveLength(88);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

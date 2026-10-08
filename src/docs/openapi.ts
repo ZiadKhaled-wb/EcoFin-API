@@ -1115,6 +1115,96 @@ export const openApiSpec = {
                 responses: { 200: { description: 'StockCount' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/stock/transfers': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'Branch transfers, newest first (stock.view)',
+                description: 'I03. Transfers out of or into the caller\'s branches; branch_id = either side; status filter. Schema: StockTransferListQuery -> StockTransferList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['draft', 'sent', 'received', 'partially_received', 'cancelled'] } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'StockTransferList' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Inventory'],
+                summary: 'Create a draft transfer (stock.transfer_send)',
+                description: 'I03. From a branch the caller works in to another branch of the shop; serialized lines need a unit in stock in the source. Nothing moves until it is sent. The same Idempotency-Key returns the same draft. Schema: StockTransferCreateBody -> StockTransfer.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'StockTransfer' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/transfers/{id}': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'A transfer with its lines (stock.view)',
+                description: 'I03. Schema: StockTransfer.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'StockTransfer' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            put: {
+                tags: ['Inventory'],
+                summary: 'Replace the notes and lines of a draft (stock.transfer_send)',
+                description: 'I03. Only while draft (TRANSFER_ALREADY_SENT after). Schema: StockTransferUpdateBody -> StockTransfer.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'StockTransfer' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/transfers/{id}/send': {
+            post: {
+                tags: ['Inventory'],
+                summary: 'Send a draft (stock.transfer_send)',
+                description: 'I03. Every line leaves the source branch (transfer_out) and shows as in transit at the destination; units are re-checked under a lock (a reserved unit stays). Sending again answers the transfer. Schema: StockTransfer.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'StockTransfer' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/transfers/{id}/receive': {
+            post: {
+                tags: ['Inventory'],
+                summary: 'Receive a sent transfer at the destination (stock.transfer_receive)',
+                description: 'I03. Lists only the lines that did not arrive in full (qty_received, reason loss or damage). Everything sent enters the destination, then each shortage is written off there by an adjustment with its reason. Receiving again answers the transfer. Schema: StockTransferReceiveBody -> StockTransfer.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'StockTransfer' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/transfers/{id}/cancel': {
+            post: {
+                tags: ['Inventory'],
+                summary: 'Cancel a draft (stock.transfer_send)',
+                description: 'I03. Nothing moved, nothing moves. A sent transfer can\'t be cancelled (TRANSFER_ALREADY_SENT). Schema: StockTransfer.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'StockTransfer' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/settings/profile': {
             get: {
                 tags: ['Settings'],

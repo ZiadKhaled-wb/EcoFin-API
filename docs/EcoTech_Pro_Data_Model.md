@@ -511,7 +511,7 @@ Each one derives the org and employee from `auth.uid()`, checks a permission, lo
 | Products (C02, D44) | `list_products`, `get_product`, `lookup_product` (POS, active only), `create_product`, `update_product` (+ `catalog.price_change` for prices), `set_product_archived`; helpers `app.ean13_check_digit`, `app.generate_product_barcode`, `app.product_apply`, `app.product_json`; C03 labels read `list_product_units` (D45) |
 | Stock view (I01, D47) | `list_stock` (on hand, reserved, available, damaged, in transit, low), `list_stock_movements` (drill-down, running balance; I05 extends it) |
 | Adjustments and counts (I02, D48) | `post_stock_adjustment`, `list_stock_adjustments`, `get_stock_adjustment`, `create_stock_count`, `save_stock_count_lines`, `scan_stock_count`, `post_stock_count`, `cancel_stock_count`, `list_stock_counts`, `get_stock_count`; helpers `app.post_adjustment_lines`, `app.stock_count_lines_live` |
-| Inventory | `send_transfer`, `receive_transfer` |
+| Transfers (I03, D49) | `create_stock_transfer`, `update_stock_transfer`, `send_stock_transfer`, `receive_stock_transfer`, `cancel_stock_transfer`, `list_stock_transfers`, `get_stock_transfer`; helpers `app.set_transfer_lines`, `app.stock_transfer_json` |
 | Purchasing | `approve_purchase_invoice`, `reject_purchase_invoice`, `post_supplier_payment`, `post_purchase_return` |
 | Cash | `open_shift`, `close_shift`, `post_cash_transfer`, `settle_collector_wallet`, `post_expense`, `close_day` |
 | Sales | `create_sale` (POS, split payments), `create_sales_return` (return / void / exchange), `create_sales_order`, `record_order_deposit`, `cancel_sales_order`, `complete_delivery` (issues the sale) |

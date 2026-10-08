@@ -16,6 +16,7 @@ const SEED_PASSWORD = 'LocalDev-Only-2026!';
 const SHOP_ONE = 'd1000000-0000-0000-0000-000000000001';
 const SHOP_TWO = 'd1000000-0000-0000-0000-000000000002';
 const BR1 = 'd2000000-0000-0000-0000-000000000011';
+const BR2 = 'd2000000-0000-0000-0000-000000000012';
 const OWNER_ONE = 'd3000000-0000-0000-0000-000000000011';
 const STAMP = Date.now();
 const TEMP_PASSWORD = `F07-${STAMP}!`;
@@ -106,6 +107,27 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     });
     expect(sent.res.status, JSON.stringify(sent.res.body)).toBe(201);
     return sent;
+  }
+  /** A draft transfer BR1 -> BR2 of a new product that has 2 in stock in BR1. */
+  async function newTransfer(token: string) {
+    const product = await newProduct(token);
+    const found = await send('post', '/api/stock/adjustments', {
+      token,
+      key: `f07-tr-found-${STAMP}-${ipCounter}`,
+      body: { branch_id: BR1, reason: 'found', lines: [{ product_id: product, quantity: 2 }] },
+    });
+    expect(found.res.status, JSON.stringify(found.res.body)).toBe(201);
+    const created = await send('post', '/api/stock/transfers', {
+      token,
+      key: `f07-tr-${STAMP}-${ipCounter}`,
+      body: {
+        from_branch_id: BR1,
+        to_branch_id: BR2,
+        lines: [{ product_id: product, quantity: 2 }],
+      },
+    });
+    expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+    return { sent: created, id: created.res.body.id as string, product };
   }
   async function newProduct(token: string) {
     const { res } = await send('post', '/api/products', { token, body: productBody() });
@@ -327,6 +349,54 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       const id = (await newCount(owner.accessToken)).res.body.id as string;
       return {
         sent: await send('post', `/api/stock/counts/${id}/cancel`, { token: owner.accessToken }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/stock/transfers': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return { sent: (await newTransfer(owner.accessToken)).sent, org: SHOP_ONE, status: 201 };
+    },
+    'PUT /api/stock/transfers/:id': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const t = await newTransfer(owner.accessToken);
+      return {
+        sent: await send('put', `/api/stock/transfers/${t.id}`, {
+          token: owner.accessToken,
+          body: { notes: 'F07', lines: [{ product_id: t.product, quantity: 1 }] },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/stock/transfers/:id/send': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const t = await newTransfer(owner.accessToken);
+      return {
+        sent: await send('post', `/api/stock/transfers/${t.id}/send`, { token: owner.accessToken }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/stock/transfers/:id/receive': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const t = await newTransfer(owner.accessToken);
+      const sent = await send('post', `/api/stock/transfers/${t.id}/send`, {
+        token: owner.accessToken,
+      });
+      expect(sent.res.status, JSON.stringify(sent.res.body)).toBe(200);
+      return {
+        sent: await send('post', `/api/stock/transfers/${t.id}/receive`, {
+          token: owner.accessToken,
+          body: {},
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/stock/transfers/:id/cancel': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const t = await newTransfer(owner.accessToken);
+      return {
+        sent: await send('post', `/api/stock/transfers/${t.id}/cancel`, {
+          token: owner.accessToken,
+        }),
         org: SHOP_ONE,
       };
     },

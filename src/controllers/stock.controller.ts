@@ -12,6 +12,10 @@ import {
   type StockCountScanBody,
   type StockListQuery,
   type StockMovementsQuery,
+  type StockTransferCreateBody,
+  type StockTransferListQuery,
+  type StockTransferReceiveBody,
+  type StockTransferUpdateBody,
 } from '@ziadkhaled-wb/contracts';
 import { getCtx } from '../middleware/requestContext';
 import * as service from '../services/stock.service';
@@ -67,4 +71,34 @@ export async function postCount(req: Request, res: Response) {
 }
 export async function cancelCount(req: Request, res: Response) {
   res.json(await service.cancelCount(getCtx(req), idOf(req)));
+}
+export async function listTransfers(req: Request, res: Response) {
+  res.json(
+    await service.listTransfers(getCtx(req), req.query as unknown as StockTransferListQuery),
+  );
+}
+export async function getTransfer(req: Request, res: Response) {
+  res.json(await service.getTransfer(getCtx(req), idOf(req)));
+}
+export async function createTransfer(req: Request, res: Response) {
+  const key = keyOf(req);
+  res
+    .status(201)
+    .json(await service.createTransfer(getCtx(req), req.body as StockTransferCreateBody, key));
+}
+export async function updateTransfer(req: Request, res: Response) {
+  res.json(
+    await service.updateTransfer(getCtx(req), idOf(req), req.body as StockTransferUpdateBody),
+  );
+}
+export async function sendTransfer(req: Request, res: Response) {
+  res.json(await service.transferAction(getCtx(req), idOf(req), 'send'));
+}
+export async function cancelTransfer(req: Request, res: Response) {
+  res.json(await service.transferAction(getCtx(req), idOf(req), 'cancel'));
+}
+export async function receiveTransfer(req: Request, res: Response) {
+  res.json(
+    await service.receiveTransfer(getCtx(req), idOf(req), req.body as StockTransferReceiveBody),
+  );
 }

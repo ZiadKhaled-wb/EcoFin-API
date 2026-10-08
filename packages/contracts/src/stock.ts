@@ -325,3 +325,141 @@ export const StockCountPostBody = z
   .object({ uncounted_as_zero: z.boolean().default(false) })
   .strict();
 export type StockCountPostBody = z.infer<typeof StockCountPostBody>;
+
+// ---------------------------------------------------------------- I03 branch transfers (D49)
+
+/** Values of `public.transfer_status`. */
+export const TransferStatus = z.enum([
+  'draft',
+  'sent',
+  'received',
+  'partially_received',
+  'cancelled',
+]);
+export type TransferStatus = z.infer<typeof TransferStatus>;
+
+/** What did not arrive in full is written off at the destination with this reason. */
+export const TransferDiscrepancyReason = z.enum(['loss', 'damage']);
+export type TransferDiscrepancyReason = z.infer<typeof TransferDiscrepancyReason>;
+
+export const StockTransferLineBody = z
+  .object({
+    product_id: Uuid,
+    /** Required for a serialized product (a unit in stock in the source branch, quantity 1). */
+    unit_id: Uuid.nullish(),
+    quantity: z.number().int().min(1).max(MAX_QTY),
+  })
+  .strict();
+export type StockTransferLineBody = z.infer<typeof StockTransferLineBody>;
+
+const TransferLines = z.array(StockTransferLineBody).min(1).max(500);
+const TransferNotes = z
+  .string()
+  .trim()
+  .max(500)
+  .nullish()
+  .transform((v) => (v ? v : undefined));
+
+/** `POST /api/stock/transfers` (stock.transfer_send, `Idempotency-Key`): a draft. */
+export const StockTransferCreateBody = z
+  .object({
+    from_branch_id: Uuid,
+    to_branch_id: Uuid,
+    notes: TransferNotes,
+    lines: TransferLines,
+  })
+  .strict()
+  .superRefine((b, ctx) => {
+    if (b.from_branch_id === b.to_branch_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['to_branch_id'],
+        message: 'Choose another branch',
+      });
+    }
+    noDuplicateLines(b.lines, ctx);
+  });
+export type StockTransferCreateBody = z.infer<typeof StockTransferCreateBody>;
+
+/** `PUT /api/stock/transfers/:id`: replaces the notes and lines of a draft. */
+export const StockTransferUpdateBody = z
+  .object({ notes: TransferNotes, lines: TransferLines })
+  .strict()
+  .superRefine((b, ctx) => noDuplicateLines(b.lines, ctx));
+export type StockTransferUpdateBody = z.infer<typeof StockTransferUpdateBody>;
+
+/** One line that did not arrive in full: the quantity that did, and why the rest didn't. */
+export const StockTransferReceiveLine = z
+  .object({
+    line_id: Uuid,
+    qty_received: z.number().int().min(0).max(MAX_QTY),
+    reason: TransferDiscrepancyReason,
+  })
+  .strict();
+export type StockTransferReceiveLine = z.infer<typeof StockTransferReceiveLine>;
+
+/** `POST /api/stock/transfers/:id/receive` (stock.transfer_receive): only the shortages. */
+export const StockTransferReceiveBody = z
+  .object({ lines: z.array(StockTransferReceiveLine).max(500).default([]) })
+  .strict()
+  .superRefine((b, ctx) => {
+    const seen = new Set<string>();
+    b.lines.forEach((l, i) => {
+      if (seen.has(l.line_id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['lines', i],
+          message: 'Duplicate line',
+        });
+      }
+      seen.add(l.line_id);
+    });
+  });
+export type StockTransferReceiveBody = z.infer<typeof StockTransferReceiveBody>;
+
+export const StockTransferLine = z.object({
+  id: Uuid,
+  product_id: Uuid,
+  name_ar: z.string(),
+  name_en: z.string().nullable(),
+  sku: z.string(),
+  is_serialized: z.boolean(),
+  unit_id: Uuid.nullable(),
+  serial: z.string().nullable(),
+  qty_sent: z.number().int().positive(),
+  qty_received: z.number().int().nonnegative().nullable(),
+  discrepancy_reason: z.string().nullable(),
+});
+export type StockTransferLine = z.infer<typeof StockTransferLine>;
+
+/** A transfer in a list: header, totals and the adjustments its receipt wrote off. */
+export const StockTransferSummary = z.object({
+  id: Uuid,
+  number: z.string(),
+  from_branch_id: Uuid,
+  to_branch_id: Uuid,
+  status: TransferStatus,
+  notes: z.string().nullable(),
+  created_at: IsoTimestamp,
+  created_by_name: z.string().nullable(),
+  sent_at: IsoTimestamp.nullable(),
+  sent_by_name: z.string().nullable(),
+  received_at: IsoTimestamp.nullable(),
+  received_by_name: z.string().nullable(),
+  lines_count: z.number().int().nonnegative(),
+  quantity_sent: z.number().int().nonnegative(),
+  quantity_received: z.number().int().nonnegative().nullable(),
+  adjustments: z.array(z.object({ id: Uuid, number: z.string(), reason: AdjustmentReason })),
+});
+export type StockTransferSummary = z.infer<typeof StockTransferSummary>;
+export const StockTransfer = StockTransferSummary.extend({ lines: z.array(StockTransferLine) });
+export type StockTransfer = z.infer<typeof StockTransfer>;
+export const StockTransferList = paginated(StockTransferSummary);
+export type StockTransferList = z.infer<typeof StockTransferList>;
+
+export const StockTransferListQuery = PaginationQuery.extend({
+  /** Transfers out of OR into this branch. */
+  branch_id: Uuid.optional(),
+  status: TransferStatus.optional(),
+}).strict();
+export type StockTransferListQuery = z.infer<typeof StockTransferListQuery>;

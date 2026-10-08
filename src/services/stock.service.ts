@@ -7,6 +7,8 @@ import {
   StockCountList,
   StockList,
   StockMovementList,
+  StockTransfer,
+  StockTransferList,
   type StockAdjustmentCreateBody,
   type StockAdjustmentListQuery,
   type StockCountCreateBody,
@@ -16,6 +18,10 @@ import {
   type StockCountPostBody,
   type StockListQuery,
   type StockMovementsQuery,
+  type StockTransferCreateBody,
+  type StockTransferListQuery,
+  type StockTransferReceiveBody,
+  type StockTransferUpdateBody,
 } from '@ziadkhaled-wb/contracts';
 import { z } from 'zod';
 import type { RequestContext } from '../middleware/requestContext';
@@ -213,4 +219,94 @@ export async function cancelCount(ctx: RequestContext, id: string): Promise<Stoc
   const { data, error } = await ctx.db.rpc('cancel_stock_count', { p_count_id: id });
   if (error) fail(error);
   return StockCount.parse(data);
+}
+
+/** Transfer lines as the SQL functions take them. */
+const transferLines = (lines: StockTransferCreateBody['lines']) =>
+  lines.map((l) => ({
+    product_id: l.product_id,
+    unit_id: l.unit_id ?? null,
+    quantity: l.quantity,
+  }));
+
+/** I03: a draft transfer (the same idempotency key again returns the same transfer). */
+export async function createTransfer(
+  ctx: RequestContext,
+  body: StockTransferCreateBody,
+  idempotencyKey: string,
+): Promise<StockTransfer> {
+  const { data, error } = await ctx.db.rpc('create_stock_transfer', {
+    p_from_branch_id: body.from_branch_id,
+    p_to_branch_id: body.to_branch_id,
+    p_notes: body.notes ?? null,
+    p_lines: transferLines(body.lines),
+    p_idempotency_key: idempotencyKey,
+  });
+  if (error) fail(error);
+  return StockTransfer.parse(data);
+}
+
+export async function updateTransfer(
+  ctx: RequestContext,
+  id: string,
+  body: StockTransferUpdateBody,
+): Promise<StockTransfer> {
+  const { data, error } = await ctx.db.rpc('update_stock_transfer', {
+    p_id: id,
+    p_notes: body.notes ?? null,
+    p_lines: transferLines(body.lines),
+  });
+  if (error) fail(error);
+  return StockTransfer.parse(data);
+}
+
+/** send / cancel: state changes; a repeat answers the transfer as it is. */
+export async function transferAction(
+  ctx: RequestContext,
+  id: string,
+  action: 'send' | 'cancel',
+): Promise<StockTransfer> {
+  const { data, error } = await ctx.db.rpc(
+    action === 'send' ? 'send_stock_transfer' : 'cancel_stock_transfer',
+    { p_id: id },
+  );
+  if (error) fail(error);
+  return StockTransfer.parse(data);
+}
+
+/** Receives at the destination; only the lines that did not arrive in full are sent. */
+export async function receiveTransfer(
+  ctx: RequestContext,
+  id: string,
+  body: StockTransferReceiveBody,
+): Promise<StockTransfer> {
+  const { data, error } = await ctx.db.rpc('receive_stock_transfer', {
+    p_id: id,
+    p_lines: body.lines,
+  });
+  if (error) fail(error);
+  return StockTransfer.parse(data);
+}
+
+export async function listTransfers(
+  ctx: RequestContext,
+  query: StockTransferListQuery,
+): Promise<StockTransferList> {
+  const { data, error } = await ctx.db.rpc('list_stock_transfers', {
+    ...(query.branch_id ? { p_branch_id: query.branch_id } : {}),
+    ...(query.status ? { p_status: query.status } : {}),
+    ...paging(query),
+  });
+  if (error) fail(error);
+  return StockTransferList.parse({
+    ...ListResult.parse(data),
+    page: query.page,
+    pageSize: query.pageSize,
+  });
+}
+
+export async function getTransfer(ctx: RequestContext, id: string): Promise<StockTransfer> {
+  const { data, error } = await ctx.db.rpc('get_stock_transfer', { p_id: id });
+  if (error) fail(error);
+  return StockTransfer.parse(data);
 }

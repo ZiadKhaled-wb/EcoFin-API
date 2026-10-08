@@ -69,6 +69,11 @@ generated = generated.replace(/"?create_stock_count"?:\s*\{[\s\S]*?Returns:/, (s
 generated = generated.replace(/"?post_stock_adjustment"?:\s*\{[\s\S]*?Returns:/, (signature) =>
   signature.replace(/("?p_note"?:\s*string)(?! \| null)/g, '$1 | null'),
 );
+// I03: transfer notes are optional.
+generated = generated.replace(
+  /"?(?:create_stock_transfer|update_stock_transfer)"?:\s*\{[\s\S]*?Returns:/g,
+  (signature) => signature.replace(/("?p_notes"?:\s*string)(?! \| null)/g, '$1 | null'),
+);
 const formatted = await prettier.format(`${HEADER}\n${generated}`, { ...config, filepath: target });
 writeFileSync(target, formatted);
 console.log(`db:types: wrote ${target}`);

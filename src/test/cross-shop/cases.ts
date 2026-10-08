@@ -492,6 +492,144 @@ for (const [method, suffix, body] of [
     },
   });
 }
+// I03 transfers: shop B makes a real draft (a product with stock in its seed branch, sent to a
+// second branch of its own), then shop A aims at it.
+/** A draft transfer of shop B, from its seed branch to its second branch (created once). */
+async function shopBTransfer(h: CrossShopHarness) {
+  const product = await shopBProduct(h, 'transfer');
+  const found = await h.call('POST', '/api/stock/adjustments', {
+    token: product.token,
+    idempotencyKey: key('tr-found'),
+    body: {
+      branch_id: SHOP_B_BR1,
+      reason: 'found',
+      lines: [{ product_id: product.id, quantity: 2 }],
+    },
+  });
+  h.expect(found.res.status, JSON.stringify(found.res.body)).toBe(201);
+  const branches = await h.call('GET', '/api/branches', { token: product.token });
+  let other = (branches.res.body as { id: string }[]).find((b) => b.id !== SHOP_B_BR1);
+  if (!other) {
+    const made = await h.call('POST', '/api/branches', {
+      token: product.token,
+      body: { name: 'Cross-shop second', code: 'XS2' },
+    });
+    h.expect(made.res.status, JSON.stringify(made.res.body)).toBe(201);
+    other = made.res.body as { id: string };
+  }
+  const created = await h.call('POST', '/api/stock/transfers', {
+    token: product.token,
+    idempotencyKey: key('tr'),
+    body: {
+      from_branch_id: SHOP_B_BR1,
+      to_branch_id: other.id,
+      lines: [{ product_id: product.id, quantity: 1 }],
+    },
+  });
+  h.expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+  return { id: (created.res.body as { id: string }).id, product: product.id, token: product.token };
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/stock/transfers',
+  name: "transfers list refuses a foreign header, another shop's branch and an org query key",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/stock/transfers', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const branch = await h.call('GET', '/api/stock/transfers', {
+      token: a.accessToken,
+      query: 'branch_id=' + SHOP_B_BR1,
+    });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    const injected = await h.call('GET', '/api/stock/transfers', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/stock/transfers',
+  name: "transfer create refuses another shop's branches and products, a foreign header and an org key",
+  async run(h) {
+    const product = await shopBProduct(h, 'tr-create');
+    const a = await h.login(OWNER_A);
+    const own = { from_branch_id: SHOP_A_BR1, to_branch_id: SHOP_A_BR2 };
+    const toB = await h.call('POST', '/api/stock/transfers', {
+      token: a.accessToken,
+      idempotencyKey: key('t1'),
+      body: {
+        from_branch_id: SHOP_A_BR1,
+        to_branch_id: SHOP_B_BR1,
+        lines: [{ product_id: product.id, quantity: 1 }],
+      },
+    });
+    h.expect(toB.res.status).toBe(404);
+    h.expect(h.code(toB.res)).toBe('BRANCH_NOT_FOUND');
+    const productB = await h.call('POST', '/api/stock/transfers', {
+      token: a.accessToken,
+      idempotencyKey: key('t2'),
+      body: { ...own, lines: [{ product_id: product.id, quantity: 1 }] },
+    });
+    h.expect(productB.res.status).toBe(404);
+    h.expect(h.code(productB.res)).toBe('PRODUCT_NOT_FOUND');
+    const header = await h.call('POST', '/api/stock/transfers', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      idempotencyKey: key('t3'),
+      body: { ...own, lines: [{ product_id: product.id, quantity: 1 }] },
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/stock/transfers', {
+      token: a.accessToken,
+      idempotencyKey: key('t4'),
+      body: { ...own, organization_id: SHOP_B, lines: [{ product_id: product.id, quantity: 1 }] },
+    });
+    h.expect(injected.res.status).toBe(400);
+    for (const sent of [toB, productB, header, injected]) {
+      h.expect(await h.auditRowsFrom(SHOP_B, sent.ip)).toBe(0);
+    }
+  },
+});
+
+for (const [method, suffix, body] of [
+  ['GET', '', undefined],
+  ['PUT', '', 'lines'],
+  ['POST', '/send', undefined],
+  ['POST', '/receive', {}],
+  ['POST', '/cancel', undefined],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/stock/transfers/:id${suffix}`,
+    name: `${method} transfer${suffix} rejects another shop's id and leaves it a draft`,
+    async run(h) {
+      const t = await shopBTransfer(h);
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call(method, `/api/stock/transfers/${t.id}${suffix}`, {
+        token: a.accessToken,
+        ...(body === 'lines'
+          ? { body: { lines: [{ product_id: t.product, quantity: 1 }] } }
+          : body
+            ? { body }
+            : {}),
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('STOCK_TRANSFER_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+      const still = await h.call('GET', `/api/stock/transfers/${t.id}`, { token: t.token });
+      h.expect((still.res.body as { status: string }).status).toBe('draft');
+    },
+  });
+}
 crossShopCase({
   method: 'GET',
   path: '/api/auth/me',
