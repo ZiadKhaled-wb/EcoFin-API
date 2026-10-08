@@ -16,7 +16,8 @@
 --   reuse app.create_units.
 -- get_unit / find_unit: the unit and its full history (every ledger row, oldest first) with
 --   each document's number and party: sold to whom, bought from whom, transferred from where to
---   where, adjusted for what reason. stock.view; the unit's current branch must be accessible.
+--   where, adjusted for what reason. stock.view; the unit's current branch must be accessible, and
+--   steps in branches the caller can't access show no document, party or employee.
 -- search_units: serial prefix search in the caller's branches (the "find a serial" box).
 -- app.stock_source_json: a ledger row's document number and party; the I01 movement drill-down
 --   now shows the number of every kind of document, not only adjustments.
@@ -206,17 +207,22 @@ AS $$
         'cost', to_char(u.cost, 'FM9999999999999990.00'), 'created_at', u.created_at,
         'purchase_invoice_id', il.invoice_id, 'purchase_invoice_number', pi.number, 'supplier_name', sp.name,
         'history', COALESCE((
+            -- Steps in a branch the caller can't access keep their date, type and branch only: no
+            -- document number, party (a customer of another branch) or employee (security review).
             SELECT jsonb_agg(jsonb_build_object(
                 'id', m.id, 'created_at', m.created_at, 'business_date', m.business_date, 'type', m.type,
                 'quantity', m.quantity, 'branch_id', m.branch_id, 'branch_name', mb.name,
                 'source_type', m.source_type, 'source_id', m.source_id,
-                'source_number', src ->> 'number', 'party_name', src ->> 'party', 'reason', src ->> 'reason',
-                'created_by_name', e.full_name)
+                'source_number', CASE WHEN ok THEN src ->> 'number' END,
+                'party_name', CASE WHEN ok THEN src ->> 'party' END,
+                'reason', src ->> 'reason',
+                'created_by_name', CASE WHEN ok THEN e.full_name END)
                 ORDER BY m.created_at, m.id)
             FROM public.stock_movements m
             JOIN public.branches mb ON mb.id = m.branch_id AND mb.organization_id = m.organization_id
             LEFT JOIN public.employees e ON e.id = m.created_by AND e.organization_id = m.organization_id
-            CROSS JOIN LATERAL (SELECT app.stock_source_json(p_org, m.source_type, m.source_id) AS src) s
+            CROSS JOIN LATERAL (SELECT app.stock_source_json(p_org, m.source_type, m.source_id) AS src,
+                                       app.has_branch_access(m.branch_id) AS ok) s
             WHERE m.organization_id = p_org AND m.unit_id = u.id), '[]'::jsonb))
     FROM public.units u
     JOIN public.products p ON p.id = u.product_id AND p.organization_id = u.organization_id

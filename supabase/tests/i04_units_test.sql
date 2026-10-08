@@ -149,10 +149,24 @@ SELECT t.expect('the I01 drill-down now names transfers too',
 RESET ROLE;
 
 -- ---------------------------------------------------------------- scope, permissions, tenant
-SELECT t.as_user('a4000000-0000-0000-8000-000000000003',t.org('a'));
+-- Security review: IMEI-030 starts in second, then comes to main by transfer; a
+-- cashier of main sees the second-branch steps without their documents, party or employee.
+SELECT t.as_user('a4000000-0000-0000-8000-000000000001',t.org('a'));
 SET LOCAL ROLE authenticated;
+SELECT public.register_units(t.id('phone'),t.id('second'),'6500','["IMEI-030"]',NULL,'i04-register-30');
+SELECT public.create_stock_transfer(t.id('second'),t.id('main'),NULL,
+  jsonb_build_array(jsonb_build_object('product_id',t.id('phone'),'unit_id',t.unit('IMEI-030'),'quantity',1)),'i04-transfer-30') AS tr30 \gset
+SELECT public.send_stock_transfer((:'tr30'::jsonb->>'id')::uuid), public.receive_stock_transfer((:'tr30'::jsonb->>'id')::uuid,'[]');
+SELECT t.as_user('a4000000-0000-0000-8000-000000000003',t.org('a'));
+SELECT public.find_unit('IMEI-030') AS h30 \gset
+SELECT t.expect('a cashier of main: second''s steps show no document, party or employee; main''s step does',
+  (SELECT bool_and(r->>'source_number' IS NULL AND r->>'party_name' IS NULL AND r->>'created_by_name' IS NULL)
+   FROM jsonb_array_elements(:'h30'::jsonb->'history') r WHERE r->>'branch_name'='Second')
+  AND (SELECT count(*)=2 FROM jsonb_array_elements(:'h30'::jsonb->'history') r WHERE r->>'branch_name'='Second')
+  AND (SELECT r->>'source_number'=(:'tr30'::jsonb->>'number') AND r->>'created_by_name' IS NOT NULL
+       FROM jsonb_array_elements(:'h30'::jsonb->'history') r WHERE r->>'type'='transfer_in'), :'h30'::text);
 SELECT t.expect('a cashier in main finds main''s units only',
-  (public.search_units('imei')->>'total')::int=2 AND (public.get_unit(t.unit('IMEI-003'))->>'serial')='IMEI-003');
+  (public.search_units('imei')->>'total')::int=3 AND (public.get_unit(t.unit('IMEI-003'))->>'serial')='IMEI-003');
 SELECT t.error('a cashier: a unit now in second',$q$SELECT public.find_unit('IMEI-010')$q$,'BRANCH_DENIED');
 SELECT t.as_user('a4000000-0000-0000-8000-000000000002',t.org('b'));
 SELECT t.error('shop b: shop a''s serial',$q$SELECT public.find_unit('IMEI-003')$q$,'UNIT_NOT_FOUND');
@@ -164,7 +178,7 @@ SELECT t.expect('ledger caches still match the ledger',NOT EXISTS(SELECT 1 FROM 
 UPDATE public.organizations SET subscription_start=current_date-60,subscription_end=current_date-30 WHERE id=t.org('a');
 SELECT t.as_user('a4000000-0000-0000-8000-000000000001',t.org('a'));
 SET LOCAL ROLE authenticated;
-SELECT t.expect('expired shop: units still read',(public.search_units()->>'total')::int=4);
+SELECT t.expect('expired shop: units still read',(public.search_units()->>'total')::int=5);
 SELECT t.error('expired shop: no registering',$q$SELECT t.reg('["X-9"]','i04-register-15')$q$,'SUBSCRIPTION_EXPIRED');
 RESET ROLE;
 UPDATE public.organizations SET subscription_end=current_date+30 WHERE id=t.org('a');
