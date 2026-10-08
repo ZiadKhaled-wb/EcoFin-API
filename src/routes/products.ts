@@ -4,6 +4,7 @@ import {
   ProductIdParams,
   ProductListQuery,
   ProductLookupQuery,
+  ProductUnitsQuery,
   ProductUpdateBody,
 } from '@ziadkhaled-wb/contracts';
 import { authenticate } from '../middleware/auth';
@@ -37,6 +38,15 @@ router.get(
   authenticatedOnly(),
   validate({ params: ProductIdParams }),
   asyncHandler(controller.get),
+);
+// C03 labels: serialized units (serials) of a product, in the caller's branches.
+router.get(
+  '/:id/units',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ params: ProductIdParams, query: ProductUnitsQuery }),
+  asyncHandler(controller.units),
 );
 router.post(
   '/',

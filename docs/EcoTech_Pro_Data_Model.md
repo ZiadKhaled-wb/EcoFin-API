@@ -508,7 +508,7 @@ Each one derives the org and employee from `auth.uid()`, checks a permission, lo
 | Profile (P04, D43) | `get_shop_profile`, `update_org_profile`; trigger `app.set_contract_creditor` on `contracts` (INSTALLMENTS_DISABLED, creditor snapshot) |
 | Tax (T01, D41) | `list_tax_classes`, `create_tax_class`, `update_tax_class`, `set_tax_class_archived`; engine `app.compute_document_tax` (called by every posting function), `app.return_line_tax` |
 | Categories (C01) | `list_categories`, `create_category`, `update_category`, `set_category_archived`; filter helper `app.category_with_children` |
-| Products (C02, D44) | `list_products`, `get_product`, `lookup_product` (POS, active only), `create_product`, `update_product` (+ `catalog.price_change` for prices), `set_product_archived`; helpers `app.ean13_check_digit`, `app.generate_product_barcode`, `app.product_apply`, `app.product_json` |
+| Products (C02, D44) | `list_products`, `get_product`, `lookup_product` (POS, active only), `create_product`, `update_product` (+ `catalog.price_change` for prices), `set_product_archived`; helpers `app.ean13_check_digit`, `app.generate_product_barcode`, `app.product_apply`, `app.product_json`; C03 labels read `list_product_units` (D45) |
 | Inventory | `post_stock_adjustment`, `post_stock_count`, `send_transfer`, `receive_transfer` |
 | Purchasing | `approve_purchase_invoice`, `reject_purchase_invoice`, `post_supplier_payment`, `post_purchase_return` |
 | Cash | `open_shift`, `close_shift`, `post_cash_transfer`, `settle_collector_wallet`, `post_expense`, `close_day` |

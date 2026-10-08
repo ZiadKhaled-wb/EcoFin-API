@@ -6,6 +6,7 @@ import { mapDbError } from '../utils/errors';
 import {
   createProduct,
   getProduct,
+  listProductUnits,
   listProducts,
   lookupProduct,
   setProductArchived,
@@ -154,6 +155,17 @@ describe('C02 product service', () => {
     expect(mapDbError({ message: code + ': private detail' })).toMatchObject({
       code,
       statusCode: status,
+    });
+  });
+
+  it('lists units with the status filter and parses them', async () => {
+    const { db, ctx } = setup();
+    const unit = { id: ID, serial: 'IMEI-1', branch_id: ID, status: 'in_stock' };
+    db.queue({ data: [unit], error: null });
+    expect(await listProductUnits(ctx, ID, { status: 'in_stock' })).toEqual([unit]);
+    expect(db.rpc).toHaveBeenCalledWith('list_product_units', {
+      p_product_id: ID,
+      p_status: 'in_stock',
     });
   });
 });

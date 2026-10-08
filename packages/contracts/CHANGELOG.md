@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.0
+
+- C03 labels: UnitStatus, ProductUnit, ProductUnitList, ProductUnitsQuery (`GET /api/products/:id/units`).
+
 ## 0.13.0
 
 - C02 products: Product, ProductList, ProductListQuery (search, category_id, include_subcategories, status), ProductLookupQuery, ProductCreateBody, ProductUpdateBody, ProductIdParams, EtaItemType, ProductStatus. Error codes PRODUCT_NOT_FOUND (404), PRODUCT_SKU_TAKEN, PRODUCT_BARCODE_TAKEN, PRODUCT_SERIAL_LOCKED, PRODUCT_CATEGORY_ARCHIVED (409).

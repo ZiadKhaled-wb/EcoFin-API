@@ -6,7 +6,13 @@
 import { beforeAll, describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { AuthLoginResponse, ErrorResponse, Product, ProductList } from '@ziadkhaled-wb/contracts';
+import {
+  AuthLoginResponse,
+  ErrorResponse,
+  Product,
+  ProductList,
+  ProductUnitList,
+} from '@ziadkhaled-wb/contracts';
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
 import { readInviteToken } from '../test/inviteMail';
@@ -241,5 +247,43 @@ describe.skipIf(!RUN)('C02 products against local stack', () => {
       expect(res.status).toBe(403);
       expect(code(res)).toBe('PERMISSION_DENIED');
     }
+  });
+
+  it('C03: lists a serialized product units (serials) for labels', async () => {
+    const created = await call('post', '/api/products', owner, {
+      name_ar: 'موبايل C02',
+      sku: `C03-PH-${STAMP}`,
+      cash_price: '9000.00',
+      is_serialized: true,
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const phone = Product.parse(created.body);
+    const main = await service.from('branches').select('id').eq('organization_id', org).single();
+    const units = await service.from('units').insert([
+      {
+        organization_id: org,
+        product_id: phone.id,
+        serial: `IMEI-${STAMP}-2`,
+        branch_id: main.data!.id,
+        cost: 1,
+      },
+      {
+        organization_id: org,
+        product_id: phone.id,
+        serial: `IMEI-${STAMP}-1`,
+        branch_id: main.data!.id,
+        cost: 1,
+      },
+    ]);
+    expect(units.error).toBeNull();
+    const res = await call('get', `/api/products/${phone.id}/units`, cashier);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(ProductUnitList.parse(res.body).map((u) => u.serial)).toEqual([
+      `IMEI-${STAMP}-1`,
+      `IMEI-${STAMP}-2`,
+    ]);
+    const sold = await call('get', `/api/products/${phone.id}/units?status=sold`);
+    expect(ProductUnitList.parse(sold.body)).toEqual([]);
+    expect((await call('get', `/api/products/${phone.id}/units?status=lost`)).status).toBe(400);
   });
 });

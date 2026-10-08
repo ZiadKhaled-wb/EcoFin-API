@@ -241,3 +241,7 @@ See [P04 plan](plans/P04.md). Covers the installment switch on contracts and the
 ## C02 — products (EC-43)
 
 See [C02 plan](plans/C02.md). Covers the slice's Done when (created, found by barcode through the POS lookup, archived, still shown in old sales) and the D44 rules.
+
+## C03 — barcode labels (EC-44)
+
+See [C03 plan](plans/C03.md). Covers the units-by-serial read and the scan check of a printed label (D45).

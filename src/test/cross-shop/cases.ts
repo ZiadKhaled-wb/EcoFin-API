@@ -187,6 +187,25 @@ crossShopCase({
 });
 
 crossShopCase({
+  method: 'GET',
+  path: '/api/products/:id/units',
+  name: "product units (labels) reject another shop's product id",
+  async run(h) {
+    const product = await shopBProduct(h, 'units');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', `/api/products/${product.id}/units`, {
+      token: a.accessToken,
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('PRODUCT_NOT_FOUND');
+    const header = await h.call('GET', `/api/products/${product.id}/units`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+  },
+});
+crossShopCase({
   method: 'POST',
   path: '/api/products',
   name: 'product create rejects foreign header and tenant body',
