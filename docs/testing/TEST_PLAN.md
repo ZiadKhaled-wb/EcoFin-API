@@ -245,3 +245,7 @@ See [C02 plan](plans/C02.md). Covers the slice's Done when (created, found by ba
 ## C03 — barcode labels (EC-44)
 
 See [C03 plan](plans/C03.md). Covers the units-by-serial read and the scan check of a printed label (D45).
+
+## TEST-2 — shop setup tests (EC-130)
+
+See [TEST-2 plan](plans/TEST-2.md): each Sprint 2 test requirement mapped to the CI test that proves it (roles, extra permissions, deactivation, plan limits, VAT golden cases, old documents, ar/en setup walk).
