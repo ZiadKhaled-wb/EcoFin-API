@@ -31,6 +31,7 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/products/:id/archive': { action: 'product.archived' },
   'POST /api/products/:id/restore': { action: 'product.restored' },
   'POST /api/stock/adjustments': { action: 'stock_adjustment.posted' },
+  'POST /api/stock/movements/export': { action: 'stock_movements.exported' },
   'POST /api/stock/counts': { action: 'stock_count.created' },
   'PUT /api/stock/counts/:id/lines': {
     none: 'I02 draft count lines; the posted count and its adjustment are audited with every line.',

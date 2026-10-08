@@ -311,6 +311,47 @@ crossShopCase({
       query: 'product_id=' + product.id,
     });
     h.expect(header.res.status).toBe(403);
+    // I05: the shop-wide history aimed at shop B's branch.
+    const branch = await h.call('GET', '/api/stock/movements', {
+      token: a.accessToken,
+      query: 'branch_id=' + SHOP_B_BR1,
+    });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/stock/movements/export',
+  name: "the movement export refuses another shop's product, branch, header and org key",
+  async run(h) {
+    const product = await shopBProduct(h, 'export');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('POST', '/api/stock/movements/export', {
+      token: a.accessToken,
+      body: { product_id: product.id },
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('PRODUCT_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, foreign.ip)).toBe(0);
+    const branch = await h.call('POST', '/api/stock/movements/export', {
+      token: a.accessToken,
+      body: { branch_id: SHOP_B_BR1 },
+    });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    const header = await h.call('POST', '/api/stock/movements/export', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: {},
+    });
+    h.expect(header.res.status).toBe(403);
+    h.expect(await h.auditRowsFrom(SHOP_B, header.ip)).toBe(0);
+    const injected = await h.call('POST', '/api/stock/movements/export', {
+      token: a.accessToken,
+      body: { organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
   },
 });
 // I02 adjustments and counts: shop B's documents are made the real way, then shop A aims at them.

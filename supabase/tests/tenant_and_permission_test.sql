@@ -379,7 +379,8 @@ INSERT INTO t.denial VALUES
  ('set_product_archived','set_product_archived','catalog.manage',$$SELECT public.set_product_archived((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND archived_at IS NULL ORDER BY id LIMIT 1),false)$$);
 INSERT INTO t.denial VALUES
  ('list_stock','list_stock','stock.view',$$SELECT public.list_stock()$$),
- ('list_stock_movements','list_stock_movements','stock.view',$$SELECT public.list_stock_movements((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' ORDER BY id LIMIT 1))$$);
+ ('list_stock_movements','list_stock_movements','stock.view',$$SELECT public.list_stock_movements((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' ORDER BY id LIMIT 1))$$),
+ ('export_stock_movements','export_stock_movements','export.data',$$SELECT public.export_stock_movements((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' ORDER BY id LIMIT 1))$$);
 -- I03: a third branch of shop one as the destination (the set_branch_active case deactivates 012);
 -- the I02 adjustment case gave the product stock in 011 before these run.
 INSERT INTO public.branches(id,organization_id,code,name) VALUES('d2000000-0000-0000-0000-0000000001f3','d1000000-0000-0000-0000-000000000001','T3F','Transfer target');

@@ -6,6 +6,7 @@ import {
   cancelCount,
   createCount,
   createTransfer,
+  exportStockMovements,
   receiveTransfer,
   transferAction,
   getCount,
@@ -103,6 +104,61 @@ describe('I01 stock service', () => {
       p_product_id: ID,
       p_limit: 50,
       p_offset: 0,
+    });
+  });
+
+  it('I05: passes only the filters given', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: { items: [], total: 0 }, error: null });
+    await listStockMovements(ctx, {
+      page: 2,
+      pageSize: 20,
+      branch_id: ID,
+      serial: 'IMEI-1',
+      types: ['sale_out', 'delivery_out'],
+      from: '2026-10-01',
+      to: '2026-10-09',
+    });
+    expect(db.rpc).toHaveBeenCalledWith('list_stock_movements', {
+      p_branch_id: ID,
+      p_serial: 'IMEI-1',
+      p_types: ['sale_out', 'delivery_out'],
+      p_from: '2026-10-01',
+      p_to: '2026-10-09',
+      p_limit: 20,
+      p_offset: 20,
+    });
+    db.queue({ data: { items: [], total: 0 }, error: null });
+    await listStockMovements(ctx, { page: 1, pageSize: 50, types: [] });
+    expect(db.rpc).toHaveBeenLastCalledWith('list_stock_movements', { p_limit: 50, p_offset: 0 });
+  });
+
+  it('I05: exports with the same filters; too many rows keeps the counts', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: { items: [], total: 0 }, error: null });
+    await expect(
+      exportStockMovements(ctx, { product_id: ID, types: ['adjustment'] }),
+    ).resolves.toEqual({
+      items: [],
+      total: 0,
+    });
+    expect(db.rpc).toHaveBeenCalledWith('export_stock_movements', {
+      p_product_id: ID,
+      p_types: ['adjustment'],
+    });
+    db.queue({
+      data: null,
+      error: { message: 'EXPORT_TOO_LARGE', details: '{"total": 10001, "limit": 10000}' },
+    });
+    await expect(exportStockMovements(ctx, {})).rejects.toMatchObject({
+      code: 'EXPORT_TOO_LARGE',
+      statusCode: 422,
+      details: { total: 10001, limit: 10000 },
+    });
+    db.queue({ data: null, error: { message: 'EXPORT_TOO_LARGE', details: 'not json' } });
+    await expect(exportStockMovements(ctx, {})).rejects.toMatchObject({
+      code: 'EXPORT_TOO_LARGE',
+      details: undefined,
     });
   });
 });

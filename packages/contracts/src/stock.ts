@@ -68,23 +68,31 @@ export const StockState = z.enum(['sellable', 'damaged']);
 export type StockState = z.infer<typeof StockState>;
 
 /**
- * One ledger movement (the I01 drill-down; I05 adds filters and document links). `balance_after`
- * is the running on-hand of that branch and stock state after this movement.
+ * One ledger movement: the I01 drill-down and the I05 movement history (D47, D51).
+ * `balance_after` is the running on-hand of that product, branch and stock state after this
+ * movement, over the whole ledger (filters never change it). The source document is
+ * `source_type` + `source_id`, with its number, the other party (customer, supplier, or
+ * "from → to" for a transfer) and the adjustment reason.
  */
 export const StockMovement = z.object({
   id: Uuid,
   created_at: IsoTimestamp,
   business_date: BusinessDate,
+  product_id: Uuid,
+  product_name_ar: z.string(),
+  product_name_en: z.string().nullable(),
+  sku: z.string(),
   branch_id: Uuid,
+  unit_id: Uuid.nullable(),
+  serial: z.string().nullable(),
   type: StockMovementType,
   stock_state: StockState,
   quantity: z.number().int(),
   balance_after: z.number().int(),
-  serial: z.string().nullable(),
   source_type: z.string(),
   source_id: Uuid,
-  /** I02: the source document's number and the adjustment reason (stock adjustments only for now). */
   source_number: z.string().nullable(),
+  party: z.string().nullable(),
   reason: AdjustmentReason.nullable(),
   reverses_movement_id: Uuid.nullable(),
   created_by_name: z.string().nullable(),
@@ -93,11 +101,60 @@ export type StockMovement = z.infer<typeof StockMovement>;
 export const StockMovementList = paginated(StockMovement);
 export type StockMovementList = z.infer<typeof StockMovementList>;
 
-export const StockMovementsQuery = PaginationQuery.extend({
-  product_id: Uuid,
+/** The I05 filters. A serial is matched exactly (trimmed, upper-cased); dates are business dates. */
+const movementFilters = {
+  product_id: Uuid.optional(),
   branch_id: Uuid.optional(),
-}).strict();
+  serial: z
+    .string()
+    .trim()
+    .max(64)
+    .optional()
+    .transform((v) => (v ? v.toUpperCase() : undefined)),
+  from: BusinessDate.optional(),
+  to: BusinessDate.optional(),
+};
+const datesInOrder = (q: { from?: string | undefined; to?: string | undefined }) =>
+  q.from === undefined || q.to === undefined || q.from <= q.to;
+const datesMessage = { message: '`from` must not be after `to`', path: ['from'] };
+
+/** GET /api/stock/movements. `types` is a comma-separated list of movement types. */
+export const StockMovementsQuery = PaginationQuery.extend({
+  ...movementFilters,
+  types: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(',').map((t) => t.trim()) : undefined))
+    .pipe(z.array(StockMovementType).max(StockMovementType.options.length).optional()),
+})
+  .strict()
+  .refine(datesInOrder, datesMessage);
 export type StockMovementsQuery = z.infer<typeof StockMovementsQuery>;
+
+/**
+ * POST /api/stock/movements/export: the same filters, no paging. Needs export.data on top of
+ * stock.view; at most STOCK_MOVEMENT_EXPORT_LIMIT rows (else EXPORT_TOO_LARGE); audited.
+ */
+export const STOCK_MOVEMENT_EXPORT_LIMIT = 10_000;
+export const StockMovementExportBody = z
+  .object({
+    ...movementFilters,
+    types: z.array(StockMovementType).max(StockMovementType.options.length).optional(),
+  })
+  .strict()
+  .refine(datesInOrder, datesMessage);
+export type StockMovementExportBody = z.infer<typeof StockMovementExportBody>;
+export const StockMovementExport = z.object({
+  items: z.array(StockMovement).max(STOCK_MOVEMENT_EXPORT_LIMIT),
+  total: z.number().int().min(0),
+});
+export type StockMovementExport = z.infer<typeof StockMovementExport>;
+/** `details` of EXPORT_TOO_LARGE: how many rows matched and the limit. */
+export const ExportTooLargeDetail = z.object({
+  total: z.number().int().min(0),
+  limit: z.number().int().min(1),
+});
+export type ExportTooLargeDetail = z.infer<typeof ExportTooLargeDetail>;
 
 // ---------------------------------------------------------------- I02 adjustments and counts (D48)
 

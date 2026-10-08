@@ -10,6 +10,7 @@ import {
   StockCountScanBody,
   StockDocumentIdParams,
   StockListQuery,
+  StockMovementExportBody,
   StockMovementsQuery,
   StockTransferCreateBody,
   StockTransferListQuery,
@@ -32,7 +33,7 @@ router.get(
   validate({ query: StockListQuery }),
   asyncHandler(controller.list),
 );
-// I01 drill-down to the ledger (I05 extends it).
+// I01 drill-down and I05 movement history (product, branch, serial, type and date filters).
 router.get(
   '/movements',
   authenticate,
@@ -40,6 +41,15 @@ router.get(
   requirePermission('stock.view'),
   validate({ query: StockMovementsQuery }),
   asyncHandler(controller.movements),
+);
+// I05 export: export.data here; the SQL also requires stock.view and writes the audit row.
+router.post(
+  '/movements/export',
+  authenticate,
+  loadRequestContext,
+  requirePermission('export.data'),
+  validate({ body: StockMovementExportBody }),
+  asyncHandler(controller.exportMovements),
 );
 // I02 adjustments: read with stock.view, post with stock.adjust (Idempotency-Key).
 router.get(

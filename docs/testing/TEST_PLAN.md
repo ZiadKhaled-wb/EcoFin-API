@@ -265,3 +265,7 @@ See [I03 plan](plans/I03.md). Covers the Done when (stock is never counted in bo
 ## I04 — serial/IMEI units (EC-50)
 
 See [I04 plan](plans/I04.md). Covers the Done when (a duplicate serial is rejected; a unit that isn't in stock in that branch can't be sold; a unit's history shows every step) and the D50 rules.
+
+## I05 — movement history (EC-51)
+
+See [I05 plan](plans/I05.md). Covers the Done when (every movement links to the document that caused it) and the D51 rules (filters, running balance, export.data, the 10 000-row limit, audit).

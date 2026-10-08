@@ -143,6 +143,8 @@ export const errorCodeHttpStatus = {
   // I04 serial units
   SERIAL_TAKEN: 409,
   SERIAL_INVALID: 400,
+  // I05 movement history
+  EXPORT_TOO_LARGE: 422,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;
