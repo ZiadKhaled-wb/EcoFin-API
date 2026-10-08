@@ -253,3 +253,7 @@ O02: Case A username login resolves the linked auth email (username-only invites
 - **Templates** are client constants: rolls 38×25 mm, 50×30 mm, 58×40 mm and an A4 sheet of 3×8 (70×37 mm). The last choice is remembered per browser. Adding a template is a client change only.
 - **Units by serial**: `GET /api/products/:id/units` (`list_product_units`, any employee) lists a product's units in the branches the caller can access (OWNER: all), `in_stock` by default, in serial order; another shop's product answers `PRODUCT_NOT_FOUND`. One label per selected unit, its barcode = the serial. Units only exist once purchases / opening stock (U0x, M02) create them.
 - **Contracts 0.14.0**: `UnitStatus`, `ProductUnit`, `ProductUnitList`, `ProductUnitsQuery`.
+
+### D46. No product limit per plan (EC-130, 9 Oct)
+- Plans limit branches, users and devices only (`plans.max_branches`, `max_users`, `max_devices`, P05). There is **no product limit**: the shop owner decided (9 Oct) that a plan never caps the number of products. TEST-2's "plan limits (… products)" item is closed by this decision; don't add a product counter or trigger.
+- C02 review (same day): restoring a product now locks its category and tax class rows before checking them (`20261009090000_c02_restore_locks.sql`); before, an active category wasn't locked and a concurrent category archive could leave an active product in an archived category (reproduced with two sessions, fixed).
