@@ -140,6 +140,9 @@ export const errorCodeHttpStatus = {
   TRANSFER_SAME_BRANCH: 400,
   TRANSFER_NOT_SENT: 409,
   TRANSFER_ALREADY_SENT: 409,
+  // I04 serial units
+  SERIAL_TAKEN: 409,
+  SERIAL_INVALID: 400,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

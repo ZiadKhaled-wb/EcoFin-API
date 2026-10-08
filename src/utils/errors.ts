@@ -10,6 +10,7 @@ import {
   PlanDowngradeDetail,
   BranchDeactivationCheck,
   CategoryInUseDetail,
+  SerialTakenDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 
@@ -87,7 +88,8 @@ export function mapDbError(err: unknown): AppError | undefined {
     code === 'PLAN_LIMIT_REACHED' ||
     code === 'PLAN_DOWNGRADE_BLOCKED' ||
     code === 'BRANCH_DEACTIVATE_NEEDS_CONFIRM' ||
-    code === 'CATEGORY_IN_USE'
+    code === 'CATEGORY_IN_USE' ||
+    code === 'SERIAL_TAKEN'
   ) {
     try {
       const raw = (err as { details?: unknown }).details;
@@ -99,7 +101,9 @@ export function mapDbError(err: unknown): AppError | undefined {
               ? PlanDowngradeDetail
               : code === 'CATEGORY_IN_USE'
                 ? CategoryInUseDetail
-                : BranchDeactivationCheck
+                : code === 'SERIAL_TAKEN'
+                  ? SerialTakenDetail
+                  : BranchDeactivationCheck
         ).safeParse(JSON.parse(raw));
         if (parsed.success) details = parsed.data;
       }

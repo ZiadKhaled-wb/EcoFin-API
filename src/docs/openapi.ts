@@ -1215,6 +1215,60 @@ export const openApiSpec = {
                 responses: { 200: { description: 'StockTransfer' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/units': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'Search serial units (stock.view)',
+                description: 'I04. Serial prefix search (upper-cased) in the caller\'s branches; optional status and branch. Schema: UnitSearchQuery -> UnitList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'search', in: 'query', schema: { type: 'string', maxLength: 64 } },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['in_stock', 'reserved', 'in_transit', 'sold', 'returned', 'in_repair', 'written_off'] } },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'UnitList' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Inventory'],
+                summary: 'Register serials the shop holds (stock.adjust, serials module)',
+                description: 'I04. Product (serialized), branch, unit cost, 1-500 serials (trimmed, upper-cased). A serial repeated or already in the shop: SERIAL_TAKEN with details.serials. Posted as opening stock (an import job). The same Idempotency-Key returns the same batch. Schema: UnitRegisterBody -> UnitRegistration.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'UnitRegistration' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/units/find': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'A unit by its exact serial, with its history (stock.view)',
+                description: 'I04. As scanned (trimmed, upper-cased). The unit\'s current branch must be one of the caller\'s. Schema: UnitFindQuery -> UnitDetail.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'serial', in: 'query', required: true, schema: { type: 'string', maxLength: 64 } },
+                ],
+                responses: { 200: { description: 'UnitDetail' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/units/{id}': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'A unit with its history (stock.view)',
+                description: 'I04. Every ledger row, oldest first, with the document number and the other party (customer, supplier, from -> to). Schema: UnitDetail.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'UnitDetail' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/settings/profile': {
             get: {
                 tags: ['Settings'],

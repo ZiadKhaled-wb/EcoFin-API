@@ -261,3 +261,7 @@ See [I02 plan](plans/I02.md). Covers the Done when (a posted count makes the sto
 ## I03 — branch transfers (EC-49)
 
 See [I03 plan](plans/I03.md). Covers the Done when (stock is never counted in both branches or in neither; in-transit stock shows in I01) and the D49 rules.
+
+## I04 — serial/IMEI units (EC-50)
+
+See [I04 plan](plans/I04.md). Covers the Done when (a duplicate serial is rejected; a unit that isn't in stock in that branch can't be sold; a unit's history shows every step) and the D50 rules.

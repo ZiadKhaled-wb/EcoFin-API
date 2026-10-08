@@ -8083,6 +8083,7 @@ export type Database = {
         };
         Returns: string;
       };
+      find_unit: { Args: { p_serial: string }; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       get_shop_settings: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -8099,6 +8100,7 @@ export type Database = {
       };
       get_stock_transfer: { Args: { p_id: string }; Returns: Json };
       get_subscription_status: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_unit: { Args: { p_id: string }; Returns: Json };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
       jobs_claim: {
         Args: { p_limit?: number; p_types: string[]; p_worker: string };
@@ -8263,6 +8265,17 @@ export type Database = {
         };
         Returns: string;
       };
+      register_units: {
+        Args: {
+          p_branch_id: string;
+          p_cost: string;
+          p_idempotency_key: string;
+          p_note: string | null;
+          p_product_id: string;
+          p_serials: Json;
+        };
+        Returns: Json;
+      };
       require_module: { Args: { p_module: string }; Returns: undefined };
       resend_employee_invite: {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
@@ -8270,6 +8283,16 @@ export type Database = {
       };
       save_stock_count_lines: { Args: { p_count_id: string; p_lines: Json }; Returns: Json };
       scan_stock_count: { Args: { p_code: string; p_count_id: string }; Returns: Json };
+      search_units: {
+        Args: {
+          p_branch_id?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_search?: string;
+          p_status?: string;
+        };
+        Returns: Json;
+      };
       send_stock_transfer: { Args: { p_id: string }; Returns: Json };
       session_context: {
         Args: Record<PropertyKey, never>;
