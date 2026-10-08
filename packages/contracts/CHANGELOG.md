@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.0
+
+- I04 serial units: Serial (trimmed, upper-cased), SERIAL_PATTERN, UnitRegisterBody, UnitRegistration, SerialTakenDetail, UnitHistoryEntry, UnitSummary, UnitDetail, UnitList, UnitSearchQuery, UnitFindQuery, UnitIdParams. Error codes SERIAL_TAKEN (409, detail: the serials), SERIAL_INVALID (400).
+
 ## 0.17.0
 
 - I03 branch transfers: TransferStatus, TransferDiscrepancyReason, StockTransferLineBody, StockTransferCreateBody, StockTransferUpdateBody, StockTransferReceiveLine, StockTransferReceiveBody, StockTransferLine, StockTransferSummary, StockTransfer, StockTransferList, StockTransferListQuery (transfers carry from/to branch names), TransferDestination(List). Error codes STOCK_TRANSFER_NOT_FOUND (404), TRANSFER_SAME_BRANCH (400), TRANSFER_NOT_SENT, TRANSFER_ALREADY_SENT (409).

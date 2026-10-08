@@ -647,6 +647,140 @@ for (const [method, suffix, body] of [
     },
   });
 }
+// I04 units: shop B's plan has no serials, so shop A registers a unit the real way and shop B
+// aims at it (and shop A aims at shop B's branch and product).
+async function shopAUnit(h: CrossShopHarness) {
+  const a = await h.login(OWNER_A);
+  const product = await h.call('POST', '/api/products', {
+    token: a.accessToken,
+    body: {
+      name_ar: 'Cross-shop phone',
+      sku: key('XSU').toUpperCase(),
+      cash_price: '10.00',
+      is_serialized: true,
+    },
+  });
+  h.expect(product.res.status, JSON.stringify(product.res.body)).toBe(201);
+  const serial = key('XS')
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, '');
+  const made = await h.call('POST', '/api/units', {
+    token: a.accessToken,
+    idempotencyKey: key('units'),
+    body: {
+      product_id: (product.res.body as { id: string }).id,
+      branch_id: SHOP_A_BR1,
+      cost: '5.00',
+      serials: [serial],
+    },
+  });
+  h.expect(made.res.status, JSON.stringify(made.res.body)).toBe(201);
+  return { id: (made.res.body as { units: { id: string }[] }).units[0]!.id, serial };
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/units',
+  name: "unit search refuses a foreign header, another shop's branch and an org query key",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/units', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const branch = await h.call('GET', '/api/units', {
+      token: a.accessToken,
+      query: 'branch_id=' + SHOP_B_BR1,
+    });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    const injected = await h.call('GET', '/api/units', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+  },
+});
+
+for (const [path, by] of [
+  ['/api/units/find', 'serial'],
+  ['/api/units/:id', 'id'],
+] as const) {
+  crossShopCase({
+    method: 'GET',
+    path,
+    name: `${path} never finds another shop's unit`,
+    async run(h) {
+      const unit = await shopAUnit(h);
+      const b = await h.login(OWNER_B);
+      const foreign = await h.call(
+        'GET',
+        by === 'id' ? `/api/units/${unit.id}` : '/api/units/find',
+        { token: b.accessToken, ...(by === 'serial' ? { query: 'serial=' + unit.serial } : {}) },
+      );
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('UNIT_NOT_FOUND');
+    },
+  });
+}
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/units',
+  name: "unit registration refuses another shop's branch and product, a foreign header and an org key",
+  async run(h) {
+    const productB = await shopBProduct(h, 'units');
+    const a = await h.login(OWNER_A);
+    const own = await h.call('POST', '/api/products', {
+      token: a.accessToken,
+      body: {
+        name_ar: 'Cross-shop phone',
+        sku: key('XSR').toUpperCase(),
+        cash_price: '10.00',
+        is_serialized: true,
+      },
+    });
+    h.expect(own.res.status).toBe(201);
+    const body = {
+      product_id: (own.res.body as { id: string }).id,
+      branch_id: SHOP_A_BR1,
+      cost: '5.00',
+      serials: [
+        key('XR')
+          .toUpperCase()
+          .replace(/[^A-Z0-9-]/g, ''),
+      ],
+    };
+    const toB = await h.call('POST', '/api/units', {
+      token: a.accessToken,
+      idempotencyKey: key('u1'),
+      body: { ...body, branch_id: SHOP_B_BR1 },
+    });
+    h.expect(toB.res.status).toBe(404);
+    h.expect(h.code(toB.res)).toBe('BRANCH_NOT_FOUND');
+    const ofB = await h.call('POST', '/api/units', {
+      token: a.accessToken,
+      idempotencyKey: key('u2'),
+      body: { ...body, product_id: productB.id },
+    });
+    h.expect(ofB.res.status).toBe(404);
+    h.expect(h.code(ofB.res)).toBe('PRODUCT_NOT_FOUND');
+    const header = await h.call('POST', '/api/units', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      idempotencyKey: key('u3'),
+      body,
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/units', {
+      token: a.accessToken,
+      idempotencyKey: key('u4'),
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    for (const sent of [toB, ofB, header, injected]) {
+      h.expect(await h.auditRowsFrom(SHOP_B, sent.ip)).toBe(0);
+    }
+  },
+});
 crossShopCase({
   method: 'GET',
   path: '/api/auth/me',

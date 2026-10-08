@@ -64,7 +64,10 @@ INSERT INTO t.no_permission_ok VALUES
   ('get_stock_count', 'I02: read-only count with its lines; checks app.has_permission(stock.count) so an expired shop can still read'),
   ('list_stock_transfers', 'I03: read-only transfers list; checks app.has_permission(stock.view) so an expired shop can still read'),
   ('get_stock_transfer', 'I03: read-only transfer with its lines; checks app.has_permission(stock.view) so an expired shop can still read'),
-  ('list_transfer_destinations', 'I03: read-only names of the shop''s active branches; checks app.has_permission(stock.transfer_send)');
+  ('list_transfer_destinations', 'I03: read-only names of the shop''s active branches; checks app.has_permission(stock.transfer_send)'),
+  ('get_unit', 'I04: read-only unit with its history; checks app.has_permission(stock.view) so an expired shop can still read'),
+  ('find_unit', 'I04: read-only unit by exact serial; checks app.has_permission(stock.view) so an expired shop can still read'),
+  ('search_units', 'I04: read-only serial search in the caller''s branches; checks app.has_permission(stock.view)');
 
 -- ---------------------------------------------------------------- catalog helpers (plpgsql, so a
 -- privilege function never runs on rows of another kind or schema before the filter)

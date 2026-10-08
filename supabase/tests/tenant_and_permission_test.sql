@@ -392,6 +392,17 @@ INSERT INTO t.denial VALUES
  ('get_stock_transfer','stock_transfer_5_get','stock.view',$$SELECT public.get_stock_transfer((SELECT id FROM public.stock_transfers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-transfer-1'))$$),
  ('list_stock_transfers','stock_transfer_6_list','stock.view',$$SELECT public.list_stock_transfers()$$),
  ('list_transfer_destinations','stock_transfer_7_destinations','stock.transfer_send',$$SELECT public.list_transfer_destinations()$$);
+-- I04: a serialized product of shop one (made as its owner) whose serial the cases register and read.
+SELECT t.as_user('d0000000-0000-0000-0000-000000000011', 'd1000000-0000-0000-0000-000000000001');
+SET LOCAL ROLE authenticated;
+SELECT public.create_product('{"name_ar":"Denial phone","sku":"DENIAL-PH","cash_price":"1","is_serialized":true}');
+RESET ROLE;
+SELECT t.as_user(NULL);
+INSERT INTO t.denial VALUES
+ ('register_units','unit_1_register','stock.adjust',$$SELECT public.register_units((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-PH'),'d2000000-0000-0000-0000-000000000011','100','["DENIAL-SN-1"]',NULL,'denial-units-1')$$),
+ ('get_unit','unit_2_get','stock.view',$$SELECT public.get_unit((SELECT id FROM public.units WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND serial='DENIAL-SN-1'))$$),
+ ('find_unit','unit_3_find','stock.view',$$SELECT public.find_unit('DENIAL-SN-1')$$),
+ ('search_units','unit_4_search','stock.view',$$SELECT public.search_units()$$);
 -- A local database may hold open counts from the integration tests; this file rolls back anyway.
 UPDATE public.stock_counts SET status = 'cancelled' WHERE organization_id = 'd1000000-0000-0000-0000-000000000001' AND status = 'open';
 -- I02: case names order the calls (a count is created, counted, posted with every other line counted

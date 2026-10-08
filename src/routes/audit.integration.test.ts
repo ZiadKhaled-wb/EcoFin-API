@@ -352,6 +352,28 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
+    'POST /api/units': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const product = await send('post', '/api/products', {
+        token: owner.accessToken,
+        body: { ...productBody(), is_serialized: true },
+      });
+      expect(product.res.status, JSON.stringify(product.res.body)).toBe(201);
+      return {
+        sent: await send('post', '/api/units', {
+          token: owner.accessToken,
+          key: `f07-units-${STAMP}-${ipCounter}`,
+          body: {
+            product_id: product.res.body.id as string,
+            branch_id: BR1,
+            cost: '10.00',
+            serials: [`F07-${STAMP}-${ipCounter}`],
+          },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
     'POST /api/stock/transfers': async () => {
       const owner = await login('owner.one@ecotech.test');
       return { sent: (await newTransfer(owner.accessToken)).sent, org: SHOP_ONE, status: 201 };

@@ -40,6 +40,7 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   },
   'POST /api/stock/counts/:id/post': { action: 'stock_count.posted' },
   'POST /api/stock/counts/:id/cancel': { action: 'stock_count.cancelled' },
+  'POST /api/units': { action: 'units.registered' },
   'POST /api/stock/transfers': { action: 'stock_transfer.created' },
   'PUT /api/stock/transfers/:id': { action: 'stock_transfer.updated' },
   'POST /api/stock/transfers/:id/send': { action: 'stock_transfer.sent' },
