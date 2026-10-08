@@ -8156,6 +8156,22 @@ export type Database = {
         };
         Returns: Json;
       };
+      list_stock: {
+        Args: {
+          p_branch_id?: string;
+          p_category_id?: string;
+          p_include_children?: boolean;
+          p_limit?: number;
+          p_low_only?: boolean;
+          p_offset?: number;
+          p_search?: string;
+        };
+        Returns: Json;
+      };
+      list_stock_movements: {
+        Args: { p_branch_id?: string; p_limit?: number; p_offset?: number; p_product_id: string };
+        Returns: Json;
+      };
       list_tax_classes: { Args: Record<PropertyKey, never>; Returns: Json };
       lookup_product: { Args: { p_code: string }; Returns: Json };
       my_permissions: {

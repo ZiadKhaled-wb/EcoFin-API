@@ -943,7 +943,41 @@ export const openApiSpec = {
                 responses: { 200: { description: 'Product' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
-        '/api/settings/profile': {
+        '/api/stock': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'Stock per product and branch (stock.view)',
+                description: 'I01. One row per product and branch in the caller\'s branches: on_hand, reserved, available (= on_hand − reserved), damaged, in_transit (sent transfers coming in), min_level and low (available < min_level). Every active product shows, also with zero stock. Filters: branch_id, category_id (+ include_subcategories), search, low_only. Schema: StockListQuery → StockList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'category_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'include_subcategories', in: 'query', schema: { type: 'string', enum: ['true', 'false'], default: 'true' } },
+                    { name: 'search', in: 'query', schema: { type: 'string', maxLength: 100 } },
+                    { name: 'low_only', in: 'query', schema: { type: 'string', enum: ['true', 'false'], default: 'false' } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'StockList' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/movements': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'Ledger movements of a product, newest first, with the running balance (stock.view)',
+                description: 'I01 drill-down (I05 extends it). branch_id optional: every branch in scope when left out. Schema: StockMovementsQuery → StockMovementList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'product_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'StockMovementList' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },        '/api/settings/profile': {
             get: {
                 tags: ['Settings'],
                 summary: 'Read the legal and financing profile (P04)',

@@ -15,6 +15,7 @@ import settingsRoutes from './routes/settings.js';
 import taxClassesRoutes from './routes/taxClasses.js';
 import categoriesRoutes from './routes/categories.js';
 import productsRoutes from './routes/products.js';
+import stockRoutes from './routes/stock.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { noClientOrg } from './middleware/noClientOrg.js';
 import { requestId } from './middleware/requestId.js';
@@ -58,6 +59,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/tax-classes', taxClassesRoutes);
   mountRouter(app, '/api/categories', categoriesRoutes);
   mountRouter(app, '/api/products', productsRoutes);
+  mountRouter(app, '/api/stock', stockRoutes);
   mountRouter(app, '/api/me', meRoutes);
   mountRouter(app, '/api/employees', employeesRoutes);
   mountRouter(app, '/api/files', filesRoutes);

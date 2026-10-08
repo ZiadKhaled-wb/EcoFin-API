@@ -268,6 +268,51 @@ crossShopCase({
     h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
   },
 });
+// I01 stock view: a foreign x-org-id, another shop's branch or product, an org key in the query.
+crossShopCase({
+  method: 'GET',
+  path: '/api/stock',
+  name: "stock view refuses a foreign header, another shop's branch and an org query key",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/stock', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const branch = await h.call('GET', '/api/stock', {
+      token: a.accessToken,
+      query: 'branch_id=' + SHOP_B_BR1,
+    });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    const injected = await h.call('GET', '/api/stock', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/stock/movements',
+  name: "stock movements refuse another shop's product and branch",
+  async run(h) {
+    const product = await shopBProduct(h, 'movements');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/stock/movements', {
+      token: a.accessToken,
+      query: 'product_id=' + product.id,
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('PRODUCT_NOT_FOUND');
+    const header = await h.call('GET', '/api/stock/movements', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      query: 'product_id=' + product.id,
+    });
+    h.expect(header.res.status).toBe(403);
+  },
+});
 crossShopCase({
   method: 'GET',
   path: '/api/auth/me',
