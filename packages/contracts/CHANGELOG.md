@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.0
+
+- I01 stock view: StockRow, StockList, StockListQuery (branch, category, subcategories, search, low_only); StockMovement, StockMovementList, StockMovementsQuery (drill-down), StockMovementType, StockState.
+
 ## 0.14.0
 
 - C03 labels: UnitStatus, ProductUnit, ProductUnitList, ProductUnitsQuery (`GET /api/products/:id/units`).
