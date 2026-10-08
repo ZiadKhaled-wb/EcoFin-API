@@ -380,6 +380,8 @@ INSERT INTO t.denial VALUES
 INSERT INTO t.denial VALUES
  ('list_stock','list_stock','stock.view',$$SELECT public.list_stock()$$),
  ('list_stock_movements','list_stock_movements','stock.view',$$SELECT public.list_stock_movements((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' ORDER BY id LIMIT 1))$$);
+-- A local database may hold open counts from the integration tests; this file rolls back anyway.
+UPDATE public.stock_counts SET status = 'cancelled' WHERE organization_id = 'd1000000-0000-0000-0000-000000000001' AND status = 'open';
 -- I02: case names order the calls (a count is created, counted, posted with every other line counted
 -- as expected; cancel uses its own count).
 INSERT INTO t.denial VALUES

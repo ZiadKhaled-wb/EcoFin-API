@@ -60,10 +60,10 @@ RESET ROLE;
 -- Opening stock (superuser; purchases are U02): tv 10 in main, 3 phones (serials) in main, 1 in second.
 UPDATE public.products SET avg_cost=40 WHERE id=t.id('tv');
 INSERT INTO public.units(organization_id,product_id,serial,branch_id,cost)
-SELECT t.org('a'),t.id('phone'),s,t.id(b),700 FROM (VALUES('I02-SN-1','main'),('I02-SN-2','main'),('I02-SN-3','main'),('I02-SN-4','second')) v(s,b);
+SELECT t.org('a'),t.id('phone'),s,t.id(b),700 FROM (VALUES('I02-SN-1','main'),('I02-SN-2','main'),('I02-SN-3','main'),('I02-SN-4','second'),('I02-SN-5','second')) v(s,b);
 INSERT INTO t.ids SELECT 'sn'||right(serial,1),id FROM public.units WHERE organization_id=t.org('a') AND product_id=t.id('phone');
 SELECT t.move('tv','main',10,'opening');
-SELECT t.move('phone','main',1,'opening','sn1'),t.move('phone','main',1,'opening','sn2'),t.move('phone','main',1,'opening','sn3'),t.move('phone','second',1,'opening','sn4');
+SELECT t.move('phone','main',1,'opening','sn1'),t.move('phone','main',1,'opening','sn2'),t.move('phone','main',1,'opening','sn3'),t.move('phone','second',1,'opening','sn4'),t.move('phone','second',1,'opening','sn5');
 
 -- ---------------------------------------------------------------- adjustments
 SELECT t.as_user('a2000000-0000-0000-8000-000000000001',t.org('a'));
@@ -114,6 +114,11 @@ SELECT t.expect('loss of a serial: the unit is written off, cost = the unit''s c
 SELECT public.post_stock_adjustment(t.id('main'),'found',NULL,
   jsonb_build_array(jsonb_build_object('product_id',t.id('phone'),'unit_id',t.id('sn3'),'quantity',1)),'i02-adj-found-unit') AS adj4 \gset
 SELECT t.expect('found again: back in stock',(SELECT status='in_stock' AND branch_id=t.id('main') FROM public.units WHERE id=t.id('sn3')) AND t.level('phone','main')=3);
+-- sn4 is sold (superuser: sales are S01); it can't be "found" again.
+RESET ROLE;
+SELECT t.move('phone','second',-1,'sale_out','sn4');
+SET LOCAL ROLE authenticated;
+SELECT t.error('a sold serial can''t be found again',format($q$SELECT public.post_stock_adjustment(%L,'found',NULL,'[{"product_id":"%s","unit_id":"%s","quantity":1}]','i02-adj-bad-sold')$q$,t.id('main'),t.id('phone'),t.id('sn4')),'UNIT_NOT_AVAILABLE');
 SELECT t.error('another shop''s product',format($q$SELECT public.post_stock_adjustment(%L,'found',NULL,'[{"product_id":"%s","quantity":1}]','i02-adj-bad-16')$q$,t.id('main'),t.id('cable_b')),'PRODUCT_NOT_FOUND');
 SELECT t.error('another shop''s branch',format($q$SELECT public.post_stock_adjustment(%L,'found',NULL,'[{"product_id":"%s","quantity":1}]','i02-adj-bad-17')$q$,t.id('main_b'),t.id('cable')),'BRANCH_NOT_FOUND');
 SELECT t.expect('audit: one stock_adjustment.posted row per adjustment, with the lines',
@@ -175,7 +180,8 @@ SELECT t.expect('scanning a serial counts that unit',
   AND (public.scan_stock_count((:'c1'::jsonb->>'id')::uuid,'I02-SN-2')->>'counted_qty')::int=1
   AND (public.scan_stock_count((:'c1'::jsonb->>'id')::uuid,'I02-SN-2')->>'counted_qty')::int=1);
 SELECT t.error('a serialized product''s barcode: scan the serial',format($q$SELECT public.scan_stock_count(%L,'I02-PH')$q$,:'c1'::jsonb->>'id'),'UNIT_REQUIRED');
-SELECT t.error('a serial in stock in another branch',format($q$SELECT public.scan_stock_count(%L,'I02-SN-4')$q$,:'c1'::jsonb->>'id'),'UNIT_ALREADY_IN_STOCK');
+SELECT t.error('a serial in stock in another branch',format($q$SELECT public.scan_stock_count(%L,'I02-SN-5')$q$,:'c1'::jsonb->>'id'),'UNIT_ALREADY_IN_STOCK');
+SELECT t.error('a sold serial can''t be counted back',format($q$SELECT public.scan_stock_count(%L,'I02-SN-4')$q$,:'c1'::jsonb->>'id'),'UNIT_NOT_AVAILABLE');
 SELECT t.error('an unknown code',format($q$SELECT public.scan_stock_count(%L,'NOPE-123')$q$,:'c1'::jsonb->>'id'),'PRODUCT_NOT_FOUND');
 SELECT t.error('another shop''s product on the sheet',format($q$SELECT public.save_stock_count_lines(%L,'[{"product_id":"%s","counted_qty":1}]')$q$,:'c1'::jsonb->>'id',t.id('cable_b')),'PRODUCT_NOT_FOUND');
 SELECT t.error('a unit counted as 2',format($q$SELECT public.save_stock_count_lines(%L,'[{"product_id":"%s","unit_id":"%s","counted_qty":2}]')$q$,:'c1'::jsonb->>'id',t.id('phone'),t.id('sn1')),'VALIDATION_FAILED');

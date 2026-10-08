@@ -166,8 +166,10 @@ $$;
 
 -- Inserts the lines of an adjustment and their ledger movements, in product_id then unit order
 -- (so two documents lock stock rows in the same order). Cost at the time: the unit's cost, else
--- the product's average cost (D04). The triggers raise OUT_OF_STOCK, UNIT_NOT_AVAILABLE,
--- UNIT_ALREADY_IN_STOCK, DAY_CLOSED...
+-- the product's average cost (D04). A unit comes back into stock only from 'written_off': a sold,
+-- returned (to the supplier) or in-repair unit is someone else's, so it is refused
+-- (UNIT_NOT_AVAILABLE; the trigger only refuses units already in stock). The triggers raise
+-- OUT_OF_STOCK, UNIT_NOT_AVAILABLE, UNIT_ALREADY_IN_STOCK, DAY_CLOSED...
 CREATE FUNCTION app.post_adjustment_lines(p_org uuid, p_emp uuid, p_adjustment_id uuid, p_branch_id uuid,
                                           p_lines jsonb)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
@@ -180,6 +182,11 @@ BEGIN
         FROM jsonb_array_elements(p_lines) e
         ORDER BY 1, 2 NULLS FIRST
     LOOP
+        IF r.unit_id IS NOT NULL AND r.quantity > 0 AND NOT EXISTS (
+            SELECT 1 FROM public.units u
+            WHERE u.id = r.unit_id AND u.organization_id = p_org AND u.status = 'written_off') THEN
+            RAISE EXCEPTION 'UNIT_NOT_AVAILABLE: only a written-off unit can be found again' USING ERRCODE = 'P0001';
+        END IF;
         INSERT INTO public.stock_adjustment_lines (organization_id, adjustment_id, product_id, unit_id, quantity, created_by)
         VALUES (p_org, p_adjustment_id, r.product_id, r.unit_id, r.quantity, p_emp)
         RETURNING id INTO v_line;
@@ -472,6 +479,10 @@ BEGIN
             END IF;
             IF v_unit.status IN ('in_stock', 'reserved', 'in_transit') AND v_unit.branch_id <> p_count.branch_id THEN
                 RAISE EXCEPTION 'UNIT_ALREADY_IN_STOCK: % is in another branch', v_unit.serial USING ERRCODE = 'P0001';
+            END IF;
+            -- Sold, returned to the supplier or in repair: not the shop's to count.
+            IF v_unit.status NOT IN ('in_stock', 'reserved', 'written_off') THEN
+                RAISE EXCEPTION 'UNIT_NOT_AVAILABLE: % is %', v_unit.serial, v_unit.status USING ERRCODE = 'P0001';
             END IF;
             v_expected := (v_unit.branch_id = p_count.branch_id AND v_unit.status IN ('in_stock', 'reserved'))::integer;
         ELSE
