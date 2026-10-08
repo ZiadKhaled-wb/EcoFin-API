@@ -218,6 +218,9 @@ SELECT t.expect('the sheet keeps what was expected at posting time, uncounted li
 SELECT t.expect('ledger caches still match the ledger',NOT EXISTS(SELECT 1 FROM app.ledger_mismatches(t.org('a'))));
 SELECT t.as_user('a2000000-0000-0000-8000-000000000004',t.org('a'));
 SET LOCAL ROLE authenticated;
+SELECT t.expect('replaying the post key: the same adjustment, nothing posted twice',
+  (public.post_stock_count((:'c1'::jsonb->>'id')::uuid,true,'i02-post-1')->>'adjustment_id')=(:'p1'::jsonb->>'adjustment_id')
+  AND (SELECT count(*)=1 FROM public.stock_adjustments WHERE count_id=(:'p1'::jsonb->>'id')::uuid) AND t.level('tv','main')=6);
 SELECT t.expect('posting again: the same result, nothing posted twice',
   (public.post_stock_count((:'c1'::jsonb->>'id')::uuid,true,'i02-post-1b')->>'adjustment_id')=(:'p1'::jsonb->>'adjustment_id') AND t.level('tv','main')=6);
 SELECT t.error('a posted count can''t change',format($q$SELECT public.save_stock_count_lines(%L,'[{"product_id":"%s","counted_qty":1}]')$q$,:'c1'::jsonb->>'id',t.id('tv')),'DOCUMENT_FINAL');
