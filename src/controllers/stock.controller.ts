@@ -11,6 +11,7 @@ import {
   type StockCountPostBody,
   type StockCountScanBody,
   type StockListQuery,
+  type StockMovementExportBody,
   type StockMovementsQuery,
   type StockTransferCreateBody,
   type StockTransferListQuery,
@@ -27,6 +28,9 @@ export async function movements(req: Request, res: Response) {
   res.json(
     await service.listStockMovements(getCtx(req), req.query as unknown as StockMovementsQuery),
   );
+}
+export async function exportMovements(req: Request, res: Response) {
+  res.json(await service.exportStockMovements(getCtx(req), req.body as StockMovementExportBody));
 }
 const idOf = (req: Request) => StockDocumentIdParams.parse(req.params).id;
 /** Stock writes take the `Idempotency-Key` header (8-128 characters); missing = 400. */

@@ -8083,6 +8083,17 @@ export type Database = {
         };
         Returns: string;
       };
+      export_stock_movements: {
+        Args: {
+          p_branch_id?: string;
+          p_from?: string;
+          p_product_id?: string;
+          p_serial?: string;
+          p_to?: string;
+          p_types?: Database['public']['Enums']['stock_movement_type'][];
+        };
+        Returns: Json;
+      };
       find_unit: { Args: { p_serial: string }; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -8207,7 +8218,16 @@ export type Database = {
         Returns: Json;
       };
       list_stock_movements: {
-        Args: { p_branch_id?: string; p_limit?: number; p_offset?: number; p_product_id: string };
+        Args: {
+          p_branch_id?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_product_id?: string;
+          p_serial?: string;
+          p_to?: string;
+          p_types?: Database['public']['Enums']['stock_movement_type'][];
+        };
         Returns: Json;
       };
       list_stock_transfers: {

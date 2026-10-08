@@ -6,6 +6,7 @@ import {
   StockCountLine,
   StockCountList,
   StockList,
+  StockMovementExport,
   StockMovementList,
   StockTransfer,
   StockTransferList,
@@ -18,6 +19,7 @@ import {
   type StockCountListQuery,
   type StockCountPostBody,
   type StockListQuery,
+  type StockMovementExportBody,
   type StockMovementsQuery,
   type StockTransferCreateBody,
   type StockTransferListQuery,
@@ -57,14 +59,23 @@ export async function listStock(ctx: RequestContext, query: StockListQuery): Pro
   return StockList.parse({ ...ListResult.parse(data), page: query.page, pageSize: query.pageSize });
 }
 
-/** I01 drill-down: a product's ledger movements, newest first, with the running balance. */
+/** The I05 filters as RPC arguments; an absent filter is left out (the SQL default is "all"). */
+const movementFilters = (f: StockMovementExportBody) => ({
+  ...(f.product_id ? { p_product_id: f.product_id } : {}),
+  ...(f.branch_id ? { p_branch_id: f.branch_id } : {}),
+  ...(f.serial ? { p_serial: f.serial } : {}),
+  ...(f.types?.length ? { p_types: f.types } : {}),
+  ...(f.from ? { p_from: f.from } : {}),
+  ...(f.to ? { p_to: f.to } : {}),
+});
+
+/** I01 drill-down and I05 history: ledger movements, newest first, with the running balance. */
 export async function listStockMovements(
   ctx: RequestContext,
   query: StockMovementsQuery,
 ): Promise<StockMovementList> {
   const { data, error } = await ctx.db.rpc('list_stock_movements', {
-    p_product_id: query.product_id,
-    ...(query.branch_id ? { p_branch_id: query.branch_id } : {}),
+    ...movementFilters(query),
     ...paging(query),
   });
   if (error) fail(error);
@@ -73,6 +84,16 @@ export async function listStockMovements(
     page: query.page,
     pageSize: query.pageSize,
   });
+}
+
+/** I05: every matching movement for a CSV (export.data + stock.view; audited in SQL). */
+export async function exportStockMovements(
+  ctx: RequestContext,
+  body: StockMovementExportBody,
+): Promise<StockMovementExport> {
+  const { data, error } = await ctx.db.rpc('export_stock_movements', movementFilters(body));
+  if (error) fail(error);
+  return StockMovementExport.parse(data);
 }
 
 /** I02: posts an adjustment; the same idempotency key again returns the first one. */

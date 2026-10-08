@@ -18,6 +18,10 @@ import {
   StockTransferUpdateBody,
   StockMovementList,
   StockMovementsQuery,
+  StockMovementExportBody,
+  StockMovementExport,
+  STOCK_MOVEMENT_EXPORT_LIMIT,
+  ExportTooLargeDetail,
   StockRow,
 } from './stock.js';
 
@@ -68,29 +72,60 @@ describe('I01 stock contracts', () => {
     expect(StockListQuery.safeParse({ pageSize: '101' }).success).toBe(false);
   });
 
-  it('movements need a product; branch is optional', () => {
-    expect(StockMovementsQuery.parse({ product_id: ID })).toMatchObject({
-      product_id: ID,
-      page: 1,
+  const movement = {
+    id: ID,
+    created_at: '2026-10-09T08:00:00.000Z',
+    business_date: '2026-10-09',
+    product_id: ID,
+    product_name_ar: 'تلفزيون',
+    product_name_en: null,
+    sku: 'TV-1',
+    branch_id: ID,
+    unit_id: null,
+    serial: null,
+    type: 'purchase_in',
+    stock_state: 'sellable',
+    quantity: 10,
+    balance_after: 10,
+    source_type: 'purchase_invoice',
+    source_id: ID,
+    source_number: 'MAIN-PI-26-000001',
+    party: 'Supplier',
+    reason: null,
+    reverses_movement_id: null,
+    created_by_name: 'Owner',
+  };
+
+  it('I05 movement filters: everything optional, serial upper-cased, types as a list', () => {
+    expect(StockMovementsQuery.parse({})).toMatchObject({ page: 1, pageSize: 50 });
+    expect(StockMovementsQuery.parse({ product_id: ID })).toMatchObject({ product_id: ID });
+    expect(
+      StockMovementsQuery.parse({
+        serial: ' imei-1 ',
+        types: 'sale_out, delivery_out',
+        from: '2026-10-01',
+        to: '2026-10-09',
+      }),
+    ).toMatchObject({
+      serial: 'IMEI-1',
+      types: ['sale_out', 'delivery_out'],
+      from: '2026-10-01',
+      to: '2026-10-09',
     });
-    expect(StockMovementsQuery.safeParse({}).success).toBe(false);
-    const movement = {
-      id: ID,
-      created_at: '2026-10-09T08:00:00.000Z',
-      business_date: '2026-10-09',
-      branch_id: ID,
-      type: 'purchase_in',
-      stock_state: 'sellable',
-      quantity: 10,
-      balance_after: 10,
-      serial: null,
-      source_type: 'purchase_invoice',
-      source_id: ID,
-      source_number: null,
-      reason: null,
-      reverses_movement_id: null,
-      created_by_name: 'Owner',
-    };
+    expect(StockMovementsQuery.parse({ serial: '   ', types: '' })).toMatchObject({
+      serial: undefined,
+      types: undefined,
+    });
+    expect(StockMovementsQuery.safeParse({ types: 'sale_out,gift' }).success).toBe(false);
+    expect(StockMovementsQuery.safeParse({ from: '2026-10-09', to: '2026-10-01' }).success).toBe(
+      false,
+    );
+    expect(StockMovementsQuery.safeParse({ from: '2026-02-30' }).success).toBe(false);
+    expect(StockMovementsQuery.safeParse({ serial: 'A'.repeat(65) }).success).toBe(false);
+    expect(StockMovementsQuery.safeParse({ organization_id: ID }).success).toBe(false);
+  });
+
+  it('a movement carries its product, unit and source document', () => {
     expect(
       StockMovementList.parse({ items: [movement], page: 1, pageSize: 50, total: 1 }).items[0],
     ).toEqual(movement);
@@ -102,6 +137,24 @@ describe('I01 stock contracts', () => {
         total: 1,
       }).success,
     ).toBe(false);
+  });
+
+  it('I05 export: the same filters in a body, at most the export limit', () => {
+    expect(StockMovementExportBody.parse({ types: ['adjustment'], serial: 'sn-1' })).toEqual({
+      types: ['adjustment'],
+      serial: 'SN-1',
+    });
+    expect(StockMovementExportBody.safeParse({ types: ['gift'] }).success).toBe(false);
+    expect(StockMovementExportBody.safeParse({ page: 1 }).success).toBe(false);
+    expect(
+      StockMovementExportBody.safeParse({ from: '2026-10-09', to: '2026-10-01' }).success,
+    ).toBe(false);
+    expect(StockMovementExport.parse({ items: [movement], total: 1 }).total).toBe(1);
+    expect(STOCK_MOVEMENT_EXPORT_LIMIT).toBe(10_000);
+    expect(ExportTooLargeDetail.parse({ total: 10_001, limit: 10_000 })).toEqual({
+      total: 10_001,
+      limit: 10_000,
+    });
   });
 });
 

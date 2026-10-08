@@ -965,17 +965,31 @@ export const openApiSpec = {
         '/api/stock/movements': {
             get: {
                 tags: ['Inventory'],
-                summary: 'Ledger movements of a product, newest first, with the running balance (stock.view)',
-                description: 'I01 drill-down (I05 extends it). branch_id optional: every branch in scope when left out. Adjustments show their number (source_number) and reason (I02). Schema: StockMovementsQuery → StockMovementList.',
+                summary: 'Movement history: ledger movements, newest first, with the running balance (stock.view)',
+                description: 'I01 drill-down and I05 movement history (D51). Every filter is optional: product, branch (every branch in scope when left out), serial (exact, any case), types (comma-separated movement types), from / to (business dates). The running balance is the on-hand of that product, branch and stock state after the movement, over the whole ledger. Each movement names its product, unit, employee and source document (source_type + source_id, number, other party, adjustment reason). Errors: PRODUCT_NOT_FOUND, BRANCH_NOT_FOUND, BRANCH_DENIED, VALIDATION_FAILED. Schema: StockMovementsQuery → StockMovementList.',
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     { $ref: '#/components/parameters/OrgId' },
-                    { name: 'product_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'product_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
                     { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'serial', in: 'query', schema: { type: 'string', maxLength: 64 } },
+                    { name: 'types', in: 'query', description: 'Comma-separated: opening, purchase_in, purchase_return_out, sale_out, sale_return_in, transfer_out, transfer_in, adjustment, delivery_out, claim_out, claim_in', schema: { type: 'string' } },
+                    { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
                     { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
                     { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
                 ],
-                responses: { 200: { description: 'StockMovementList' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+                responses: { 200: { description: 'StockMovementList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/movements/export': {
+            post: {
+                tags: ['Inventory'],
+                summary: 'Export the movement history (export.data + stock.view)',
+                description: 'I05 (D51, user decision). The same filters as GET /api/stock/movements in the body, no paging; every matching movement, newest first, for the website to turn into a CSV. At most 10 000 rows: more is refused with EXPORT_TOO_LARGE (422, details.total and details.limit), never cut. Works in an expired shop. Audited as stock_movements.exported with the filters and the row count. Schema: StockMovementExportBody → StockMovementExport.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'StockMovementExport' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
             },
         },
         '/api/stock/adjustments': {

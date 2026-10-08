@@ -323,6 +323,18 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         status: 201,
       };
     },
+    // I05: an export reads but is audited (with the filters and the row count).
+    'POST /api/stock/movements/export': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newProduct(owner.accessToken);
+      return {
+        sent: await send('post', '/api/stock/movements/export', {
+          token: owner.accessToken,
+          body: { product_id: id },
+        }),
+        org: SHOP_ONE,
+      };
+    },
     // Counts use a fresh (empty) category each, so they never overlap an open count of the branch.
     'POST /api/stock/counts': async () => {
       const owner = await login('owner.one@ecotech.test');

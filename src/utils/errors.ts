@@ -11,6 +11,7 @@ import {
   BranchDeactivationCheck,
   CategoryInUseDetail,
   SerialTakenDetail,
+  ExportTooLargeDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 
@@ -89,7 +90,8 @@ export function mapDbError(err: unknown): AppError | undefined {
     code === 'PLAN_DOWNGRADE_BLOCKED' ||
     code === 'BRANCH_DEACTIVATE_NEEDS_CONFIRM' ||
     code === 'CATEGORY_IN_USE' ||
-    code === 'SERIAL_TAKEN'
+    code === 'SERIAL_TAKEN' ||
+    code === 'EXPORT_TOO_LARGE'
   ) {
     try {
       const raw = (err as { details?: unknown }).details;
@@ -103,7 +105,9 @@ export function mapDbError(err: unknown): AppError | undefined {
                 ? CategoryInUseDetail
                 : code === 'SERIAL_TAKEN'
                   ? SerialTakenDetail
-                  : BranchDeactivationCheck
+                  : code === 'EXPORT_TOO_LARGE'
+                    ? ExportTooLargeDetail
+                    : BranchDeactivationCheck
         ).safeParse(JSON.parse(raw));
         if (parsed.success) details = parsed.data;
       }

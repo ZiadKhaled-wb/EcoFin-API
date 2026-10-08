@@ -4,6 +4,8 @@
 // running balance. A collector (no stock.view) is refused.
 // I02: an adjustment through the API (idempotent), a count (scan, save, post) after which the
 // stock equals the counted numbers, and the ledger rows carry the adjustment's number and reason.
+// I05: the history filtered by type links each movement to its document; the export holds the
+// same rows and is audited; a role without export.data can't export.
 import { beforeAll, describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -16,6 +18,7 @@ import {
   StockCountDetail,
   StockCountLine,
   StockList,
+  StockMovementExport,
   StockMovementList,
   StockTransfer,
 } from '@ziadkhaled-wb/contracts';
@@ -176,7 +179,8 @@ describe.skipIf(!RUN)('I01 stock view against local stack', () => {
     ]);
 
     expect((await call('/api/stock?low_only=maybe')).status).toBe(400);
-    expect((await call('/api/stock/movements')).status).toBe(400);
+    // I05: the product is optional now (the whole shop's history).
+    expect((await call('/api/stock/movements')).status).toBe(200);
   });
 
   it('I02: adjusts, counts and posts so the stock equals the counted numbers', async () => {
@@ -320,6 +324,82 @@ describe.skipIf(!RUN)('I01 stock view against local stack', () => {
     const cancel = await send('post', `/api/stock/transfers/${transfer.id}/cancel`, {});
     expect(cancel.status).toBe(409);
     expect(ErrorResponse.parse(cancel.body).error.code).toBe('TRANSFER_ALREADY_SENT');
+  });
+
+  it('I05: the history links every movement to its document; the export is audited', async () => {
+    const created = await post('/api/products', {
+      name_ar: 'سماعة I05',
+      sku: `I05-HP-${STAMP}`,
+      cash_price: '20.00',
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const product = Product.parse(created.body);
+    const numbers: string[] = [];
+    for (const [reason, quantity] of [
+      ['found', 5],
+      ['damage', -2],
+    ] as const) {
+      const adj = await send(
+        'post',
+        '/api/stock/adjustments',
+        { branch_id: main, reason, lines: [{ product_id: product.id, quantity }] },
+        `i05-${reason}-${STAMP}`,
+      );
+      expect(adj.status, JSON.stringify(adj.body)).toBe(201);
+      numbers.push(StockAdjustment.parse(adj.body).number);
+    }
+
+    const res = await call(`/api/stock/movements?product_id=${product.id}&types=adjustment`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    const history = StockMovementList.parse(res.body);
+    // Done when: every movement names the document that caused it (same created_at order is not
+    // guaranteed inside one second, so compare as a set).
+    expect(history.total).toBe(2);
+    expect(
+      history.items
+        .map((m) => [m.source_type, m.source_number, m.reason, m.quantity, m.sku])
+        .sort((x, y) => String(x[1]).localeCompare(String(y[1]))),
+    ).toEqual([
+      ['stock_adjustment', numbers[0], 'found', 5, `I05-HP-${STAMP}`],
+      ['stock_adjustment', numbers[1], 'damage', -2, `I05-HP-${STAMP}`],
+    ]);
+    expect(
+      StockMovementList.parse((await call(`/api/stock/movements?types=sale_out`)).body).items.some(
+        (m) => m.product_id === product.id,
+      ),
+    ).toBe(false);
+    expect((await call('/api/stock/movements?types=gift')).status).toBe(400);
+    expect((await call('/api/stock/movements?from=2026-10-09&to=2026-10-01')).status).toBe(400);
+
+    const exported = await post('/api/stock/movements/export', {
+      product_id: product.id,
+      types: ['adjustment'],
+    });
+    expect(exported.status, JSON.stringify(exported.body)).toBe(200);
+    expect(StockMovementExport.parse(exported.body)).toEqual({
+      items: history.items,
+      total: 2,
+    });
+    const audit = await service
+      .from('audit_log')
+      .select('after')
+      .eq('organization_id', org)
+      .eq('action', 'stock_movements.exported');
+    expect(audit.error).toBeNull();
+    expect(audit.data).toHaveLength(1);
+    expect(audit.data![0]!.after).toMatchObject({ product_id: product.id, rows: 2 });
+
+    const refused = await request(app)
+      .post('/api/stock/movements/export')
+      .set('X-Forwarded-For', `198.18.14.${(++ip % 250) + 1}`)
+      .set('Authorization', 'Bearer ' + collector)
+      .set('x-org-id', org)
+      .send({});
+    expect(refused.status).toBe(403);
+    expect(ErrorResponse.parse(refused.body).error).toMatchObject({
+      code: 'PERMISSION_DENIED',
+      details: { permission: 'export.data' },
+    });
   });
 
   it('refuses a role without stock.view', async () => {

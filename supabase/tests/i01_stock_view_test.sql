@@ -198,10 +198,10 @@ RESET ROLE;
 SELECT t.expect('the reads wrote no audit rows',NOT EXISTS(SELECT 1 FROM public.audit_log WHERE organization_id=t.org('a') AND action LIKE 'stock%'));
 SELECT t.expect('no anon grants',
   NOT has_function_privilege('anon','public.list_stock(uuid,uuid,boolean,text,boolean,integer,integer)','EXECUTE')
-  AND NOT has_function_privilege('anon','public.list_stock_movements(uuid,uuid,integer,integer)','EXECUTE'));
+  AND NOT has_function_privilege('anon','public.list_stock_movements(uuid,uuid,integer,integer,text,public.stock_movement_type[],date,date)','EXECUTE'));
 SELECT t.expect('authenticated may execute both',
   has_function_privilege('authenticated','public.list_stock(uuid,uuid,boolean,text,boolean,integer,integer)','EXECUTE')
-  AND has_function_privilege('authenticated','public.list_stock_movements(uuid,uuid,integer,integer)','EXECUTE'));
+  AND has_function_privilege('authenticated','public.list_stock_movements(uuid,uuid,integer,integer,text,public.stock_movement_type[],date,date)','EXECUTE'));
 
 SELECT name,ok,detail FROM t.results WHERE NOT COALESCE(ok,false);
 SELECT count(*) FILTER(WHERE ok) passed,count(*) FILTER(WHERE NOT COALESCE(ok,false)) failed FROM t.results;
