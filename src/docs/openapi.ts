@@ -966,7 +966,7 @@ export const openApiSpec = {
             get: {
                 tags: ['Inventory'],
                 summary: 'Ledger movements of a product, newest first, with the running balance (stock.view)',
-                description: 'I01 drill-down (I05 extends it). branch_id optional: every branch in scope when left out. Schema: StockMovementsQuery → StockMovementList.',
+                description: 'I01 drill-down (I05 extends it). branch_id optional: every branch in scope when left out. Adjustments show their number (source_number) and reason (I02). Schema: StockMovementsQuery → StockMovementList.',
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     { $ref: '#/components/parameters/OrgId' },
@@ -977,7 +977,145 @@ export const openApiSpec = {
                 ],
                 responses: { 200: { description: 'StockMovementList' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
-        },        '/api/settings/profile': {
+        },
+        '/api/stock/adjustments': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'Stock adjustments, newest first (stock.view)',
+                description: 'I02. Adjustments in the caller\'s branches; filters branch_id and reason (damage, loss, found, correction, count, other). Schema: StockAdjustmentListQuery → StockAdjustmentList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'reason', in: 'query', schema: { type: 'string', enum: ['damage', 'loss', 'found', 'correction', 'count', 'other'] } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'StockAdjustmentList' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Inventory'],
+                summary: 'Post a stock adjustment (stock.adjust)',
+                description: 'I02. Lines change sellable stock through the ledger (type adjustment). damage and loss remove stock, found adds it, correction and other go either way; other needs a note. Serialized products need unit_id and ±1. The same Idempotency-Key again returns the first adjustment. Errors: ADJUSTMENT_SIGN_INVALID, OUT_OF_STOCK, UNIT_*, DAY_CLOSED. Schema: StockAdjustmentCreateBody → StockAdjustment.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'StockAdjustment' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/adjustments/{id}': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'An adjustment with its lines (stock.view)',
+                description: 'I02. Schema: StockAdjustment.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'StockAdjustment' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/counts': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'Stock counts, newest first (stock.count)',
+                description: 'I02. Counts in the caller\'s branches; filters branch_id and status (open, posted, cancelled). Schema: StockCountListQuery → StockCountList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['open', 'posted', 'cancelled'] } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'StockCountList' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Inventory'],
+                summary: 'Open a count sheet for a branch, optionally one category (stock.count)',
+                description: 'I02. Lines are snapshotted: a line per product in scope (active, or archived with stock) and per serialized unit in the branch. Counts covering the same products can\'t be open together (STOCK_COUNT_OPEN). Schema: StockCountCreateBody → StockCount.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'StockCount' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/counts/{id}': {
+            get: {
+                tags: ['Inventory'],
+                summary: 'A count and one page of its lines (stock.count)',
+                description: 'I02. While open, expected_qty is the live stock, so difference is what posting will change. filter: all, uncounted, different; search: name, SKU prefix, exact barcode or serial. Schema: StockCountDetailQuery → StockCountDetail.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'filter', in: 'query', schema: { type: 'string', enum: ['all', 'uncounted', 'different'], default: 'all' } },
+                    { name: 'search', in: 'query', schema: { type: 'string', maxLength: 100 } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'StockCountDetail' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/counts/{id}/lines': {
+            put: {
+                tags: ['Inventory'],
+                summary: 'Save counted quantities (stock.count)',
+                description: 'I02. Up to 500 lines; null clears a line. A product or unit in scope that is not on the sheet is added. Not audited (draft); posting is. Schema: StockCountLinesBody → StockCount.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'StockCount' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/counts/{id}/scan': {
+            post: {
+                tags: ['Inventory'],
+                summary: 'Scan a serial, barcode or SKU into a count (stock.count)',
+                description: 'I02. A serial counts its unit (1); a barcode or SKU adds one to the product\'s line; a serialized product\'s barcode is refused (UNIT_REQUIRED). Schema: StockCountScanBody → StockCountLine.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'StockCountLine' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/counts/{id}/post': {
+            post: {
+                tags: ['Inventory'],
+                summary: 'Post a count (stock.count)',
+                description: 'I02. Locks the stock, stores expected quantities and posts every difference as one adjustment (reason count): the stock then equals the counted numbers. Uncounted lines block it (STOCK_COUNT_INCOMPLETE) unless uncounted_as_zero. A posted count answers its result again. Schema: StockCountPostBody → StockCount.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 200: { description: 'StockCount' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/stock/counts/{id}/cancel': {
+            post: {
+                tags: ['Inventory'],
+                summary: 'Cancel an open count (stock.count)',
+                description: 'I02. No stock change. A posted count can\'t be cancelled (DOCUMENT_FINAL). Schema: StockCount.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'StockCount' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/settings/profile': {
             get: {
                 tags: ['Settings'],
                 summary: 'Read the legal and financing profile (P04)',

@@ -127,6 +127,14 @@ export const errorCodeHttpStatus = {
   PRODUCT_BARCODE_TAKEN: 409,
   PRODUCT_SERIAL_LOCKED: 409,
   PRODUCT_CATEGORY_ARCHIVED: 409,
+  // I02 stock adjustments and counts
+  STOCK_ADJUSTMENT_NOT_FOUND: 404,
+  STOCK_COUNT_NOT_FOUND: 404,
+  UNIT_NOT_FOUND: 404,
+  STOCK_COUNT_OPEN: 409,
+  STOCK_COUNT_INCOMPLETE: 409,
+  STOCK_COUNT_PRODUCT_OUT_OF_SCOPE: 422,
+  ADJUSTMENT_SIGN_INVALID: 400,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

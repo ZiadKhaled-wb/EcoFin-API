@@ -253,3 +253,7 @@ See [TEST-2 plan](plans/TEST-2.md): each Sprint 2 test requirement mapped to the
 ## I01 — stock view (EC-47)
 
 See [I01 plan](plans/I01.md). Covers the Done when (every number equals its ledger sum, for every product and branch) and the D47 rules.
+
+## I02 — stock adjustments and counts (EC-48)
+
+See [I02 plan](plans/I02.md). Covers the Done when (a posted count makes the stock equal the counted numbers and leaves ledger entries with the reason) and the D48 rules.

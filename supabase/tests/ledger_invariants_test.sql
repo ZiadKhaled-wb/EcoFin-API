@@ -269,6 +269,10 @@ SELECT t.expect('4.4 every table with idempotency_key has UNIQUE (organization_i
 CREATE TABLE t.replay_tested (fn text PRIMARY KEY, where_tested text);
 INSERT INTO t.replay_tested VALUES ('app.lock_idempotency_key', 'ledger_invariants 4.1-4.3, f10_ledger 6.1-6.5');
 INSERT INTO t.replay_tested VALUES ('public.admin_record_subscription_payment','p05_subscription_test.sql: replay same id, one payment and one audit');
+INSERT INTO t.replay_tested VALUES
+ ('public.post_stock_adjustment','i02_stock_adjustments_test.sql: same key -> same adjustment, stock unchanged'),
+ ('public.create_stock_count','i02_stock_adjustments_test.sql: same key -> same count'),
+ ('public.post_stock_count','i02_stock_adjustments_test.sql: same key -> same adjustment, nothing posted twice; key reused for another count -> IDEMPOTENCY_CONFLICT');
 CREATE TABLE t.key_functions AS
 SELECT n.nspname || '.' || p.proname AS fn
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace

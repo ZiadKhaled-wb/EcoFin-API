@@ -30,6 +30,16 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'PATCH /api/products/:id': { action: 'product.updated' },
   'POST /api/products/:id/archive': { action: 'product.archived' },
   'POST /api/products/:id/restore': { action: 'product.restored' },
+  'POST /api/stock/adjustments': { action: 'stock_adjustment.posted' },
+  'POST /api/stock/counts': { action: 'stock_count.created' },
+  'PUT /api/stock/counts/:id/lines': {
+    none: 'I02 draft count lines; the posted count and its adjustment are audited with every line.',
+  },
+  'POST /api/stock/counts/:id/scan': {
+    none: 'I02 draft count line from a scan; the posted count and its adjustment are audited.',
+  },
+  'POST /api/stock/counts/:id/post': { action: 'stock_count.posted' },
+  'POST /api/stock/counts/:id/cancel': { action: 'stock_count.cancelled' },
   'POST /api/branches': { action: 'branch.created' },
   'PATCH /api/branches/:id': { action: 'branch.updated' },
   'POST /api/branches/:id/deactivate': { action: 'branch.deactivated' },
