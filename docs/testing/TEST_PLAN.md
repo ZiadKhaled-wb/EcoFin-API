@@ -269,3 +269,7 @@ See [I04 plan](plans/I04.md). Covers the Done when (a duplicate serial is reject
 ## I05 — movement history (EC-51)
 
 See [I05 plan](plans/I05.md). Covers the Done when (every movement links to the document that caused it) and the D51 rules (filters, running balance, export.data, the 10 000-row limit, audit).
+
+## I06 — low-stock alerts (EC-52)
+
+See [I06 plan](plans/I06.md). Covers the Done when (a product below its min level appears in the low list and on the dashboard) and the D52 rules (per-branch levels, archived products and deactivated branches never low).

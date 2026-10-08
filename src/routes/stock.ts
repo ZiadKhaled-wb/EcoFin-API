@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import {
+  BranchMinLevelBody,
+  LowStockSummaryQuery,
   StockAdjustmentCreateBody,
   StockAdjustmentListQuery,
   StockCountCreateBody,
@@ -50,6 +52,32 @@ router.post(
   requirePermission('export.data'),
   validate({ body: StockMovementExportBody }),
   asyncHandler(controller.exportMovements),
+);
+// I06 low stock: the dashboard card and a product's per-branch min levels (stock.view); setting a
+// branch's level needs catalog.manage and the branch (checked in SQL).
+router.get(
+  '/low-summary',
+  authenticate,
+  loadRequestContext,
+  requirePermission('stock.view'),
+  validate({ query: LowStockSummaryQuery }),
+  asyncHandler(controller.lowSummary),
+);
+router.get(
+  '/min-levels/:id',
+  authenticate,
+  loadRequestContext,
+  requirePermission('stock.view'),
+  validate({ params: StockDocumentIdParams }),
+  asyncHandler(controller.minLevels),
+);
+router.put(
+  '/min-levels/:id',
+  authenticate,
+  loadRequestContext,
+  requirePermission('catalog.manage'),
+  validate({ params: StockDocumentIdParams, body: BranchMinLevelBody }),
+  asyncHandler(controller.setMinLevel),
 );
 // I02 adjustments: read with stock.view, post with stock.adjust (Idempotency-Key).
 router.get(

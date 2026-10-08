@@ -13,6 +13,9 @@ import {
   listAdjustments,
   listStock,
   listStockMovements,
+  listBranchMinLevels,
+  lowStockSummary,
+  setBranchMinLevel,
   postAdjustment,
   postCount,
   saveCountLines,
@@ -36,6 +39,7 @@ const row = {
   damaged: 0,
   in_transit: 1,
   min_level: 3,
+  min_source: 'shop',
   low: false,
 };
 
@@ -131,6 +135,46 @@ describe('I01 stock service', () => {
     db.queue({ data: { items: [], total: 0 }, error: null });
     await listStockMovements(ctx, { page: 1, pageSize: 50, types: [] });
     expect(db.rpc).toHaveBeenLastCalledWith('list_stock_movements', { p_limit: 50, p_offset: 0 });
+  });
+
+  it('I06: the dashboard summary and per-branch levels', async () => {
+    const { db, ctx } = setup();
+    const levels = {
+      product_id: ID,
+      product_min_stock: 0,
+      shop_min_stock: 3,
+      branches: [{ branch_id: ID, min_stock: 8, min_level: 8, min_source: 'branch' }],
+    };
+    db.queue({ data: { total: 0, branches: [], items: [] }, error: null });
+    await expect(lowStockSummary(ctx, { limit: 7 })).resolves.toEqual({
+      total: 0,
+      branches: [],
+      items: [],
+    });
+    expect(db.rpc).toHaveBeenLastCalledWith('low_stock_summary', { p_limit: 7 });
+    db.queue({ data: levels, error: null });
+    await listBranchMinLevels(ctx, ID);
+    expect(db.rpc).toHaveBeenLastCalledWith('list_branch_min_levels', { p_product_id: ID });
+    db.queue({ data: levels, error: null });
+    await expect(setBranchMinLevel(ctx, ID, { branch_id: ID, min_stock: 8 })).resolves.toEqual(
+      levels,
+    );
+    expect(db.rpc).toHaveBeenLastCalledWith('set_branch_min_level', {
+      p_product_id: ID,
+      p_branch_id: ID,
+      p_min_stock: 8,
+    });
+    // null removes the override: the argument is left out (SQL default NULL).
+    db.queue({ data: levels, error: null });
+    await setBranchMinLevel(ctx, ID, { branch_id: ID, min_stock: null });
+    expect(db.rpc).toHaveBeenLastCalledWith('set_branch_min_level', {
+      p_product_id: ID,
+      p_branch_id: ID,
+    });
+    db.queue({ data: null, error: { message: 'BRANCH_INACTIVE: x' } });
+    await expect(setBranchMinLevel(ctx, ID, { branch_id: ID, min_stock: 1 })).rejects.toMatchObject(
+      { code: 'BRANCH_INACTIVE' },
+    );
   });
 
   it('I05: exports with the same filters; too many rows keeps the counts', async () => {

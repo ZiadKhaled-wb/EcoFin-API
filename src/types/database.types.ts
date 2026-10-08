@@ -3862,6 +3862,55 @@ export type Database = {
         };
         Relationships: [];
       };
+      product_branch_min_stock: {
+        Row: {
+          branch_id: string;
+          min_stock: number;
+          organization_id: string;
+          product_id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          branch_id: string;
+          min_stock: number;
+          organization_id: string;
+          product_id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          branch_id?: string;
+          min_stock?: number;
+          organization_id?: string;
+          product_id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'product_branch_min_stock_branch_id_organization_id_fkey';
+            columns: ['branch_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'branches';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'product_branch_min_stock_product_id_organization_id_fkey';
+            columns: ['product_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'products';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'product_branch_min_stock_updated_by_organization_id_fkey';
+            columns: ['updated_by', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id', 'organization_id'];
+          },
+        ];
+      };
       products: {
         Row: {
           archived_at: string | null;
@@ -8159,6 +8208,7 @@ export type Database = {
         }[];
       };
       jobs_succeed: { Args: { p_job_id: string; p_worker: string }; Returns: boolean };
+      list_branch_min_levels: { Args: { p_product_id: string }; Returns: Json };
       list_categories: { Args: Record<PropertyKey, never>; Returns: Json };
       list_employees: {
         Args: {
@@ -8237,6 +8287,7 @@ export type Database = {
       list_tax_classes: { Args: Record<PropertyKey, never>; Returns: Json };
       list_transfer_destinations: { Args: Record<PropertyKey, never>; Returns: Json };
       lookup_product: { Args: { p_code: string }; Returns: Json };
+      low_stock_summary: { Args: { p_limit?: number }; Returns: Json };
       my_permissions: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -8334,6 +8385,10 @@ export type Database = {
           p_reason: string | null;
         };
         Returns: undefined;
+      };
+      set_branch_min_level: {
+        Args: { p_branch_id: string; p_min_stock?: number; p_product_id: string };
+        Returns: Json;
       };
       set_category_archived: {
         Args: { p_archived: boolean; p_id: string; p_move_to?: string };

@@ -6,11 +6,15 @@
 // stock equals the counted numbers, and the ledger rows carry the adjustment's number and reason.
 // I05: the history filtered by type links each movement to its document; the export holds the
 // same rows and is audited; a role without export.data can't export.
+// I06: a branch min level makes a product low; it shows in the low list and on the dashboard
+// card; removing the level falls back to the product's; a collector can't read or set levels.
 import { beforeAll, describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   AuthLoginResponse,
+  BranchMinLevels,
+  LowStockSummary,
   ErrorResponse,
   Product,
   StockAdjustment,
@@ -400,6 +404,83 @@ describe.skipIf(!RUN)('I01 stock view against local stack', () => {
       code: 'PERMISSION_DENIED',
       details: { permission: 'export.data' },
     });
+  });
+
+  it('I06: a product below its branch min level is in the low list and on the dashboard', async () => {
+    const created = await post('/api/products', {
+      name_ar: 'شاحن I06',
+      sku: `I06-CH-${STAMP}`,
+      cash_price: '15.00',
+      min_stock: 2,
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const product = Product.parse(created.body);
+    const found = await send(
+      'post',
+      '/api/stock/adjustments',
+      { branch_id: main, reason: 'found', lines: [{ product_id: product.id, quantity: 4 }] },
+      `i06-found-${STAMP}`,
+    );
+    expect(found.status, JSON.stringify(found.body)).toBe(201);
+    const lowRows = async () =>
+      StockList.parse(
+        (await call(`/api/stock?low_only=true&branch_id=${main}&search=I06-CH-${STAMP}`)).body,
+      ).items;
+    const onDashboard = async () =>
+      LowStockSummary.parse((await call('/api/stock/low-summary?limit=20')).body).items.some(
+        (i) => i.product_id === product.id && i.branch_id === main,
+      );
+    // 4 on hand, product level 2: not low.
+    expect(await lowRows()).toEqual([]);
+
+    const set = await send('put', `/api/stock/min-levels/${product.id}`, {
+      branch_id: main,
+      min_stock: 6,
+    });
+    expect(set.status, JSON.stringify(set.body)).toBe(200);
+    expect(BranchMinLevels.parse(set.body).branches.find((b) => b.branch_id === main)).toEqual({
+      branch_id: main,
+      min_stock: 6,
+      min_level: 6,
+      min_source: 'branch',
+    });
+    // Done when: below its min level, it is in the list and on the dashboard.
+    expect((await lowRows()).map((r) => [r.min_level, r.min_source, r.low])).toEqual([
+      [6, 'branch', true],
+    ]);
+    expect(await onDashboard()).toBe(true);
+
+    const cleared = await send('put', `/api/stock/min-levels/${product.id}`, {
+      branch_id: main,
+      min_stock: null,
+    });
+    expect(BranchMinLevels.parse(cleared.body).branches[0]).toMatchObject({
+      min_stock: null,
+      min_level: 2,
+      min_source: 'product',
+    });
+    expect(await lowRows()).toEqual([]);
+    expect(await onDashboard()).toBe(false);
+    const read = await call(`/api/stock/min-levels/${product.id}`);
+    expect(BranchMinLevels.parse(read.body).product_min_stock).toBe(2);
+    expect(
+      (await send('put', `/api/stock/min-levels/${product.id}`, { branch_id: main, min_stock: -1 }))
+        .status,
+    ).toBe(400);
+
+    for (const res of [
+      await call('/api/stock/low-summary', collector),
+      await call(`/api/stock/min-levels/${product.id}`, collector),
+      await request(app)
+        .put(`/api/stock/min-levels/${product.id}`)
+        .set('X-Forwarded-For', `198.18.14.${(++ip % 250) + 1}`)
+        .set('Authorization', 'Bearer ' + collector)
+        .set('x-org-id', org)
+        .send({ branch_id: main, min_stock: 1 }),
+    ]) {
+      expect(res.status).toBe(403);
+      expect(ErrorResponse.parse(res.body).error.code).toBe('PERMISSION_DENIED');
+    }
   });
 
   it('refuses a role without stock.view', async () => {

@@ -380,6 +380,9 @@ INSERT INTO t.denial VALUES
 INSERT INTO t.denial VALUES
  ('list_stock','list_stock','stock.view',$$SELECT public.list_stock()$$),
  ('list_stock_movements','list_stock_movements','stock.view',$$SELECT public.list_stock_movements((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' ORDER BY id LIMIT 1))$$),
+ ('list_branch_min_levels','list_branch_min_levels','stock.view',$$SELECT public.list_branch_min_levels((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' ORDER BY id LIMIT 1))$$),
+ ('set_branch_min_level','set_branch_min_level','catalog.manage',$$SELECT public.set_branch_min_level((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' ORDER BY id LIMIT 1),'d2000000-0000-0000-0000-000000000011',4)$$),
+ ('low_stock_summary','low_stock_summary','stock.view',$$SELECT public.low_stock_summary()$$),
  ('export_stock_movements','export_stock_movements','export.data',$$SELECT public.export_stock_movements((SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' ORDER BY id LIMIT 1))$$);
 -- I03: a third branch of shop one as the destination (the set_branch_active case deactivates 012);
 -- the I02 adjustment case gave the product stock in 011 before these run.

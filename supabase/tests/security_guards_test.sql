@@ -58,6 +58,8 @@ INSERT INTO t.no_permission_ok VALUES
   ('list_product_units', 'C03: read-only serials of a product''s units in the caller''s accessible branches (labels); any employee'),
   ('list_stock', 'I01: read-only stock view; checks app.has_permission(stock.view) so an expired (read-only) shop can still read'),
   ('list_stock_movements', 'I01: read-only movement drill-down; checks app.has_permission(stock.view) so an expired shop can still read'),
+  ('list_branch_min_levels', 'I06: read-only min levels of a product in the caller''s branches; checks app.has_permission(stock.view) so an expired shop can still read'),
+  ('low_stock_summary', 'I06: read-only dashboard low-stock card; checks app.has_permission(stock.view) so an expired shop can still read'),
   ('list_stock_adjustments', 'I02: read-only adjustments list; checks app.has_permission(stock.view) so an expired shop can still read'),
   ('get_stock_adjustment', 'I02: read-only adjustment with lines; checks app.has_permission(stock.view) so an expired shop can still read'),
   ('list_stock_counts', 'I02: read-only counts list; checks app.has_permission(stock.count) so an expired shop can still read'),

@@ -1,6 +1,8 @@
 import type { Request, Response } from 'express';
 import {
   IdempotencyKeyHeader,
+  type BranchMinLevelBody,
+  type LowStockSummaryQuery,
   StockDocumentIdParams,
   type StockAdjustmentCreateBody,
   type StockAdjustmentListQuery,
@@ -31,6 +33,17 @@ export async function movements(req: Request, res: Response) {
 }
 export async function exportMovements(req: Request, res: Response) {
   res.json(await service.exportStockMovements(getCtx(req), req.body as StockMovementExportBody));
+}
+export async function lowSummary(req: Request, res: Response) {
+  res.json(
+    await service.lowStockSummary(getCtx(req), req.query as unknown as LowStockSummaryQuery),
+  );
+}
+export async function minLevels(req: Request, res: Response) {
+  res.json(await service.listBranchMinLevels(getCtx(req), idOf(req)));
+}
+export async function setMinLevel(req: Request, res: Response) {
+  res.json(await service.setBranchMinLevel(getCtx(req), idOf(req), req.body as BranchMinLevelBody));
 }
 const idOf = (req: Request) => StockDocumentIdParams.parse(req.params).id;
 /** Stock writes take the `Idempotency-Key` header (8-128 characters); missing = 400. */

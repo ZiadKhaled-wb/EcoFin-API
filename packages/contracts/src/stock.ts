@@ -5,11 +5,16 @@ import { IsoTimestamp, BusinessDate, PaginationQuery, Uuid, paginated } from './
 export const AdjustmentReason = z.enum(['damage', 'loss', 'found', 'correction', 'count', 'other']);
 export type AdjustmentReason = z.infer<typeof AdjustmentReason>;
 
+/** I06 (D52): where a min level comes from: the branch's override, the product, or the shop. */
+export const MinLevelSource = z.enum(['branch', 'product', 'shop']);
+export type MinLevelSource = z.infer<typeof MinLevelSource>;
+
 /**
  * I01 stock view (D47). One row per product and branch, read from `stock_levels` (kept from the
  * ledger by trigger): `available = on_hand − reserved`; `damaged` is the damaged stock state;
- * `in_transit` is sent-not-received transfer stock coming INTO the branch. `min_level` is the
- * product's min stock, or the shop's global minimum; `low` = available < min_level.
+ * `in_transit` is sent-not-received transfer stock coming INTO the branch. `min_level` (I06):
+ * the branch's override, else the product's min stock, else the shop's global minimum;
+ * `low` = available < min_level, never for an archived product or a deactivated branch.
  */
 export const StockRow = z.object({
   product_id: Uuid,
@@ -27,6 +32,7 @@ export const StockRow = z.object({
   damaged: z.number().int(),
   in_transit: z.number().int().nonnegative(),
   min_level: z.number().int().nonnegative(),
+  min_source: MinLevelSource,
   low: z.boolean(),
 });
 export type StockRow = z.infer<typeof StockRow>;
@@ -529,3 +535,57 @@ export const TransferDestination = z.object({ id: Uuid, code: z.string(), name: 
 export type TransferDestination = z.infer<typeof TransferDestination>;
 export const TransferDestinationList = z.array(TransferDestination);
 export type TransferDestinationList = z.infer<typeof TransferDestinationList>;
+
+// ---------------------------------------------------------------- I06 low-stock alerts (D52)
+
+export const MAX_MIN_STOCK = 1_000_000;
+
+/** A product's min level in each of the caller's branches. `min_stock` is the branch override. */
+export const BranchMinLevels = z.object({
+  product_id: Uuid,
+  product_min_stock: z.number().int().nonnegative(),
+  shop_min_stock: z.number().int().nonnegative(),
+  branches: z.array(
+    z.object({
+      branch_id: Uuid,
+      min_stock: z.number().int().nonnegative().nullable(),
+      min_level: z.number().int().nonnegative(),
+      min_source: MinLevelSource,
+    }),
+  ),
+});
+export type BranchMinLevels = z.infer<typeof BranchMinLevels>;
+
+/** PUT /api/stock/min-levels/:id (catalog.manage): set a branch's level, or null to remove it. */
+export const BranchMinLevelBody = z
+  .object({
+    branch_id: Uuid,
+    min_stock: z.number().int().min(0).max(MAX_MIN_STOCK).nullable(),
+  })
+  .strict();
+export type BranchMinLevelBody = z.infer<typeof BranchMinLevelBody>;
+
+/** GET /api/stock/low-summary: the dashboard card (1-20 biggest shortages, default 5). */
+export const LowStockSummaryQuery = z
+  .object({ limit: z.coerce.number().int().min(1).max(20).default(5) })
+  .strict();
+export type LowStockSummaryQuery = z.infer<typeof LowStockSummaryQuery>;
+
+/** Low products per active branch of the caller, and the biggest shortages (min level − available). */
+export const LowStockSummary = z.object({
+  total: z.number().int().min(0),
+  branches: z.array(z.object({ branch_id: Uuid, low: z.number().int().min(0) })),
+  items: z.array(
+    z.object({
+      product_id: Uuid,
+      name_ar: z.string(),
+      name_en: z.string().nullable(),
+      sku: z.string(),
+      branch_id: Uuid,
+      available: z.number().int(),
+      min_level: z.number().int().nonnegative(),
+      shortage: z.number().int().positive(),
+    }),
+  ),
+});
+export type LowStockSummary = z.infer<typeof LowStockSummary>;
