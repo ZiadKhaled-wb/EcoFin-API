@@ -18,10 +18,71 @@
 --                     shortages) or send the goods back with a new transfer.
 -- Numbered TR in the source branch (F11). Create takes the idempotency key; send, receive and
 -- cancel are state changes under a row lock, so a repeat answers the current transfer and moves
--- nothing again (the receipt adjustments use the keys 'transfer/<id>/<reason>').
+-- nothing again (the receipt adjustments use the keys 'system:transfer/<id>/<reason>').
+-- Security review (two fixes, section 0): keys starting with 'system:' are reserved for documents
+-- the database makes itself (a client could otherwise pre-empt or spoof a receipt adjustment), and
+-- a unit leaves a branch only when it is in_stock there: a reserved unit (S10) is refused by
+-- send and by every adjustment line, since the ledger trigger alone would let it go.
 -- Reads (stock.view): transfers whose source or destination the caller can access; also in an
 -- expired (read-only) shop. Numbered after the newest migration on main (D39).
 -- =============================================================================
+
+-- 0. Security review fixes (redefine F10 / I02 helpers) ----------------------------------------------
+
+-- F10 + reserved prefix: 'system:' keys belong to documents the database creates itself.
+CREATE OR REPLACE FUNCTION app.lock_idempotency_key(p_organization_id uuid, p_key text)
+RETURNS void LANGUAGE plpgsql SET search_path = ''
+AS $$
+BEGIN
+    IF p_key IS NULL OR length(p_key) NOT BETWEEN 8 AND 128 THEN
+        RAISE EXCEPTION 'VALIDATION_FAILED: the idempotency key must be 8 to 128 characters' USING ERRCODE = 'P0001';
+    END IF;
+    IF p_key LIKE 'system:%' THEN
+        RAISE EXCEPTION 'VALIDATION_FAILED: idempotency keys starting with system: are reserved' USING ERRCODE = 'P0001';
+    END IF;
+    PERFORM pg_advisory_xact_lock(hashtextextended('idempotency/' || p_organization_id::text || '/' || p_key, 0));
+END;
+$$;
+
+-- I02 + a unit leaves only when it is in stock in that branch (locked): a reserved unit is
+-- refused (its reservation is released first, S10), as is a unit of another branch.
+CREATE OR REPLACE FUNCTION app.post_adjustment_lines(p_org uuid, p_emp uuid, p_adjustment_id uuid, p_branch_id uuid,
+                                                     p_lines jsonb)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE r record; v_line uuid;
+BEGIN
+    FOR r IN
+        SELECT (e ->> 'product_id')::uuid AS product_id, NULLIF(e ->> 'unit_id', '')::uuid AS unit_id,
+               (e ->> 'quantity')::integer AS quantity
+        FROM jsonb_array_elements(p_lines) e
+        ORDER BY 1, 2 NULLS FIRST
+    LOOP
+        IF r.unit_id IS NOT NULL AND r.quantity > 0 AND NOT EXISTS (
+            SELECT 1 FROM public.units u
+            WHERE u.id = r.unit_id AND u.organization_id = p_org AND u.status = 'written_off') THEN
+            RAISE EXCEPTION 'UNIT_NOT_AVAILABLE: only a written-off unit can be found again' USING ERRCODE = 'P0001';
+        END IF;
+        IF r.unit_id IS NOT NULL AND r.quantity < 0 AND NOT EXISTS (
+            SELECT 1 FROM public.units u
+            WHERE u.id = r.unit_id AND u.organization_id = p_org AND u.branch_id = p_branch_id
+              AND u.status = 'in_stock' FOR UPDATE) THEN
+            RAISE EXCEPTION 'UNIT_NOT_AVAILABLE: the unit is not in stock here (reserved units are released first)'
+                USING ERRCODE = 'P0001';
+        END IF;
+        INSERT INTO public.stock_adjustment_lines (organization_id, adjustment_id, product_id, unit_id, quantity, created_by)
+        VALUES (p_org, p_adjustment_id, r.product_id, r.unit_id, r.quantity, p_emp)
+        RETURNING id INTO v_line;
+        INSERT INTO public.stock_movements (organization_id, product_id, branch_id, unit_id, quantity, type,
+                                            stock_state, unit_cost, source_type, source_id, source_line_id, created_by)
+        SELECT p_org, r.product_id, p_branch_id, r.unit_id, r.quantity, 'adjustment', 'sellable',
+               COALESCE(u.cost, p.avg_cost, 0), 'stock_adjustment', p_adjustment_id, v_line, p_emp
+        FROM public.products p
+        LEFT JOIN public.units u ON u.id = r.unit_id AND u.organization_id = p_org
+        WHERE p.id = r.product_id AND p.organization_id = p_org;
+    END LOOP;
+END;
+$$;
 
 -- 1. JSON for the API --------------------------------------------------------------------------------
 
@@ -43,7 +104,7 @@ AS $$
             SELECT jsonb_agg(jsonb_build_object('id', a.id, 'number', a.number, 'reason', a.reason)
                              ORDER BY a.number)
             FROM public.stock_adjustments a
-            WHERE a.organization_id = p_org AND a.idempotency_key LIKE 'transfer/' || t.id::text || '/%'),
+            WHERE a.organization_id = p_org AND a.idempotency_key LIKE 'system:transfer/' || t.id::text || '/%'),
             '[]'::jsonb))
         || CASE WHEN p_with_lines THEN jsonb_build_object('lines', COALESCE((
             SELECT jsonb_agg(jsonb_build_object(
@@ -230,6 +291,18 @@ BEGIN
     IF EXISTS (SELECT 1 FROM public.branches b WHERE b.id = v_t.to_branch_id AND NOT b.is_active) THEN
         RAISE EXCEPTION 'BRANCH_INACTIVE: %', v_t.to_branch_id USING ERRCODE = '42501';
     END IF;
+    -- The units again, now and locked: the draft was checked when saved. A reserved unit stays.
+    PERFORM 1 FROM public.units u
+    WHERE u.organization_id = v_org
+      AND u.id IN (SELECT l.unit_id FROM public.stock_transfer_lines l
+                   WHERE l.organization_id = v_org AND l.transfer_id = p_id AND l.unit_id IS NOT NULL)
+    ORDER BY u.id FOR UPDATE;
+    IF EXISTS (SELECT 1 FROM public.stock_transfer_lines l
+               JOIN public.units u ON u.id = l.unit_id AND u.organization_id = l.organization_id
+               WHERE l.organization_id = v_org AND l.transfer_id = p_id
+                 AND (u.branch_id <> v_t.from_branch_id OR u.status <> 'in_stock')) THEN
+        RAISE EXCEPTION 'UNIT_NOT_AVAILABLE: a unit is no longer in stock in the source branch' USING ERRCODE = 'P0001';
+    END IF;
 
     -- Product, then unit order: two documents lock stock rows in the same order.
     INSERT INTO public.stock_movements (organization_id, product_id, branch_id, unit_id, quantity, type,
@@ -332,7 +405,7 @@ BEGIN
         INSERT INTO public.stock_adjustments (organization_id, number, branch_id, reason, note, idempotency_key, created_by)
         VALUES (v_org, app.next_document_number(v_org, v_t.to_branch_id, 'stock_adjustment'), v_t.to_branch_id,
                 v_reason::public.adjustment_reason, 'Transfer ' || v_t.number,
-                'transfer/' || p_id::text || '/' || v_reason, v_emp)
+                'system:transfer/' || p_id::text || '/' || v_reason, v_emp)
         RETURNING id INTO v_adj;
         PERFORM app.post_adjustment_lines(v_org, v_emp, v_adj, v_t.to_branch_id, v_lines);
     END LOOP;

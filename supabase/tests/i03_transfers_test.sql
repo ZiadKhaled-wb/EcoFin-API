@@ -132,6 +132,9 @@ SELECT t.expect('receiving again moves nothing',
 RESET ROLE;
 SELECT t.expect('Done when (received): never in both branches or in neither (main 4 + second 5 + 1 written off = 10)',
   t.accounted('cable')=10 AND t.accounted('phone')=3 AND t.level('cable','main')+t.level('cable','second')=9);
+SELECT t.expect('the receipt adjustment carries a system key nobody else can use',
+  (SELECT idempotency_key='system:transfer/'||(:'d1'::jsonb->>'id')||'/loss' FROM public.stock_adjustments
+   WHERE id=(:'r1'::jsonb->'adjustments'->0->>'id')::uuid));
 SELECT t.expect('the ledger: transfer_out at the source, transfer_in at the destination, both pointing at the transfer',
   (SELECT count(*)=2 FROM public.stock_movements WHERE source_type='transfer' AND source_id=(:'d1'::jsonb->>'id')::uuid AND type='transfer_out')
   AND (SELECT sum(quantity)=7 FROM public.stock_movements WHERE source_type='transfer' AND source_id=(:'d1'::jsonb->>'id')::uuid AND type='transfer_in' AND branch_id=t.id('second'))
@@ -162,11 +165,37 @@ SELECT t.as_user('a3000000-0000-0000-8000-000000000003',t.org('a'));
 SELECT t.expect('a draft is cancelled (twice answers the same)',
   (public.cancel_stock_transfer((:'d3'::jsonb->>'id')::uuid)->>'status')='cancelled'
   AND (public.cancel_stock_transfer((:'d3'::jsonb->>'id')::uuid)->>'status')='cancelled');
+-- Security review: a unit reserved after the draft was saved stays in the branch.
+RESET ROLE;
+INSERT INTO public.units(organization_id,product_id,serial,branch_id,cost) VALUES(t.org('a'),t.id('phone'),'I03-SN-4',t.id('main'),700) RETURNING id AS sn4 \gset
+INSERT INTO t.ids VALUES('sn4',:'sn4');
+SELECT t.move('phone','main',1,'sn4');
+SELECT t.as_user('a3000000-0000-0000-8000-000000000003',t.org('a'));
+SET LOCAL ROLE authenticated;
+SELECT public.create_stock_transfer(t.id('main'),t.id('second'),NULL,
+  jsonb_build_array(jsonb_build_object('product_id',t.id('phone'),'unit_id',t.id('sn4'),'quantity',1)),'i03-transfer-4') AS d4 \gset
+RESET ROLE;
+INSERT INTO public.customers(organization_id,full_name) VALUES(t.org('a'),'I03 customer') RETURNING id AS customer_id \gset
+INSERT INTO public.sales_orders(organization_id,number,customer_id,branch_id,prices_include_vat,subtotal,total,idempotency_key)
+VALUES(t.org('a'),'I03-SO-1',:'customer_id',t.id('main'),true,900,900,'i03-order-1') RETURNING id AS order_id \gset
+INSERT INTO public.sales_order_lines(organization_id,order_id,line_no,product_id,quantity,unit_price,tax_class_id,tax_rate,line_total)
+VALUES(t.org('a'),:'order_id',1,t.id('phone'),1,900,(SELECT default_tax_class_id FROM public.org_settings WHERE organization_id=t.org('a')),14,900) RETURNING id AS line_id \gset
+INSERT INTO public.stock_reservations(organization_id,product_id,branch_id,unit_id,order_line_id,quantity) VALUES(t.org('a'),t.id('phone'),t.id('main'),t.id('sn4'),:'line_id',1);
+SELECT t.as_user('a3000000-0000-0000-8000-000000000003',t.org('a'));
+SET LOCAL ROLE authenticated;
+SELECT t.error('a unit reserved after the draft can''t be sent',format('SELECT public.send_stock_transfer(%L)',:'d4'::jsonb->>'id'),'UNIT_NOT_AVAILABLE');
+SELECT t.expect('the reserved unit stayed in main, reserved',
+  (SELECT status='reserved' AND branch_id=t.id('main') FROM public.units WHERE id=t.id('sn4'))
+  AND (public.get_stock_transfer((:'d4'::jsonb->>'id')::uuid)->>'status')='draft');
+SELECT t.as_user('a3000000-0000-0000-8000-000000000001',t.org('a'));
+SELECT t.error('a reserved unit can''t be written off either',format($q$SELECT public.post_stock_adjustment(%L,'loss',NULL,'[{"product_id":"%s","unit_id":"%s","quantity":-1}]','i03-adj-reserved')$q$,t.id('main'),t.id('phone'),t.id('sn4')),'UNIT_NOT_AVAILABLE');
+SELECT t.error('system: idempotency keys are reserved',format($q$SELECT public.post_stock_adjustment(%L,'loss',NULL,'[{"product_id":"%s","quantity":-1}]','system:transfer/%s/loss')$q$,t.id('second'),t.id('cable'),:'d1'::jsonb->>'id'),'VALIDATION_FAILED');
+SELECT t.as_user('a3000000-0000-0000-8000-000000000003',t.org('a'));
 SELECT t.error('a cancelled transfer can''t be sent',format('SELECT public.send_stock_transfer(%L)',:'d3'::jsonb->>'id'),'DOCUMENT_FINAL');
 
 -- ---------------------------------------------------------------- reads, scope, permissions
 SELECT t.expect('lists: by status, by branch on either side, paging',
-  (public.list_stock_transfers()->>'total')::int=3
+  (public.list_stock_transfers()->>'total')::int=4
   AND (public.list_stock_transfers(p_status=>'partially_received')->>'total')::int=2
   AND (public.list_stock_transfers(p_status=>'cancelled')->>'total')::int=1
   AND jsonb_array_length(public.list_stock_transfers(p_limit=>1)->'items')=1
@@ -175,7 +204,7 @@ RESET ROLE;
 SELECT t.as_user('a3000000-0000-0000-8000-000000000004',t.org('a'));
 SET LOCAL ROLE authenticated;
 SELECT t.expect('the receiver (second only) sees the transfers coming in',
-  (public.list_stock_transfers()->>'total')::int=3 AND (public.list_stock_transfers(t.id('second'))->>'total')::int=3);
+  (public.list_stock_transfers()->>'total')::int=4 AND (public.list_stock_transfers(t.id('second'))->>'total')::int=4);
 SELECT t.error('the receiver can''t send from main',format('SELECT public.send_stock_transfer(%L)',:'d1'::jsonb->>'id'),'BRANCH_DENIED');
 SELECT t.as_user('a3000000-0000-0000-8000-000000000005',t.org('a'));
 SELECT t.error('a cashier can''t create a transfer',format($q$SELECT public.create_stock_transfer(%L,%L,NULL,'[{"product_id":"%s","quantity":1}]','i03-cashier')$q$,t.id('main'),t.id('second'),t.id('cable')),'PERMISSION_DENIED');
@@ -187,8 +216,8 @@ SELECT t.error('shop b: send shop a''s transfer',format('SELECT public.send_stoc
 SELECT t.error('shop b: receive shop a''s transfer',format($q$SELECT public.receive_stock_transfer(%L,'[]')$q$,:'d1'::jsonb->>'id'),'STOCK_TRANSFER_NOT_FOUND');
 SELECT t.expect('shop b: nothing listed',(public.list_stock_transfers()->>'total')::int=0);
 RESET ROLE;
-SELECT t.expect('audit: created 3, updated 1, sent 2, received 2, cancelled 1',
-  (SELECT count(*) FROM public.audit_log WHERE organization_id=t.org('a') AND action='stock_transfer.created')=3
+SELECT t.expect('audit: created 4, updated 1, sent 2, received 2, cancelled 1',
+  (SELECT count(*) FROM public.audit_log WHERE organization_id=t.org('a') AND action='stock_transfer.created')=4
   AND (SELECT count(*) FROM public.audit_log WHERE organization_id=t.org('a') AND action='stock_transfer.updated')=1
   AND (SELECT count(*) FROM public.audit_log WHERE organization_id=t.org('a') AND action='stock_transfer.sent')=2
   AND (SELECT count(*) FROM public.audit_log WHERE organization_id=t.org('a') AND action='stock_transfer.received')=2
@@ -198,7 +227,7 @@ SELECT t.expect('ledger caches still match the ledger',NOT EXISTS(SELECT 1 FROM 
 UPDATE public.organizations SET subscription_start=current_date-60,subscription_end=current_date-30 WHERE id=t.org('a');
 SELECT t.as_user('a3000000-0000-0000-8000-000000000001',t.org('a'));
 SET LOCAL ROLE authenticated;
-SELECT t.expect('expired shop: transfers still read',(public.list_stock_transfers()->>'total')::int=3);
+SELECT t.expect('expired shop: transfers still read',(public.list_stock_transfers()->>'total')::int=4);
 SELECT t.error('expired shop: no new transfer',format($q$SELECT public.create_stock_transfer(%L,%L,NULL,'[{"product_id":"%s","quantity":1}]','i03-expired')$q$,t.id('main'),t.id('second'),t.id('cable')),'SUBSCRIPTION_EXPIRED');
 RESET ROLE;
 UPDATE public.organizations SET subscription_end=current_date+30 WHERE id=t.org('a');
