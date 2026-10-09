@@ -1337,6 +1337,75 @@ export const openApiSpec = {
                 responses: { 200: { description: 'Supplier' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/purchase-invoices': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'List purchase invoices of the caller\'s branches (any purchasing read key)',
+                description: 'U02 (D54). Newest invoice date first. Filters: supplier_id, branch_id, status (draft | pending_approval | approved | rejected), from/to (invoice date), search (the PI number or the supplier\'s invoice number, contains). Another shop\'s supplier answers SUPPLIER_NOT_FOUND; a branch the caller doesn\'t work in BRANCH_DENIED. Works in an expired shop. Schema: PurchaseInvoiceListQuery → PurchaseInvoiceList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'supplier_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['draft', 'pending_approval', 'approved', 'rejected'] } },
+                    { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'search', in: 'query', schema: { type: 'string', maxLength: 40 } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'PurchaseInvoiceList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Purchasing'],
+                summary: 'Create a draft purchase invoice (purchase.invoice_create)',
+                description: 'U02 (D54). Supplier (active), branch (the caller\'s), optional supplier invoice number (unique per supplier among non-rejected invoices: SUPPLIER_INVOICE_NO_TAKEN), invoice date (not in the future), 1-200 lines with each product once: quantity 1-100 000, unit_cost BEFORE VAT, tax_class_id (default the product\'s), serials for serialized products (optional on a draft; one per unit; needs the serials module). VAT per line from the class. The same Idempotency-Key returns the same invoice. Audited as purchase_invoice.created. Schema: PurchaseInvoiceCreateBody → PurchaseInvoice.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'PurchaseInvoice' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/purchase-invoices/{id}': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'Read a purchase invoice with its lines (any purchasing read key)',
+                description: 'U02 (D54). Another shop\'s invoice, or one of a branch the caller doesn\'t work in, answers PURCHASE_INVOICE_NOT_FOUND. outstanding (approved only) = total − payments − credit returns; unit_ids are the serial units created by the approval. Schema: PurchaseInvoice.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'PurchaseInvoice' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            put: {
+                tags: ['Purchasing'],
+                summary: 'Change a draft purchase invoice (purchase.invoice_create)',
+                description: 'U02 (D54). Drafts only (else PURCHASE_INVOICE_NOT_EDITABLE): supplier_invoice_no, invoice_date and/or lines (all lines replaced, totals recomputed). The supplier and the branch are fixed. Audited as purchase_invoice.updated with what changed; no change, no row. Schema: PurchaseInvoiceUpdateBody → PurchaseInvoice.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'PurchaseInvoice' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/purchase-invoices/{id}/approve': {
+            post: {
+                tags: ['Purchasing'],
+                summary: 'Approve a purchase invoice (purchase.invoice_approve)',
+                description: 'U02 (D54). Recomputes VAT with the current class rates, then per line in product order: updates the product\'s moving-average cost on the net unit cost (all branches, half-up to 4 places; no stock → the unit cost) and posts the stock (purchase_in) once; serialized lines create their units. The supplier balance rises by the total including VAT. Already approved: answered unchanged. Errors: SERIALS_REQUIRED (422, details.line_ids), SERIAL_TAKEN (details.serials), SUPPLIER_ARCHIVED, PURCHASE_INVOICE_NOT_EDITABLE (rejected), BRANCH_DENIED / BRANCH_INACTIVE. Audited as purchase_invoice.approved with the costs before and after.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'PurchaseInvoice' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/purchase-invoices/{id}/reject': {
+            post: {
+                tags: ['Purchasing'],
+                summary: 'Reject a draft purchase invoice (purchase.invoice_approve)',
+                description: 'U02 (D54). reason 3-500 characters. A rejected invoice is final and frees its supplier invoice number. Approved or already rejected: PURCHASE_INVOICE_NOT_EDITABLE. Audited as purchase_invoice.rejected (warning) with the reason. Schema: PurchaseInvoiceRejectBody → PurchaseInvoice.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'PurchaseInvoice' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/units': {
             get: {
                 tags: ['Inventory'],

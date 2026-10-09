@@ -433,6 +433,20 @@ INSERT INTO t.denial VALUES
  ('list_suppliers','supplier_4_list','supplier.manage',$$SELECT public.list_suppliers()$$),
  ('get_supplier','supplier_5_get','supplier.manage',$$SELECT public.get_supplier((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial supplier'))$$),
  ('supplier_statement','supplier_6_statement','supplier.manage',$$SELECT public.supplier_statement((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial supplier'))$$);
+-- U02: a supplier of shop one (made as its owner) for the purchase invoice cases; case names order
+-- the calls (the owner's create makes the draft the others use; reject uses its own draft).
+SELECT t.as_user('d0000000-0000-0000-0000-000000000011', 'd1000000-0000-0000-0000-000000000001');
+SET LOCAL ROLE authenticated;
+SELECT public.create_supplier('{"name":"TEST-1 denial PI supplier"}');
+RESET ROLE;
+SELECT t.as_user(NULL);
+INSERT INTO t.denial VALUES
+ ('create_purchase_invoice','purchase_invoice_1_create','purchase.invoice_create',$$SELECT public.create_purchase_invoice((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial PI supplier'),'d2000000-0000-0000-0000-000000000011',NULL,current_date,jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND NOT is_serialized AND archived_at IS NULL ORDER BY id LIMIT 1),'quantity',1,'unit_cost','10.00')),'denial-pi-1')$$),
+ ('update_purchase_invoice','purchase_invoice_2_update','purchase.invoice_create',$$SELECT public.update_purchase_invoice((SELECT id FROM public.purchase_invoices WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-pi-1'),'{"supplier_invoice_no":"DEN-1"}')$$),
+ ('get_purchase_invoice','purchase_invoice_3_get','supplier.manage',$$SELECT public.get_purchase_invoice((SELECT id FROM public.purchase_invoices WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-pi-1'))$$),
+ ('list_purchase_invoices','purchase_invoice_4_list','supplier.manage',$$SELECT public.list_purchase_invoices()$$),
+ ('reject_purchase_invoice','purchase_invoice_5_reject','purchase.invoice_approve',$$SELECT public.reject_purchase_invoice((public.create_purchase_invoice((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial PI supplier'),'d2000000-0000-0000-0000-000000000011',NULL,current_date,jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND NOT is_serialized AND archived_at IS NULL ORDER BY id LIMIT 1),'quantity',1,'unit_cost','10.00')),'denial-pi-rej')->>'id')::uuid,'Denial test')$$),
+ ('approve_purchase_invoice','purchase_invoice_6_approve','purchase.invoice_approve',$$SELECT public.approve_purchase_invoice((SELECT id FROM public.purchase_invoices WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-pi-1'))$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

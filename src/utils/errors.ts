@@ -12,8 +12,10 @@ import {
   CategoryInUseDetail,
   SerialTakenDetail,
   ExportTooLargeDetail,
+  SerialsRequiredDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
+import type { ZodTypeAny } from 'zod';
 
 export type { ErrorCode };
 
@@ -71,6 +73,17 @@ export function safeMessage(code: ErrorCode): string {
   return `${words.charAt(0).toUpperCase()}${words.slice(1)}.`;
 }
 
+/** Codes whose database DETAIL (JSON) is passed on to the client, parsed by its contract schema. */
+const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
+  PLAN_LIMIT_REACHED: PlanLimitDetail,
+  PLAN_DOWNGRADE_BLOCKED: PlanDowngradeDetail,
+  BRANCH_DEACTIVATE_NEEDS_CONFIRM: BranchDeactivationCheck,
+  CATEGORY_IN_USE: CategoryInUseDetail,
+  SERIAL_TAKEN: SerialTakenDetail,
+  EXPORT_TOO_LARGE: ExportTooLargeDetail,
+  SERIALS_REQUIRED: SerialsRequiredDetail,
+};
+
 /**
  * Turns a database error into an AppError when its message starts with a contract error code
  * (`OUT_OF_STOCK: product ...`, `PERMISSION_DENIED`, `DAY_CLOSED: ...`). Returns undefined for
@@ -85,30 +98,12 @@ export function mapDbError(err: unknown): AppError | undefined {
   if (token === undefined || !Object.hasOwn(errorCodeHttpStatus, token)) return undefined;
   const code = token as ErrorCode;
   let details: unknown;
-  if (
-    code === 'PLAN_LIMIT_REACHED' ||
-    code === 'PLAN_DOWNGRADE_BLOCKED' ||
-    code === 'BRANCH_DEACTIVATE_NEEDS_CONFIRM' ||
-    code === 'CATEGORY_IN_USE' ||
-    code === 'SERIAL_TAKEN' ||
-    code === 'EXPORT_TOO_LARGE'
-  ) {
+  const detailSchema = DETAIL_SCHEMAS[code];
+  if (detailSchema) {
     try {
       const raw = (err as { details?: unknown }).details;
       if (typeof raw === 'string') {
-        const parsed = (
-          code === 'PLAN_LIMIT_REACHED'
-            ? PlanLimitDetail
-            : code === 'PLAN_DOWNGRADE_BLOCKED'
-              ? PlanDowngradeDetail
-              : code === 'CATEGORY_IN_USE'
-                ? CategoryInUseDetail
-                : code === 'SERIAL_TAKEN'
-                  ? SerialTakenDetail
-                  : code === 'EXPORT_TOO_LARGE'
-                    ? ExportTooLargeDetail
-                    : BranchDeactivationCheck
-        ).safeParse(JSON.parse(raw));
+        const parsed = detailSchema.safeParse(JSON.parse(raw));
         if (parsed.success) details = parsed.data;
       }
     } catch {

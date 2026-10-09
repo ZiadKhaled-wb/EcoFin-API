@@ -72,7 +72,9 @@ INSERT INTO t.no_permission_ok VALUES
   ('search_units', 'I04: read-only serial search in the caller''s branches; checks app.has_permission(stock.view)'),
   ('list_suppliers', 'U01: read-only supplier list; checks app.has_permission on any purchasing read key (D53) so an expired shop can still read'),
   ('get_supplier', 'U01: read-only supplier, archived included; checks app.has_permission on any purchasing read key (D53)'),
-  ('supplier_statement', 'U01: read-only supplier statement; checks app.has_permission on any purchasing read key (D53) so an expired shop can still read');
+  ('supplier_statement', 'U01: read-only supplier statement; checks app.has_permission on any purchasing read key (D53) so an expired shop can still read'),
+  ('list_purchase_invoices', 'U02: read-only purchase invoices of the caller''s branches; any purchasing read key (D53), works in an expired shop'),
+  ('get_purchase_invoice', 'U02: read-only purchase invoice of the caller''s branches; any purchasing read key (D53)');
 
 -- ---------------------------------------------------------------- catalog helpers (plpgsql, so a
 -- privilege function never runs on rows of another kind or schema before the filter)

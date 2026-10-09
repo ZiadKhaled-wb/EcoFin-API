@@ -277,3 +277,7 @@ See [I06 plan](plans/I06.md). Covers the Done when (a product below its min leve
 ## U01 — suppliers (EC-53)
 
 See [U01 plan](plans/U01.md). Covers the Done when (the statement balance equals invoices − payments − returns, and equals `v_supplier_balances`) and the D53 rules (active-only uniqueness of name and phone, no archive with a balance or open documents, who may read, shop-wide statements).
+
+## U02 — purchase invoices (EC-54)
+
+See [U02 plan](plans/U02.md). Covers the Done when (approving a multi-line invoice adds each quantity exactly once, the moving-average cost is right, the supplier balance rises by the total) and the D54 rules (net cost before VAT, approve once, drafts only, serials, current tax rates at approval).

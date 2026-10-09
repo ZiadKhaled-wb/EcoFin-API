@@ -1589,3 +1589,159 @@ crossShopCase({
     h.expect((after.res.body as { archived_at: string | null }).archived_at).not.toBeNull();
   },
 });
+
+// U02 purchase invoices: shop B's supplier, product and draft invoice are made the real way.
+async function shopBPurchase(h: CrossShopHarness, tag: string) {
+  const supplier = await shopBSupplier(h, 'pi-' + tag);
+  const product = await shopBProduct(h, 'pi-' + tag);
+  const created = await h.call('POST', '/api/purchase-invoices', {
+    token: supplier.token,
+    idempotencyKey: `xs-pi-${tag}-${Date.now()}-${Math.random()}`,
+    body: {
+      supplier_id: supplier.id,
+      branch_id: SHOP_B_BR1,
+      invoice_date: new Date().toISOString().slice(0, 10),
+      lines: [{ product_id: product.id, quantity: 1, unit_cost: '10.00' }],
+    },
+  });
+  h.expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+  const invoice = created.res.body as { id: string; updated_at: string };
+  return { invoice, supplier, product, token: supplier.token };
+}
+async function invoiceStatus(h: CrossShopHarness, token: string, id: string) {
+  const own = await h.call('GET', `/api/purchase-invoices/${id}`, { token });
+  return own.res.body as { status: string; updated_at: string };
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/purchase-invoices',
+  name: "purchase invoices list refuses a foreign header, an org query key and shop B's supplier",
+  async run(h) {
+    const theirs = await shopBPurchase(h, 'list');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/purchase-invoices', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/purchase-invoices', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const bySupplier = await h.call('GET', '/api/purchase-invoices', {
+      token: a.accessToken,
+      query: 'supplier_id=' + theirs.supplier.id,
+    });
+    h.expect(bySupplier.res.status).toBe(404);
+    h.expect(h.code(bySupplier.res)).toBe('SUPPLIER_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/purchase-invoices/:id',
+  name: "purchase invoice read rejects another shop's id and a foreign header",
+  async run(h) {
+    const theirs = await shopBPurchase(h, 'get');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', `/api/purchase-invoices/${theirs.invoice.id}`, {
+      token: a.accessToken,
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('PURCHASE_INVOICE_NOT_FOUND');
+    const header = await h.call('GET', `/api/purchase-invoices/${theirs.invoice.id}`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/purchase-invoices',
+  name: "purchase invoice create rejects a foreign header, a tenant body and shop B's supplier, branch or product",
+  async run(h) {
+    const theirs = await shopBPurchase(h, 'create');
+    const a = await h.login(OWNER_A);
+    const own = await h.call('POST', '/api/suppliers', {
+      token: a.accessToken,
+      body: { name: `Cross-shop PI supplier ${Date.now()}-${Math.random()}` },
+    });
+    h.expect(own.res.status, JSON.stringify(own.res.body)).toBe(201);
+    const ownProduct = await h.call('POST', '/api/products', {
+      token: a.accessToken,
+      body: { name_ar: 'Cross-shop PI', sku: `XS-PI-${Date.now()}`, cash_price: '1.00' },
+    });
+    h.expect(ownProduct.res.status, JSON.stringify(ownProduct.res.body)).toBe(201);
+    const body = {
+      supplier_id: (own.res.body as { id: string }).id,
+      branch_id: SHOP_A_BR1,
+      invoice_date: new Date().toISOString().slice(0, 10),
+      lines: [
+        { product_id: (ownProduct.res.body as { id: string }).id, quantity: 1, unit_cost: '1.00' },
+      ],
+    };
+    const send = (b: object, orgId?: string) =>
+      h.call('POST', '/api/purchase-invoices', {
+        token: a.accessToken,
+        idempotencyKey: `xs-pi-a-${Date.now()}-${Math.random()}`,
+        body: b,
+        ...(orgId ? { orgId } : {}),
+      });
+    const foreign = await send(body, SHOP_B);
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await send({ ...body, organization_id: SHOP_B });
+    h.expect(injected.res.status).toBe(400);
+    const supplier = await send({ ...body, supplier_id: theirs.supplier.id });
+    h.expect(supplier.res.status).toBe(404);
+    h.expect(h.code(supplier.res)).toBe('SUPPLIER_NOT_FOUND');
+    const branch = await send({ ...body, branch_id: SHOP_B_BR1 });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    const product = await send({
+      ...body,
+      lines: [{ product_id: theirs.product.id, quantity: 1, unit_cost: '1.00' }],
+    });
+    h.expect(product.res.status).toBe(404);
+    h.expect(h.code(product.res)).toBe('PRODUCT_NOT_FOUND');
+    for (const call of [foreign, injected, supplier, branch, product]) {
+      h.expect(await h.auditRowsFrom(SHOP_A, call.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+  },
+});
+
+for (const [method, suffix] of [
+  ['PUT', ''],
+  ['POST', '/approve'],
+  ['POST', '/reject'],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/purchase-invoices/:id${suffix}`,
+    name: `${method} purchase invoice${suffix} rejects another shop's id and leaves it unchanged`,
+    async run(h) {
+      const theirs = await shopBPurchase(h, method.toLowerCase() + suffix.replace('/', '-'));
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call(method, `/api/purchase-invoices/${theirs.invoice.id}${suffix}`, {
+        token: a.accessToken,
+        body:
+          suffix === ''
+            ? { supplier_invoice_no: 'FOREIGN' }
+            : suffix === '/reject'
+              ? { reason: 'Not mine' }
+              : {},
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('PURCHASE_INVOICE_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_A, foreign.ip)).toBe(0);
+      const after = await invoiceStatus(h, theirs.token, theirs.invoice.id);
+      h.expect(after).toMatchObject({ status: 'draft', updated_at: theirs.invoice.updated_at });
+    },
+  });
+}
