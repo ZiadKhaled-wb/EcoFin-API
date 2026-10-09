@@ -172,6 +172,11 @@ export const errorCodeHttpStatus = {
   PURCHASE_RETURN_NOT_FOUND: 404,
   PURCHASE_INVOICE_NOT_APPROVED: 409,
   RETURN_QTY_EXCEEDED: 409,
+  // U03 supplier payments
+  SUPPLIER_PAYMENT_NOT_FOUND: 404,
+  PAYMENT_EXCEEDS_OUTSTANDING: 409,
+  ALLOCATION_INVALID: 400,
+  PAYMENT_ALREADY_REVERSED: 409,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

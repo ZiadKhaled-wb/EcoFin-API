@@ -289,5 +289,8 @@ See [U06 plan](plans/U06.md). Covers the Done when (a user below the owner can't
 ## K01 — vaults (EC-59)
 See [K01 plan](plans/K01.md). Covers the Done when (a transfer changes both balances once; the ledger view adds up to the balance) and the D56 rules (safes and banks only, one opening balance, source-branch access, default vault and balance guards).
 
+## U03 — supplier payments (EC-55)
+See [U03 plan](plans/U03.md). Covers the Done when (a double-click pays once; invoice and supplier balances update) and the D58 rules (fully allocated, oldest first, never above the outstanding, safe not below 0, owner-only reversal).
+
 ## U04 — purchase returns (EC-56)
 See [U04 plan](plans/U04.md). Covers the Done when (stock and supplier balance each change exactly once; you can't return more than you bought) and the D57 rules (approved invoices only, the invoice's branch, exact serial units, D41 tax, recomputed average, credit or cash refund).

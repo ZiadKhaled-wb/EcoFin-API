@@ -39,6 +39,8 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/purchase-invoices/:id/approve': { action: 'purchase_invoice.approved' },
   'POST /api/purchase-invoices/:id/reject': { action: 'purchase_invoice.rejected' },
   'POST /api/purchase-returns': { action: 'purchase_return.posted' },
+  'POST /api/supplier-payments': { action: 'supplier_payment.posted' },
+  'POST /api/supplier-payments/:id/reverse': { action: 'supplier_payment.reversed' },
   'POST /api/cash-accounts': { action: 'cash_account.created' },
   'PATCH /api/cash-accounts/:id': { action: 'cash_account.renamed' },
   'POST /api/cash-accounts/:id/deactivate': { action: 'cash_account.deactivated' },

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.26.0
+
+- U03 supplier payments: SupplierPaymentAllocationInput, SupplierPaymentCreateBody (allocations add up to the amount, each invoice once), SupplierPaymentReverseBody, SupplierPaymentIdParams, SupplierPaymentAllocation, SupplierPayment, SupplierPaymentSummary, SupplierPaymentList, SupplierPaymentListQuery (include_reversals, default true), OpenSupplierInvoice, OpenSupplierInvoiceList, OpenSupplierInvoiceQuery, PaymentExceedsOutstandingDetail. Error codes SUPPLIER_PAYMENT_NOT_FOUND (404), PAYMENT_EXCEEDS_OUTSTANDING (409, details), ALLOCATION_INVALID (400), PAYMENT_ALREADY_REVERSED (409).
+
 ## 0.25.1
 
 - No schema change: 0.25.0 was tagged on the commit before U04 and never published; this is the first published version with the U04 purchase return schemas.

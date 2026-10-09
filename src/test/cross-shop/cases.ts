@@ -2238,3 +2238,189 @@ crossShopCase({
     ).toBe(false);
   },
 });
+
+// U03 supplier payments (D58). Shop B's payment is made by B's owner from a funded bank.
+const payKey = () => `xs-u03-${Date.now()}-${Math.random()}`;
+async function shopBPayment(h: CrossShopHarness) {
+  const invoice = await approvedPurchase(h, OWNER_B, SHOP_B_BR1);
+  const bank = await cashAccountOf(h, OWNER_B, '50.00');
+  const made = await h.call('POST', '/api/supplier-payments', {
+    token: invoice.token,
+    idempotencyKey: payKey(),
+    body: {
+      supplier_id: invoice.supplierId,
+      branch_id: SHOP_B_BR1,
+      cash_account_id: bank,
+      amount: '5.00',
+    },
+  });
+  h.expect(made.res.status, JSON.stringify(made.res.body)).toBe(201);
+  return { id: (made.res.body as { id: string }).id, invoice, bank };
+}
+crossShopCase({
+  method: 'GET',
+  path: '/api/supplier-payments',
+  name: "supplier payments list refuses a foreign header, an org key and shop B's supplier or branch",
+  async run(h) {
+    const theirs = await shopBPayment(h);
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/supplier-payments', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/supplier-payments', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    for (const [query, code] of [
+      ['supplier_id=' + theirs.invoice.supplierId, 'SUPPLIER_NOT_FOUND'],
+      ['branch_id=' + SHOP_B_BR1, 'BRANCH_NOT_FOUND'],
+    ] as const) {
+      const res = await h.call('GET', '/api/supplier-payments', { token: a.accessToken, query });
+      h.expect(res.res.status).toBe(404);
+      h.expect(h.code(res.res)).toBe(code);
+    }
+    const own = await h.call('GET', '/api/supplier-payments', {
+      token: a.accessToken,
+      query: 'pageSize=100',
+    });
+    h.expect(own.res.status).toBe(200);
+    h.expect(
+      (own.res.body as { items: { id: string }[] }).items.some((x) => x.id === theirs.id),
+    ).toBe(false);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/supplier-payments/open-invoices',
+  name: "the open invoices of shop B's supplier are not found; a foreign header and an org key are refused",
+  async run(h) {
+    const theirs = await approvedPurchase(h, OWNER_B, SHOP_B_BR1);
+    const a = await h.login(OWNER_A);
+    const query = 'supplier_id=' + theirs.supplierId;
+    const res = await h.call('GET', '/api/supplier-payments/open-invoices', {
+      token: a.accessToken,
+      query,
+    });
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('SUPPLIER_NOT_FOUND');
+    const header = await h.call('GET', '/api/supplier-payments/open-invoices', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      query,
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/supplier-payments/open-invoices', {
+      token: a.accessToken,
+      query: query + '&organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/supplier-payments/:id',
+  name: "shop B's supplier payment is not found; a foreign header is refused",
+  async run(h) {
+    const theirs = await shopBPayment(h);
+    const a = await h.login(OWNER_A);
+    const res = await h.call('GET', `/api/supplier-payments/${theirs.id}`, {
+      token: a.accessToken,
+    });
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('SUPPLIER_PAYMENT_NOT_FOUND');
+    const header = await h.call('GET', `/api/supplier-payments/${theirs.id}`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/supplier-payments',
+  name: "a payment with shop B's supplier, invoice, branch or cash account is refused and moves no money",
+  async run(h) {
+    const theirs = await approvedPurchase(h, OWNER_B, SHOP_B_BR1);
+    const theirBank = await cashAccountOf(h, OWNER_B, '20.00');
+    const mine = await approvedPurchase(h, OWNER_A, SHOP_A_BR1);
+    const myBank = await cashAccountOf(h, OWNER_A, '20.00');
+    const a = await h.login(OWNER_A);
+    const body = {
+      supplier_id: mine.supplierId,
+      branch_id: SHOP_A_BR1,
+      cash_account_id: myBank,
+      amount: '1.00',
+    };
+    const send = (b: object, orgId?: string) =>
+      h.call('POST', '/api/supplier-payments', {
+        token: a.accessToken,
+        idempotencyKey: payKey(),
+        body: b,
+        ...(orgId ? { orgId } : {}),
+      });
+    const foreign = await send(body, SHOP_B);
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await send({ ...body, organization_id: SHOP_B });
+    h.expect(injected.res.status).toBe(400);
+    const supplier = await send({ ...body, supplier_id: theirs.supplierId });
+    h.expect(supplier.res.status).toBe(404);
+    h.expect(h.code(supplier.res)).toBe('SUPPLIER_NOT_FOUND');
+    const branch = await send({ ...body, branch_id: SHOP_B_BR1 });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    const account = await send({ ...body, cash_account_id: theirBank });
+    h.expect(account.res.status).toBe(400);
+    h.expect(h.code(account.res)).toBe('VAULT_INVALID');
+    const invoice = await send({
+      ...body,
+      allocations: [{ purchase_invoice_id: theirs.id, amount: '1.00' }],
+    });
+    h.expect(invoice.res.status).toBe(400);
+    h.expect(h.code(invoice.res)).toBe('ALLOCATION_INVALID');
+    for (const call of [foreign, injected, supplier, branch, account, invoice]) {
+      h.expect(await h.auditRowsFrom(SHOP_A, call.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+    const mineAfter = await h.call('GET', `/api/cash-accounts/${myBank}`, { token: a.accessToken });
+    h.expect((mineAfter.res.body as { balance: string }).balance).toBe('20.00');
+    const theirsAfter = await h.call('GET', `/api/cash-accounts/${theirBank}`, {
+      token: theirs.token,
+    });
+    h.expect((theirsAfter.res.body as { balance: string }).balance).toBe('20.00');
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/supplier-payments/:id/reverse',
+  name: "reversing shop B's supplier payment is not found and leaves it as it was",
+  async run(h) {
+    const theirs = await shopBPayment(h);
+    const a = await h.login(OWNER_A);
+    const send = (orgId?: string) =>
+      h.call('POST', `/api/supplier-payments/${theirs.id}/reverse`, {
+        token: a.accessToken,
+        idempotencyKey: payKey(),
+        body: { reason: 'Cross-shop case' },
+        ...(orgId ? { orgId } : {}),
+      });
+    const foreign = await send(SHOP_B);
+    h.expect(foreign.res.status).toBe(403);
+    const res = await send();
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('SUPPLIER_PAYMENT_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, res.ip)).toBe(0);
+    const own = await h.call('GET', `/api/supplier-payments/${theirs.id}`, {
+      token: theirs.invoice.token,
+    });
+    h.expect(
+      (own.res.body as { reversed_by_payment_id: string | null }).reversed_by_payment_id,
+    ).toBeNull();
+    const bank = await h.call('GET', `/api/cash-accounts/${theirs.bank}`, {
+      token: theirs.invoice.token,
+    });
+    h.expect((bank.res.body as { balance: string }).balance).toBe('45.00');
+  },
+});
