@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.25.1
+
+- No schema change: 0.25.0 was tagged on the commit before U04 and never published; this is the first published version with the U04 purchase return schemas.
+
 ## 0.25.0
 
 - U04 purchase returns: PurchaseReturnLineInput (quantity or unit_ids), PurchaseReturnCreateBody (cash needs cash_account_id), PurchaseReturnIdParams, PurchaseReturnLine, PurchaseReturn, PurchaseReturnSummary, PurchaseReturnList, PurchaseReturnListQuery, ReturnableLine, ReturnableInvoice, ReturnQtyExceededDetail, PayableCashAccount, PayableCashAccountList, PayableCashAccountQuery. Error codes PURCHASE_RETURN_NOT_FOUND (404), PURCHASE_INVOICE_NOT_APPROVED, RETURN_QTY_EXCEEDED (409, details).
