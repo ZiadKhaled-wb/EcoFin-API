@@ -182,11 +182,12 @@ SELECT t.expect('statement: payments and the reversal are on the U01 statement, 
   AND (SELECT count(*) FROM jsonb_array_elements(s->'rows') r WHERE r->>'kind'='payment_reversal')=1
   AND (s->>'closing_balance')::numeric=t.bal('nile'), s::text)
 FROM (SELECT public.supplier_statement(t.id('nile')) s) x;
+-- The business date is the shop's today (Cairo), which can be a day ahead of the database's UTC date.
 SELECT t.expect('list: newest first; without reversals only the payments that count',
   (public.list_supplier_payments(t.id('nile'))->>'total')::int=4
   AND (public.list_supplier_payments(t.id('nile'),NULL,NULL,NULL,false)->>'total')::int=2
   AND (public.list_supplier_payments(t.id('delta'))->>'total')::int=0
-  AND (public.list_supplier_payments(NULL,t.id('main'),current_date,current_date,true,1,1)->'items'->0->>'id') IS NOT NULL
+  AND (public.list_supplier_payments(NULL,t.id('main'),current_date-1,current_date+1,true,1,1)->'items'->0->>'id') IS NOT NULL
   AND NOT (public.list_supplier_payments()->'items'->0 ? 'allocations'));
 SELECT t.error('list: from after to',format('SELECT public.list_supplier_payments(NULL,NULL,%L,%L)',current_date,current_date-1),'VALIDATION_FAILED');
 RESET ROLE;
