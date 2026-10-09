@@ -31,6 +31,15 @@ router.get(
   validate({ params: PurchaseInvoiceIdParams }),
   asyncHandler(controller.get),
 );
+// U04 (D57): what can still go back to the supplier, line by line.
+router.get(
+  '/:id/returnable',
+  authenticate,
+  loadRequestContext,
+  requirePermission('purchase.return_create'),
+  validate({ params: PurchaseInvoiceIdParams }),
+  asyncHandler(controller.returnable),
+);
 // The Idempotency-Key header is read by the controller (IdempotencyKeyHeader).
 router.post(
   '/',

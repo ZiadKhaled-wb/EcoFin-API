@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { BusinessDate, IsoTimestamp, Money, PaginationQuery, Uuid, paginated } from './common.js';
 import { Serial } from './units.js';
+import { PurchaseRefundMode } from './suppliers.js';
 
 /**
  * U02 purchase invoices (D54). A supplier's invoice is a draft until it is approved (stock in once,
@@ -203,3 +204,154 @@ export type PurchaseApprovalListQuery = z.infer<typeof PurchaseApprovalListQuery
 /** Details of SERIALS_REQUIRED: the serialized lines that still need their serials. */
 export const SerialsRequiredDetail = z.object({ line_ids: z.array(Uuid) });
 export type SerialsRequiredDetail = z.infer<typeof SerialsRequiredDetail>;
+
+/**
+ * U04 purchase returns (D57). Goods go back against an approved invoice, from its branch, at the
+ * invoice's net unit cost; `supplier_credit` lowers the supplier balance, `cash` puts the refund
+ * into a safe or bank (`cash_account_id`) and leaves the balance alone.
+ */
+export const PurchaseReturnLineInput = z
+  .object({
+    invoice_line_id: Uuid,
+    /** Normal lines: how many go back. */
+    quantity: z.number().int().min(1).max(1_000_000).optional(),
+    /** Serialized lines: the exact units (created by this invoice line, in stock). */
+    unit_ids: z.array(Uuid).min(1).max(500).optional(),
+  })
+  .strict()
+  .refine((l) => (l.quantity === undefined) !== (l.unit_ids === undefined), {
+    message: 'Give either quantity or unit_ids',
+  })
+  .refine((l) => !l.unit_ids || new Set(l.unit_ids).size === l.unit_ids.length, {
+    message: 'A unit appears at most once',
+    path: ['unit_ids'],
+  });
+export type PurchaseReturnLineInput = z.infer<typeof PurchaseReturnLineInput>;
+
+/** `Idempotency-Key` header. `cash_account_id` is required for `cash` and forbidden otherwise. */
+export const PurchaseReturnCreateBody = z
+  .object({
+    purchase_invoice_id: Uuid,
+    refund_mode: PurchaseRefundMode,
+    cash_account_id: Uuid.optional(),
+    reason: z.string().trim().min(3).max(500),
+    lines: z
+      .array(PurchaseReturnLineInput)
+      .min(1)
+      .max(200)
+      .refine((lines) => new Set(lines.map((l) => l.invoice_line_id)).size === lines.length, {
+        message: 'A line appears at most once',
+      }),
+  })
+  .strict()
+  .refine((b) => (b.refund_mode === 'cash') === (b.cash_account_id !== undefined), {
+    message: 'A cash refund needs an account; a supplier credit takes none',
+    path: ['cash_account_id'],
+  });
+export type PurchaseReturnCreateBody = z.infer<typeof PurchaseReturnCreateBody>;
+export type PurchaseReturnCreateInput = z.input<typeof PurchaseReturnCreateBody>;
+
+export const PurchaseReturnIdParams = z.object({ id: Uuid }).strict();
+export type PurchaseReturnIdParams = z.infer<typeof PurchaseReturnIdParams>;
+
+export const PurchaseReturnLine = z.object({
+  id: Uuid,
+  invoice_line_id: Uuid,
+  product_id: Uuid,
+  name_ar: z.string(),
+  name_en: z.string().nullable(),
+  sku: z.string(),
+  unit_id: Uuid.nullable(),
+  serial: z.string().nullable(),
+  quantity: z.number().int().positive(),
+  unit_cost: Money,
+  tax_amount: Money,
+  net: Money,
+  line_total: Money,
+});
+export type PurchaseReturnLine = z.infer<typeof PurchaseReturnLine>;
+
+const returnHeader = {
+  id: Uuid,
+  number: z.string(),
+  purchase_invoice_id: Uuid,
+  invoice_number: z.string(),
+  supplier_id: Uuid,
+  supplier_name: z.string(),
+  branch_id: Uuid,
+  refund_mode: PurchaseRefundMode,
+  cash_account_id: Uuid.nullable(),
+  cash_account_name: z.string().nullable(),
+  subtotal: Money,
+  tax_total: Money,
+  total: Money,
+  reason: z.string(),
+  business_date: BusinessDate,
+  created_by_name: z.string().nullable(),
+  created_at: IsoTimestamp,
+};
+export const PurchaseReturn = z.object({ ...returnHeader, lines: z.array(PurchaseReturnLine) });
+export type PurchaseReturn = z.infer<typeof PurchaseReturn>;
+export const PurchaseReturnSummary = z.object({
+  ...returnHeader,
+  lines_count: z.number().int().nonnegative(),
+});
+export type PurchaseReturnSummary = z.infer<typeof PurchaseReturnSummary>;
+export const PurchaseReturnList = paginated(PurchaseReturnSummary);
+export type PurchaseReturnList = z.infer<typeof PurchaseReturnList>;
+
+export const PurchaseReturnListQuery = PaginationQuery.extend({
+  supplier_id: Uuid.optional(),
+  branch_id: Uuid.optional(),
+  purchase_invoice_id: Uuid.optional(),
+  from: BusinessDate.optional(),
+  to: BusinessDate.optional(),
+})
+  .strict()
+  .refine((q) => q.from === undefined || q.to === undefined || q.from <= q.to, {
+    message: '`from` must not be after `to`',
+    path: ['from'],
+  });
+export type PurchaseReturnListQuery = z.infer<typeof PurchaseReturnListQuery>;
+
+/** What can still go back from an invoice: per line, and the units in stock in its branch. */
+export const ReturnableLine = z.object({
+  invoice_line_id: Uuid,
+  product_id: Uuid,
+  name_ar: z.string(),
+  name_en: z.string().nullable(),
+  sku: z.string(),
+  is_serialized: z.boolean(),
+  purchased: z.number().int().positive(),
+  returned: z.number().int().nonnegative(),
+  returnable: z.number().int().nonnegative(),
+  unit_cost: Money,
+  units_in_stock: z.array(z.object({ unit_id: Uuid, serial: z.string() })),
+});
+export type ReturnableLine = z.infer<typeof ReturnableLine>;
+export const ReturnableInvoice = z.object({
+  invoice: PurchaseInvoiceSummary,
+  lines: z.array(ReturnableLine),
+});
+export type ReturnableInvoice = z.infer<typeof ReturnableInvoice>;
+
+/** Details of RETURN_QTY_EXCEEDED: the line and how many can still go back. */
+export const ReturnQtyExceededDetail = z.object({
+  invoice_line_id: Uuid,
+  returnable: z.number().int().nonnegative(),
+});
+export type ReturnQtyExceededDetail = z.infer<typeof ReturnQtyExceededDetail>;
+
+/** U04 decision 8 (also U03): an active safe or bank usable for a branch, with its balance. */
+export const PayableCashAccount = z.object({
+  id: Uuid,
+  name: z.string(),
+  kind: z.enum(['safe', 'bank']),
+  branch_id: Uuid.nullable(),
+  balance: Money,
+});
+export type PayableCashAccount = z.infer<typeof PayableCashAccount>;
+export const PayableCashAccountList = z.object({ items: z.array(PayableCashAccount) });
+export type PayableCashAccountList = z.infer<typeof PayableCashAccountList>;
+export const PayableCashAccountQuery = z.object({ branch_id: Uuid }).strict();
+export type PayableCashAccountQuery = z.infer<typeof PayableCashAccountQuery>;

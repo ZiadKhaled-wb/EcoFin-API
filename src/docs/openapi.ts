@@ -1422,6 +1422,69 @@ export const openApiSpec = {
                 responses: { 200: { description: 'PurchaseApprovalList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/purchase-invoices/{id}/returnable': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'What can still go back to the supplier from an invoice (purchase.return_create)',
+                description: 'U04 (D57). Per invoice line: purchased, returned, returnable (purchased minus every earlier return), the net unit cost and, for serialized products, the units of that line still in stock in the branch of the invoice. Another shop, or a branch the caller does not work in: PURCHASE_INVOICE_NOT_FOUND. Schema: ReturnableInvoice.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'ReturnableInvoice' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/purchase-returns': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'List purchase returns of the branches of the caller (any purchasing read key)',
+                description: 'U04 (D57). Newest business date first. Filters: supplier_id, branch_id, purchase_invoice_id, from/to (business date). Another shop answers SUPPLIER_NOT_FOUND / PURCHASE_INVOICE_NOT_FOUND / BRANCH_NOT_FOUND; a branch the caller does not work in BRANCH_DENIED. Works in an expired shop. Schema: PurchaseReturnListQuery → PurchaseReturnList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'supplier_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'purchase_invoice_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'PurchaseReturnList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Purchasing'],
+                summary: 'Return goods to a supplier (purchase.return_create)',
+                description: 'U04 (D57). Against an approved invoice (else PURCHASE_INVOICE_NOT_APPROVED), from its branch. Lines: each invoice line once, with quantity (normal products) or unit_ids (serialized: units that line created, in stock in that branch; else UNIT_NOT_AVAILABLE / UNIT_NOT_FOUND). Never more than bought minus returned: RETURN_QTY_EXCEEDED (409, details invoice_line_id and returnable). Stock leaves once at the net unit cost of the invoice (OUT_OF_STOCK when the goods are not in the branch); tax and gross per line follow D41, so the returns of a line add back to it exactly. The moving-average cost is recomputed: (Q×A − r×c) / (Q − r), half-up to 4 places, never below 0; nothing left keeps the average. refund_mode supplier_credit lowers the supplier balance (it may go negative); cash puts +total into cash_account_id, an active safe or bank of the branch or a shop-wide bank (VAULT_INVALID / CASH_ACCOUNT_INACTIVE), and leaves the balance alone. reason 3-500. Numbered PR. The same Idempotency-Key returns the first return. Audited as purchase_return.posted. Schema: PurchaseReturnCreateBody → PurchaseReturn.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'PurchaseReturn' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/purchase-returns/{id}': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'Read a purchase return with its lines (any purchasing read key)',
+                description: 'U04 (D57). Another shop, or a branch the caller does not work in: PURCHASE_RETURN_NOT_FOUND. Serialized lines come one per unit with the serial. Schema: PurchaseReturn.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'PurchaseReturn' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/purchasing/cash-accounts': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'Safes and banks money can move through for a branch (purchase.return_create or supplier.payment_create)',
+                description: 'U04 (D57), also used by supplier payments. The active safes and banks of the branch plus shop-wide banks, with balances. The caller needs the branch (BRANCH_DENIED / BRANCH_NOT_FOUND). Schema: PayableCashAccountQuery → PayableCashAccountList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'branch_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'PayableCashAccountList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/cash-accounts': {
             get: {
                 tags: ['Cash'],

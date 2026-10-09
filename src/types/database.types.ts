@@ -8175,6 +8175,8 @@ export type Database = {
       get_cash_transfer: { Args: { p_id: string }; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
+      get_purchase_return: { Args: { p_id: string }; Returns: Json };
+      get_returnable_invoice: { Args: { p_invoice_id: string }; Returns: Json };
       get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       get_shop_settings: { Args: Record<PropertyKey, never>; Returns: Json };
       get_stock_adjustment: { Args: { p_id: string }; Returns: Json };
@@ -8284,6 +8286,7 @@ export type Database = {
         }[];
       };
       list_installment_policies: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_payable_cash_accounts: { Args: { p_branch_id: string }; Returns: Json };
       list_product_units: { Args: { p_product_id: string; p_status?: string }; Returns: Json };
       list_products: {
         Args: {
@@ -8308,6 +8311,18 @@ export type Database = {
           p_offset?: number;
           p_search?: string;
           p_status?: string;
+          p_supplier_id?: string;
+          p_to?: string;
+        };
+        Returns: Json;
+      };
+      list_purchase_returns: {
+        Args: {
+          p_branch_id?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_purchase_invoice_id?: string;
           p_supplier_id?: string;
           p_to?: string;
         };
@@ -8378,6 +8393,17 @@ export type Database = {
       password_reset_lookup: { Args: { p_token_hash: string }; Returns: Json };
       post_cash_opening: {
         Args: { p_amount: string; p_id: string; p_idempotency_key: string; p_note: string };
+        Returns: Json;
+      };
+      post_purchase_return: {
+        Args: {
+          p_cash_account_id?: string;
+          p_idempotency_key: string;
+          p_invoice_id: string;
+          p_lines: Json;
+          p_reason: string;
+          p_refund_mode: string;
+        };
         Returns: Json;
       };
       post_stock_adjustment: {
