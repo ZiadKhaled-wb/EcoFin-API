@@ -145,6 +145,12 @@ export const errorCodeHttpStatus = {
   SERIAL_INVALID: 400,
   // I05 movement history
   EXPORT_TOO_LARGE: 422,
+  // U01 suppliers
+  SUPPLIER_NOT_FOUND: 404,
+  SUPPLIER_NAME_TAKEN: 409,
+  SUPPLIER_PHONE_TAKEN: 409,
+  SUPPLIER_HAS_BALANCE: 409,
+  SUPPLIER_HAS_OPEN_DOCUMENTS: 409,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

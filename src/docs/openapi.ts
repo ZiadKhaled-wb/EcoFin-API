@@ -1260,6 +1260,83 @@ export const openApiSpec = {
                 responses: { 200: { description: 'StockTransfer' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/suppliers': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'List suppliers (any purchasing read key)',
+                description: 'U01 (D53). Readable with any of supplier.manage, purchase.order_manage, purchase.invoice_create, purchase.invoice_approve, purchase.return_create, supplier.payment_create, report.financial; works in an expired shop. search matches the name (contains, any letter case) or a phone prefix (spaces and dashes ignored). status: active (default) | archived | all. Ordered by name. Each supplier carries its balance (what the shop owes). Schema: SupplierListQuery → SupplierList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'search', in: 'query', schema: { type: 'string', maxLength: 100 } },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['active', 'archived', 'all'], default: 'active' } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'SupplierList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Purchasing'],
+                summary: 'Create a supplier (supplier.manage)',
+                description: 'U01 (D53). name 1-150 (trimmed); phone stored without spaces or dashes (+ and 6-15 digits); tax_registration_no 9-20 digits or dashes; address up to 300; notes up to 1000; payment_terms_days 0-365 (default 0). Names (any letter case) and phones are unique among active suppliers: SUPPLIER_NAME_TAKEN, SUPPLIER_PHONE_TAKEN. Audited as supplier.created. Schema: SupplierCreateBody → Supplier.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 201: { description: 'Supplier' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/suppliers/{id}': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'Read a supplier, archived included (any purchasing read key)',
+                description: 'U01 (D53). Another shop\'s id answers SUPPLIER_NOT_FOUND. Schema: Supplier.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Supplier' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            patch: {
+                tags: ['Purchasing'],
+                summary: 'Update a supplier (supplier.manage)',
+                description: 'U01 (D53). Any create field, at least one; null clears an optional field. An archived supplier answers SUPPLIER_NOT_FOUND (restore it first). Audited as supplier.updated with the changed keys only; no change, no audit row. Schema: SupplierUpdateBody → Supplier.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Supplier' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/suppliers/{id}/statement': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'Supplier statement with a running balance (any purchasing read key)',
+                description: 'U01 (D53). Shop-wide (every branch): approved invoices (debit), payments (credit), payment reversals (debit) and returns (credit when supplier_credit; 0 and 0 when the supplier refunded cash), ordered by date. from/to are business dates (from must not be after to); opening_balance is the net of the documents before from. Without dates the closing balance equals the supplier balance (invoices − payments − credit returns). Schema: SupplierStatementQuery → SupplierStatement.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+                ],
+                responses: { 200: { description: 'SupplierStatement' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/suppliers/{id}/archive': {
+            post: {
+                tags: ['Purchasing'],
+                summary: 'Deactivate (archive) a supplier (supplier.manage)',
+                description: 'U01 (D53). Refused while the balance is not 0 (SUPPLIER_HAS_BALANCE) or with open documents: invoices in draft or pending approval, purchase orders in draft, sent or partially received (SUPPLIER_HAS_OPEN_DOCUMENTS). Already archived: no change. Audited as supplier.archived (warning).',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Supplier' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/suppliers/{id}/restore': {
+            post: {
+                tags: ['Purchasing'],
+                summary: 'Restore an archived supplier (supplier.manage)',
+                description: 'U01 (D53). Refused when an active supplier now has the same name or phone (SUPPLIER_NAME_TAKEN, SUPPLIER_PHONE_TAKEN). Audited as supplier.restored.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Supplier' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/units': {
             get: {
                 tags: ['Inventory'],

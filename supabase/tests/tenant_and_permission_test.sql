@@ -424,6 +424,15 @@ INSERT INTO t.denial VALUES
  ('post_stock_count','stock_count_6_post','stock.count',$$SELECT public.save_stock_count_lines((SELECT id FROM public.stock_counts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-count-main'),(SELECT jsonb_agg(jsonb_build_object('product_id',l.product_id,'unit_id',l.unit_id,'counted_qty',l.expected_qty)) FROM public.stock_count_lines l WHERE l.count_id=(SELECT id FROM public.stock_counts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-count-main') AND l.counted_qty IS NULL)),public.post_stock_count((SELECT id FROM public.stock_counts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-count-main'),false,'denial-count-post')$$);
 INSERT INTO t.denial VALUES
  ('update_org_profile','update_org_profile','org.profile_manage',$$SELECT public.update_org_profile('{"legal_name":"Denied"}')$$);
+-- U01: case names order the calls (the owner's create makes the supplier the others use). The reads
+-- need any purchasing read key (D53); the role picked for supplier.manage (CASHIER) has none of them.
+INSERT INTO t.denial VALUES
+ ('create_supplier','supplier_1_create','supplier.manage',$$SELECT public.create_supplier('{"name":"TEST-1 denial supplier"}')$$),
+ ('update_supplier','supplier_2_update','supplier.manage',$$SELECT public.update_supplier((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial supplier'),'{"notes":"Denied"}')$$),
+ ('set_supplier_archived','supplier_3_archive','supplier.manage',$$SELECT public.set_supplier_archived((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial supplier'),false)$$),
+ ('list_suppliers','supplier_4_list','supplier.manage',$$SELECT public.list_suppliers()$$),
+ ('get_supplier','supplier_5_get','supplier.manage',$$SELECT public.get_supplier((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial supplier'))$$),
+ ('supplier_statement','supplier_6_statement','supplier.manage',$$SELECT public.supplier_statement((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial supplier'))$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
