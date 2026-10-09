@@ -12,6 +12,7 @@ import {
   CategoryInUseDetail,
   SerialTakenDetail,
   ExportTooLargeDetail,
+  ReturnQtyExceededDetail,
   SerialsRequiredDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
@@ -82,6 +83,7 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   SERIAL_TAKEN: SerialTakenDetail,
   EXPORT_TOO_LARGE: ExportTooLargeDetail,
   SERIALS_REQUIRED: SerialsRequiredDetail,
+  RETURN_QTY_EXCEEDED: ReturnQtyExceededDetail,
 };
 
 /**

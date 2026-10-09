@@ -1,11 +1,17 @@
 import {
+  PayableCashAccountList,
   PurchaseApprovalList,
   PurchaseInvoice,
   PurchaseInvoiceList,
+  PurchaseReturn,
+  PurchaseReturnList,
+  ReturnableInvoice,
   type PurchaseApprovalListQuery,
   type PurchaseInvoiceCreateBody,
   type PurchaseInvoiceListQuery,
   type PurchaseInvoiceUpdateBody,
+  type PurchaseReturnCreateBody,
+  type PurchaseReturnListQuery,
 } from '@ziadkhaled-wb/contracts';
 import { z } from 'zod';
 import type { Json } from '../types/database.types';
@@ -145,4 +151,76 @@ export async function listPurchaseApprovals(
   if (error) fail(error);
   const result = ListResult.parse(data);
   return PurchaseApprovalList.parse({ ...result, page: query.page, pageSize: query.pageSize });
+}
+
+/** U04: returns of the caller's branches (any purchasing read key, D53), newest first. */
+export async function listPurchaseReturns(
+  ctx: RequestContext,
+  query: PurchaseReturnListQuery,
+): Promise<PurchaseReturnList> {
+  const { data, error } = await ctx.db.rpc('list_purchase_returns', {
+    ...(query.supplier_id ? { p_supplier_id: query.supplier_id } : {}),
+    ...(query.branch_id ? { p_branch_id: query.branch_id } : {}),
+    ...(query.purchase_invoice_id ? { p_purchase_invoice_id: query.purchase_invoice_id } : {}),
+    ...(query.from ? { p_from: query.from } : {}),
+    ...(query.to ? { p_to: query.to } : {}),
+    p_limit: query.pageSize,
+    p_offset: (query.page - 1) * query.pageSize,
+  });
+  if (error) fail(error);
+  const result = ListResult.parse(data);
+  return PurchaseReturnList.parse({ ...result, page: query.page, pageSize: query.pageSize });
+}
+
+export async function getPurchaseReturn(ctx: RequestContext, id: string): Promise<PurchaseReturn> {
+  const { data, error } = await ctx.db.rpc('get_purchase_return', { p_id: id });
+  if (error) fail(error);
+  return PurchaseReturn.parse(data);
+}
+
+/**
+ * U04 (D57): goods back to the supplier against an approved invoice. Stock out once at the
+ * invoice's cost, the moving average recomputed, supplier credit or a cash refund into a safe or
+ * bank. The same idempotency key again returns the first return.
+ */
+export async function postPurchaseReturn(
+  ctx: RequestContext,
+  body: PurchaseReturnCreateBody,
+  idempotencyKey: string,
+): Promise<PurchaseReturn> {
+  const { data, error } = await ctx.db.rpc('post_purchase_return', {
+    p_invoice_id: body.purchase_invoice_id,
+    p_refund_mode: body.refund_mode,
+    p_reason: body.reason,
+    p_lines: body.lines.map((l) => ({
+      invoice_line_id: l.invoice_line_id,
+      ...(l.unit_ids ? { unit_ids: l.unit_ids } : { quantity: l.quantity }),
+    })) as Json,
+    p_idempotency_key: idempotencyKey,
+    ...(body.cash_account_id ? { p_cash_account_id: body.cash_account_id } : {}),
+  });
+  if (error) fail(error);
+  return PurchaseReturn.parse(data);
+}
+
+/** U04: what can still go back from an invoice (purchase.return_create). */
+export async function getReturnableInvoice(
+  ctx: RequestContext,
+  invoiceId: string,
+): Promise<ReturnableInvoice> {
+  const { data, error } = await ctx.db.rpc('get_returnable_invoice', { p_invoice_id: invoiceId });
+  if (error) fail(error);
+  return ReturnableInvoice.parse(data);
+}
+
+/** U04 decision 8 (also U03): the active safes and banks usable for a branch, with balances. */
+export async function listPayableCashAccounts(
+  ctx: RequestContext,
+  branchId: string,
+): Promise<PayableCashAccountList> {
+  const { data, error } = await ctx.db.rpc('list_payable_cash_accounts', {
+    p_branch_id: branchId,
+  });
+  if (error) fail(error);
+  return PayableCashAccountList.parse(data);
 }

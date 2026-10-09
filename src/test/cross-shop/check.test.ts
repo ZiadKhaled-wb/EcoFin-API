@@ -142,9 +142,14 @@ describe('cross-shop route check (D19)', () => {
         'GET /api/cash-transfers',
         'GET /api/cash-transfers/:id',
         'POST /api/cash-transfers',
+        'GET /api/purchase-returns',
+        'GET /api/purchase-returns/:id',
+        'POST /api/purchase-returns',
+        'GET /api/purchase-invoices/:id/returnable',
+        'GET /api/purchasing/cash-accounts',
       ]),
     );
-    expect(keys).toHaveLength(122);
+    expect(keys).toHaveLength(127);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

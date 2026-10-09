@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import {
   IdempotencyKeyHeader,
+  PayableCashAccountQuery,
   PurchaseApprovalListQuery,
   PurchaseInvoiceApproveBody,
   PurchaseInvoiceCreateBody,
@@ -8,6 +9,8 @@ import {
   PurchaseInvoiceListQuery,
   PurchaseInvoiceRejectBody,
   PurchaseInvoiceUpdateBody,
+  PurchaseReturnCreateBody,
+  PurchaseReturnListQuery,
 } from '@ziadkhaled-wb/contracts';
 import { getCtx } from '../middleware/requestContext';
 import * as service from '../services/purchases.service';
@@ -54,4 +57,27 @@ export async function approvals(req: Request, res: Response) {
   res.json(
     await service.listPurchaseApprovals(getCtx(req), PurchaseApprovalListQuery.parse(req.query)),
   );
+}
+export async function returnable(req: Request, res: Response) {
+  res.json(await service.getReturnableInvoice(getCtx(req), id(req)));
+}
+export async function listReturns(req: Request, res: Response) {
+  res.json(
+    await service.listPurchaseReturns(getCtx(req), PurchaseReturnListQuery.parse(req.query)),
+  );
+}
+export async function getReturn(req: Request, res: Response) {
+  res.json(await service.getPurchaseReturn(getCtx(req), id(req)));
+}
+export async function postReturn(req: Request, res: Response) {
+  const key = keyOf(req);
+  res
+    .status(201)
+    .json(
+      await service.postPurchaseReturn(getCtx(req), PurchaseReturnCreateBody.parse(req.body), key),
+    );
+}
+export async function cashAccounts(req: Request, res: Response) {
+  const { branch_id } = PayableCashAccountQuery.parse(req.query);
+  res.json(await service.listPayableCashAccounts(getCtx(req), branch_id));
 }

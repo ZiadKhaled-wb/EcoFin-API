@@ -168,6 +168,10 @@ export const errorCodeHttpStatus = {
   CASH_ACCOUNT_IS_DEFAULT: 409,
   CASH_ACCOUNT_HAS_MOVEMENTS: 409,
   TRANSFER_SAME_ACCOUNT: 400,
+  // U04 purchase returns
+  PURCHASE_RETURN_NOT_FOUND: 404,
+  PURCHASE_INVOICE_NOT_APPROVED: 409,
+  RETURN_QTY_EXCEEDED: 409,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

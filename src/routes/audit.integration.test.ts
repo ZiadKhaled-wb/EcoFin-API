@@ -385,6 +385,29 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
+    'POST /api/purchase-returns': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const { id } = await newPurchaseInvoice(owner.accessToken);
+      const approved = await send('post', `/api/purchase-invoices/${id}/approve`, {
+        token: owner.accessToken,
+      });
+      expect(approved.res.status, JSON.stringify(approved.res.body)).toBe(200);
+      const line = (approved.res.body as { lines: { id: string }[] }).lines[0]!.id;
+      return {
+        sent: await send('post', '/api/purchase-returns', {
+          token: owner.accessToken,
+          key: `f07-pr-${STAMP}-${ipCounter}`,
+          body: {
+            purchase_invoice_id: id,
+            refund_mode: 'supplier_credit',
+            reason: 'F07 audit driver',
+            lines: [{ invoice_line_id: line, quantity: 1 }],
+          },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
     'POST /api/suppliers': async () => {
       const owner = await login('owner.one@ecotech.test');
       return {
