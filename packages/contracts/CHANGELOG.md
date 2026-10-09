@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.21.0
+
+- U01 suppliers: Supplier (with `balance`), SupplierList, SupplierListQuery (search, status), SupplierCreateBody, SupplierUpdateBody (phone without spaces or dashes, SUPPLIER_PHONE_PATTERN, SUPPLIER_TAX_NO_PATTERN, normalizeSupplierPhone), SupplierIdParams, SupplierStatus, SupplierStatementQuery (from <= to), SupplierStatement, SupplierStatementRow, SupplierStatementRowKind, PurchaseRefundMode. Error codes SUPPLIER_NOT_FOUND (404), SUPPLIER_NAME_TAKEN, SUPPLIER_PHONE_TAKEN, SUPPLIER_HAS_BALANCE, SUPPLIER_HAS_OPEN_DOCUMENTS (409).
+
 ## 0.18.0
 
 - I04 serial units: Serial (trimmed, upper-cased), SERIAL_PATTERN, UnitRegisterBody, UnitRegistration, SerialTakenDetail, UnitHistoryEntry, UnitSummary, UnitDetail, UnitList, UnitSearchQuery, UnitFindQuery, UnitIdParams. Error codes SERIAL_TAKEN (409, detail: the serials), SERIAL_INVALID (400).
