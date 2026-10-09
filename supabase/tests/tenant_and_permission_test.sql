@@ -446,7 +446,8 @@ INSERT INTO t.denial VALUES
  ('get_purchase_invoice','purchase_invoice_3_get','supplier.manage',$$SELECT public.get_purchase_invoice((SELECT id FROM public.purchase_invoices WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-pi-1'))$$),
  ('list_purchase_invoices','purchase_invoice_4_list','supplier.manage',$$SELECT public.list_purchase_invoices()$$),
  ('reject_purchase_invoice','purchase_invoice_5_reject','purchase.invoice_approve',$$SELECT public.reject_purchase_invoice((public.create_purchase_invoice((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial PI supplier'),'d2000000-0000-0000-0000-000000000011',NULL,current_date,jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND NOT is_serialized AND archived_at IS NULL ORDER BY id LIMIT 1),'quantity',1,'unit_cost','10.00')),'denial-pi-rej')->>'id')::uuid,'Denial test')$$),
- ('approve_purchase_invoice','purchase_invoice_6_approve','purchase.invoice_approve',$$SELECT public.approve_purchase_invoice((SELECT id FROM public.purchase_invoices WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-pi-1'))$$);
+ ('approve_purchase_invoice','purchase_invoice_6_approve','purchase.invoice_approve',$$SELECT public.approve_purchase_invoice((SELECT id FROM public.purchase_invoices WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-pi-1'))$$),
+ ('list_purchase_approvals','purchase_invoice_7_approvals','purchase.invoice_approve',$$SELECT public.list_purchase_approvals()$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
