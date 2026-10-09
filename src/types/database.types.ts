@@ -8088,6 +8088,20 @@ export type Database = {
         };
         Returns: string;
       };
+      create_cash_account: {
+        Args: { p_branch_id?: string; p_kind: string; p_name: string };
+        Returns: Json;
+      };
+      create_cash_transfer: {
+        Args: {
+          p_amount: string;
+          p_from: string;
+          p_idempotency_key: string;
+          p_note: string;
+          p_to: string;
+        };
+        Returns: Json;
+      };
       create_category: { Args: { p_name: string; p_parent_id?: string }; Returns: string };
       create_employee: {
         Args: {
@@ -8157,6 +8171,8 @@ export type Database = {
         Returns: Json;
       };
       find_unit: { Args: { p_serial: string }; Returns: Json };
+      get_cash_account: { Args: { p_id: string }; Returns: Json };
+      get_cash_transfer: { Args: { p_id: string }; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
       get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -8224,6 +8240,24 @@ export type Database = {
       };
       jobs_succeed: { Args: { p_job_id: string; p_worker: string }; Returns: boolean };
       list_branch_min_levels: { Args: { p_product_id: string }; Returns: Json };
+      list_cash_account_movements: {
+        Args: { p_from?: string; p_id: string; p_limit?: number; p_offset?: number; p_to?: string };
+        Returns: Json;
+      };
+      list_cash_accounts: {
+        Args: { p_branch_id?: string; p_kind?: string; p_status?: string };
+        Returns: Json;
+      };
+      list_cash_transfers: {
+        Args: {
+          p_account_id?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_to?: string;
+        };
+        Returns: Json;
+      };
       list_categories: { Args: Record<PropertyKey, never>; Returns: Json };
       list_employees: {
         Args: {
@@ -8342,6 +8376,10 @@ export type Database = {
         }[];
       };
       password_reset_lookup: { Args: { p_token_hash: string }; Returns: Json };
+      post_cash_opening: {
+        Args: { p_amount: string; p_id: string; p_idempotency_key: string; p_note: string };
+        Returns: Json;
+      };
       post_stock_adjustment: {
         Args: {
           p_branch_id: string;
@@ -8384,6 +8422,7 @@ export type Database = {
         Returns: Json;
       };
       reject_purchase_invoice: { Args: { p_id: string; p_reason: string }; Returns: Json };
+      rename_cash_account: { Args: { p_id: string; p_name: string }; Returns: Json };
       require_module: { Args: { p_module: string }; Returns: undefined };
       resend_employee_invite: {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
@@ -8427,6 +8466,7 @@ export type Database = {
         Args: { p_branch_id: string; p_min_stock?: number; p_product_id: string };
         Returns: Json;
       };
+      set_cash_account_active: { Args: { p_active: boolean; p_id: string }; Returns: Json };
       set_category_archived: {
         Args: { p_archived: boolean; p_id: string; p_move_to?: string };
         Returns: undefined;

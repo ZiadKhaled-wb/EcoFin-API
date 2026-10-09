@@ -448,6 +448,19 @@ INSERT INTO t.denial VALUES
  ('reject_purchase_invoice','purchase_invoice_5_reject','purchase.invoice_approve',$$SELECT public.reject_purchase_invoice((public.create_purchase_invoice((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial PI supplier'),'d2000000-0000-0000-0000-000000000011',NULL,current_date,jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND NOT is_serialized AND archived_at IS NULL ORDER BY id LIMIT 1),'quantity',1,'unit_cost','10.00')),'denial-pi-rej')->>'id')::uuid,'Denial test')$$),
  ('approve_purchase_invoice','purchase_invoice_6_approve','purchase.invoice_approve',$$SELECT public.approve_purchase_invoice((SELECT id FROM public.purchase_invoices WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-pi-1'))$$),
  ('list_purchase_approvals','purchase_invoice_7_approvals','purchase.invoice_approve',$$SELECT public.list_purchase_approvals()$$);
+-- K01: case names order the calls (the owner's create makes the bank the others use; the opening
+-- funds it, the transfer moves 10.00 into a new safe (the seed shop has no cash accounts)).
+INSERT INTO t.denial VALUES
+ ('create_cash_account','cash_01_create','cash.account_manage',$$SELECT public.create_cash_account('TEST-1 denial bank','bank',NULL)$$),
+ ('rename_cash_account','cash_02_rename','cash.account_manage',$$SELECT public.rename_cash_account((SELECT id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial bank'),'TEST-1 denial bank')$$),
+ ('post_cash_opening','cash_03_opening','cash.adjust',$$SELECT public.post_cash_opening((SELECT id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial bank'),'100.00','Denial opening','denial-cash-opening')$$),
+ ('create_cash_transfer','cash_04_transfer','cash.transfer',$$SELECT public.create_cash_transfer((SELECT id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial bank'),(public.create_cash_account('TEST-1 denial safe','safe','d2000000-0000-0000-0000-000000000011')->>'id')::uuid,'10.00',NULL,'denial-cash-transfer')$$),
+ ('set_cash_account_active','cash_05_active','cash.account_manage',$$SELECT public.set_cash_account_active((SELECT id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial bank'),true)$$),
+ ('list_cash_accounts','cash_06_list','cash.view',$$SELECT public.list_cash_accounts()$$),
+ ('get_cash_account','cash_07_get','cash.view',$$SELECT public.get_cash_account((SELECT id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial bank'))$$),
+ ('list_cash_account_movements','cash_08_movements','cash.view',$$SELECT public.list_cash_account_movements((SELECT id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial bank'))$$),
+ ('list_cash_transfers','cash_09_transfers','cash.view',$$SELECT public.list_cash_transfers()$$),
+ ('get_cash_transfer','cash_10_transfer_get','cash.view',$$SELECT public.get_cash_transfer((SELECT id FROM public.cash_transfers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-cash-transfer'))$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

@@ -285,3 +285,6 @@ See [U02 plan](plans/U02.md). Covers the Done when (approving a multi-line invoi
 ## U06 — purchase approval by amount (EC-58)
 
 See [U06 plan](plans/U06.md). Covers the Done when (a user below the owner can't approve a large invoice; the approval list shows the waiting invoices) and the D55 rules (strictly greater, total with VAT, owner note, pending stays pending, one pending approval per invoice).
+
+## K01 — vaults (EC-59)
+See [K01 plan](plans/K01.md). Covers the Done when (a transfer changes both balances once; the ledger view adds up to the balance) and the D56 rules (safes and banks only, one opening balance, source-branch access, default vault and balance guards).

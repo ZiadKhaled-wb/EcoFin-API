@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.24.0
+
+- K01 vaults: CashAccountKind (safe, bank), CashAccountStatus, CashAccount (balance, is_default), CashAccountList, CashAccountListQuery (status, default active; branch_id; kind), CashAccountCreateBody (a safe needs a branch), CashAccountUpdateBody, CashAccountIdParams, PositiveMoney, CashOpeningBody (amount > 0, note 3-500), CashTransferCreateBody (two different accounts), CashTransfer, CashTransferList, CashTransferListQuery, CashMovementType, CashLedgerRow, CashLedger, CashLedgerQuery. Error codes CASH_ACCOUNT_NOT_FOUND, CASH_TRANSFER_NOT_FOUND (404), CASH_ACCOUNT_NAME_TAKEN, CASH_ACCOUNT_HAS_BALANCE, CASH_ACCOUNT_IS_DEFAULT, CASH_ACCOUNT_HAS_MOVEMENTS (409); CASH_ACCOUNT_INACTIVE was already there, TRANSFER_SAME_ACCOUNT (400).
+
 ## 0.23.0
 
 - U06 purchase approval by amount: PurchaseApprovalStatus, PurchaseApproval, PurchaseInvoiceApproveBody (optional note, 3-500), PurchaseApprovalListItem, PurchaseApprovalList, PurchaseApprovalListQuery (status, default pending; branch_id). PurchaseInvoice and PurchaseInvoiceSummary gain `approval` (the latest approval or null). Error codes APPROVAL_OWNER_ONLY (403), APPROVAL_NOTE_REQUIRED (400).

@@ -275,6 +275,8 @@ INSERT INTO t.replay_tested VALUES
  ('public.register_units','i04_units_test.sql: same key -> same batch, nothing created twice'),
  ('public.create_stock_transfer','i03_transfers_test.sql: same key -> same transfer'),
  ('public.create_purchase_invoice','u02_purchase_invoices_test.sql: same key -> same invoice, no second row or audit'),
+ ('public.create_cash_transfer','k01_vaults_test.sql: same key -> same transfer, nothing new'),
+ ('public.post_cash_opening','k01_vaults_test.sql: same key -> nothing new; the key used for another account -> VALIDATION_FAILED'),
  ('public.post_stock_count','i02_stock_adjustments_test.sql: same key -> same adjustment, nothing posted twice; key reused for another count -> IDEMPOTENCY_CONFLICT');
 CREATE TABLE t.key_functions AS
 SELECT n.nspname || '.' || p.proname AS fn
