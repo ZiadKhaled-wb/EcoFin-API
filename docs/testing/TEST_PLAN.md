@@ -273,3 +273,7 @@ See [I05 plan](plans/I05.md). Covers the Done when (every movement links to the 
 ## I06 — low-stock alerts (EC-52)
 
 See [I06 plan](plans/I06.md). Covers the Done when (a product below its min level appears in the low list and on the dashboard) and the D52 rules (per-branch levels, archived products and deactivated branches never low).
+
+## U01 — suppliers (EC-53)
+
+See [U01 plan](plans/U01.md). Covers the Done when (the statement balance equals invoices − payments − returns, and equals `v_supplier_balances`) and the D53 rules (active-only uniqueness of name and phone, no archive with a balance or open documents, who may read, shop-wide statements).

@@ -242,7 +242,7 @@ erDiagram
 
 | Table | Columns | Notes |
 |---|---|---|
-| `suppliers` | `name`, `phone`, `tax_registration_no`, `address`, `payment_terms_days`, `archived_at` | U01. Balance comes from a view. |
+| `suppliers` | `name`, `phone`, `tax_registration_no`, `address`, `payment_terms_days`, `notes`, `archived_at` | U01. Balance comes from a view (`v_supplier_balances`). Unique among **active** suppliers (D53): `suppliers_active_name_key` (`organization_id`, `lower(btrim(name))`) and `suppliers_active_phone_key` (`organization_id`, `phone`, stored without spaces or dashes). |
 | `purchase_orders` | `number`, `supplier_id`, `branch_id`, `status po_status`, `expected_date`, `notes`, `idempotency_key` | U05 |
 | `purchase_order_lines` | `po_id`, `product_id`, `quantity`, `expected_unit_cost` | Received qty comes from a view over invoice lines |
 | `purchase_invoices` | `number`, `supplier_invoice_no` (UK per org+supplier), `supplier_id`, `branch_id`, `po_id`, `invoice_date`, `status`, `subtotal`, `tax_total`, `total`, `approved_by/at`, `rejected_reason`, `idempotency_key` | U02. Approval posts stock and cost once; amount paid comes from a view. |
@@ -516,6 +516,7 @@ Each one derives the org and employee from `auth.uid()`, checks a permission, lo
 | Adjustments and counts (I02, D48) | `post_stock_adjustment`, `list_stock_adjustments`, `get_stock_adjustment`, `create_stock_count`, `save_stock_count_lines`, `scan_stock_count`, `post_stock_count`, `cancel_stock_count`, `list_stock_counts`, `get_stock_count`; helpers `app.post_adjustment_lines`, `app.stock_count_lines_live` |
 | Serial units (I04, D50) | `register_units`, `get_unit`, `find_unit`, `search_units`; helpers `app.create_units` (U02 / M02 reuse it), `app.parse_serials`, `app.unit_json`, `app.stock_source_json` (document number and party of a ledger row) |
 | Transfers (I03, D49) | `create_stock_transfer`, `update_stock_transfer`, `send_stock_transfer`, `receive_stock_transfer`, `cancel_stock_transfer`, `list_stock_transfers`, `get_stock_transfer`, `list_transfer_destinations`; helpers `app.set_transfer_lines`, `app.stock_transfer_json` |
+| Suppliers (U01, D53) | `list_suppliers`, `get_supplier`, `supplier_statement` (shop-wide, running balance; closing = `v_supplier_balances.balance`), `create_supplier`, `update_supplier`, `set_supplier_archived` (refused with a balance or open documents); reads open to any purchasing read key (`app.can_read_suppliers`); helpers `app.supplier_read_guard`, `app.supplier_json`, `app.supplier_apply`, `app.supplier_fields_json`, `app.supplier_unique_error`, `app.supplier_statement_rows` |
 | Purchasing | `approve_purchase_invoice`, `reject_purchase_invoice`, `post_supplier_payment`, `post_purchase_return` |
 | Cash | `open_shift`, `close_shift`, `post_cash_transfer`, `settle_collector_wallet`, `post_expense`, `close_day` |
 | Sales | `create_sale` (POS, split payments), `create_sales_return` (return / void / exchange), `create_sales_order`, `record_order_deposit`, `cancel_sales_order`, `complete_delivery` (issues the sale) |
