@@ -281,3 +281,7 @@ See [U01 plan](plans/U01.md). Covers the Done when (the statement balance equals
 ## U02 — purchase invoices (EC-54)
 
 See [U02 plan](plans/U02.md). Covers the Done when (approving a multi-line invoice adds each quantity exactly once, the moving-average cost is right, the supplier balance rises by the total) and the D54 rules (net cost before VAT, approve once, drafts only, serials, current tax rates at approval).
+
+## U06 — purchase approval by amount (EC-58)
+
+See [U06 plan](plans/U06.md). Covers the Done when (a user below the owner can't approve a large invoice; the approval list shows the waiting invoices) and the D55 rules (strictly greater, total with VAT, owner note, pending stays pending, one pending approval per invoice).

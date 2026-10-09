@@ -340,13 +340,13 @@ SELECT t.expect('ledger caches match the ledger',
 SELECT t.expect('no anon grants',
   NOT has_function_privilege('anon','public.create_purchase_invoice(uuid,uuid,text,date,jsonb,text)','EXECUTE')
   AND NOT has_function_privilege('anon','public.update_purchase_invoice(uuid,jsonb)','EXECUTE')
-  AND NOT has_function_privilege('anon','public.approve_purchase_invoice(uuid)','EXECUTE')
+  AND NOT has_function_privilege('anon','public.approve_purchase_invoice(uuid,text)','EXECUTE')
   AND NOT has_function_privilege('anon','public.reject_purchase_invoice(uuid,text)','EXECUTE')
   AND NOT has_function_privilege('anon','public.list_purchase_invoices(uuid,uuid,text,date,date,text,integer,integer)','EXECUTE')
   AND NOT has_function_privilege('anon','public.get_purchase_invoice(uuid)','EXECUTE'));
 SELECT t.expect('authenticated runs the six functions, not the helpers',
   has_function_privilege('authenticated','public.create_purchase_invoice(uuid,uuid,text,date,jsonb,text)','EXECUTE')
-  AND has_function_privilege('authenticated','public.approve_purchase_invoice(uuid)','EXECUTE')
+  AND has_function_privilege('authenticated','public.approve_purchase_invoice(uuid,text)','EXECUTE')
   AND has_function_privilege('authenticated','public.get_purchase_invoice(uuid)','EXECUTE')
   AND NOT has_function_privilege('authenticated','app.purchase_invoice_json(uuid,uuid,boolean)','EXECUTE')
   AND NOT has_function_privilege('authenticated','app.purchase_invoice_compute(uuid,uuid)','EXECUTE')

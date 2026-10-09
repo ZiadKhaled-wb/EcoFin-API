@@ -4,6 +4,7 @@ import type { DbClient } from '../utils/supabase';
 import type { RequestContext } from '../middleware/requestContext';
 import { mapDbError } from '../utils/errors';
 import {
+  listPurchaseApprovals,
   approvePurchaseInvoice,
   createPurchaseInvoice,
   getPurchaseInvoice,
@@ -40,6 +41,7 @@ const header = {
   created_by_name: 'Owner',
   created_at: ts,
   updated_at: ts,
+  approval: null,
 };
 const invoice = (extra: Record<string, unknown> = {}) => ({
   ...header,
@@ -241,5 +243,68 @@ describe('U02 purchase invoice service', () => {
       code,
       statusCode: status,
     });
+  });
+
+  it('U06: approve sends the note only when given', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: invoice({ status: 'pending_approval' }), error: null });
+    expect((await approvePurchaseInvoice(ctx, ID)).status).toBe('pending_approval');
+    expect(db.rpc).toHaveBeenLastCalledWith('approve_purchase_invoice', { p_id: ID });
+    db.queue({
+      data: invoice({ status: 'approved', outstanding: '1482.00', approved_at: ts }),
+      error: null,
+    });
+    await approvePurchaseInvoice(ctx, ID, 'Checked with the supplier');
+    expect(db.rpc).toHaveBeenLastCalledWith('approve_purchase_invoice', {
+      p_id: ID,
+      p_note: 'Checked with the supplier',
+    });
+  });
+
+  it('U06: lists approvals with the status, the branch and the paging', async () => {
+    const { db, ctx } = setup();
+    const approval = {
+      id: 'a0540000-0000-4000-8000-000000000040',
+      status: 'pending',
+      amount: '12000.00',
+      threshold: '10000.00',
+      requested_by_name: 'Manager',
+      requested_at: ts,
+      decided_by_name: null,
+      decided_at: null,
+      note: null,
+    };
+    db.queue({
+      data: {
+        items: [
+          {
+            approval,
+            invoice: { ...header, status: 'pending_approval', approval, lines_count: 1 },
+          },
+        ],
+        total: 1,
+      },
+      error: null,
+    });
+    const list = await listPurchaseApprovals(ctx, {
+      status: 'pending',
+      branch_id: BRANCH,
+      page: 1,
+      pageSize: 20,
+    });
+    expect(list.items[0]!.approval.threshold).toBe('10000.00');
+    expect(db.rpc).toHaveBeenCalledWith('list_purchase_approvals', {
+      p_status: 'pending',
+      p_branch_id: BRANCH,
+      p_limit: 20,
+      p_offset: 0,
+    });
+  });
+
+  it.each([
+    ['APPROVAL_OWNER_ONLY', 403],
+    ['APPROVAL_NOTE_REQUIRED', 400],
+  ] as const)('U06 maps %s', (code, status) => {
+    expect(mapDbError({ message: code })).toMatchObject({ code, statusCode: status });
   });
 });

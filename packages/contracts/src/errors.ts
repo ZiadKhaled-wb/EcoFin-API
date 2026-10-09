@@ -157,6 +157,9 @@ export const errorCodeHttpStatus = {
   SUPPLIER_INVOICE_NO_TAKEN: 409,
   SUPPLIER_ARCHIVED: 409,
   SERIALS_REQUIRED: 422,
+  // U06 purchase approval by amount
+  APPROVAL_OWNER_ONLY: 403,
+  APPROVAL_NOTE_REQUIRED: 400,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

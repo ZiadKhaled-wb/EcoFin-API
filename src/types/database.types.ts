@@ -8067,7 +8067,7 @@ export type Database = {
         };
         Returns: undefined;
       };
-      approve_purchase_invoice: { Args: { p_id: string }; Returns: Json };
+      approve_purchase_invoice: { Args: { p_id: string; p_note?: string }; Returns: Json };
       auth_clear_must_change_password: { Args: { p_auth_user_id: string }; Returns: number };
       auth_record_login: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
@@ -8260,6 +8260,10 @@ export type Database = {
           p_search?: string;
           p_status?: string;
         };
+        Returns: Json;
+      };
+      list_purchase_approvals: {
+        Args: { p_branch_id?: string; p_limit?: number; p_offset?: number; p_status?: string };
         Returns: Json;
       };
       list_purchase_invoices: {

@@ -1745,3 +1745,41 @@ for (const [method, suffix] of [
     },
   });
 }
+
+// U06: the approval list refuses a foreign header and an org key, and never shows shop B's invoices.
+crossShopCase({
+  method: 'GET',
+  path: '/api/purchase-approvals',
+  name: "purchase approvals refuse a foreign header and an org query key, and never show shop B's",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/purchase-approvals', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/purchase-approvals', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const branch = await h.call('GET', '/api/purchase-approvals', {
+      token: a.accessToken,
+      query: 'branch_id=' + SHOP_B_BR1,
+    });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    for (const status of ['pending', 'approved', 'rejected']) {
+      const own = await h.call('GET', '/api/purchase-approvals', {
+        token: a.accessToken,
+        query: 'pageSize=100&status=' + status,
+      });
+      h.expect(own.res.status).toBe(200);
+      const branches = (own.res.body as { items: { invoice: { branch_id: string } }[] }).items.map(
+        (i) => i.invoice.branch_id,
+      );
+      h.expect(branches.every((b) => b !== SHOP_B_BR1)).toBe(true);
+    }
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
