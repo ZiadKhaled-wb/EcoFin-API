@@ -7,6 +7,10 @@ import {
   PurchaseInvoiceRejectBody,
   PurchaseInvoiceUpdateBody,
   SerialsRequiredDetail,
+  PurchaseApproval,
+  PurchaseApprovalList,
+  PurchaseApprovalListQuery,
+  PurchaseInvoiceApproveBody,
 } from './purchases.js';
 import { errorCodeHttpStatus } from './errors.js';
 
@@ -70,6 +74,7 @@ const invoice = {
   created_by_name: 'Owner',
   created_at: ts,
   updated_at: ts,
+  approval: null,
 };
 
 describe('U02 purchase invoice contracts', () => {
@@ -167,5 +172,67 @@ describe('U02 purchase invoice contracts', () => {
     expect(errorCodeHttpStatus.SERIALS_REQUIRED).toBe(422);
     expect(SerialsRequiredDetail.parse({ line_ids: [TV] }).line_ids).toEqual([TV]);
     expect(SerialsRequiredDetail.safeParse({ line_ids: ['x'] }).success).toBe(false);
+  });
+
+  it('U06: the approve body takes an optional trimmed note of 3-500 characters', () => {
+    expect(PurchaseInvoiceApproveBody.parse({})).toEqual({});
+    expect(PurchaseInvoiceApproveBody.parse({ note: '  Checked ' })).toEqual({ note: 'Checked' });
+    expect(PurchaseInvoiceApproveBody.safeParse({ note: ' ok ' }).success).toBe(false);
+    expect(PurchaseInvoiceApproveBody.safeParse({ note: 'x'.repeat(501) }).success).toBe(false);
+    expect(PurchaseInvoiceApproveBody.safeParse({ reason: 'Checked' }).success).toBe(false);
+  });
+
+  it('U06: an invoice carries its latest approval; the approval list shape', () => {
+    const approval = {
+      id: 'a0540000-0000-4000-8000-000000000040',
+      status: 'pending',
+      amount: '12000.00',
+      threshold: '10000.00',
+      requested_by_name: 'Manager',
+      requested_at: ts,
+      decided_by_name: null,
+      decided_at: null,
+      note: null,
+    };
+    expect(PurchaseApproval.parse(approval).threshold).toBe('10000.00');
+    expect(PurchaseApproval.safeParse({ ...approval, amount: 12000 }).success).toBe(false);
+    expect(
+      PurchaseInvoice.parse({ ...invoice, status: 'pending_approval', approval, lines: [line] })
+        .approval,
+    ).toMatchObject({ status: 'pending' });
+    expect(PurchaseInvoice.safeParse({ ...invoice, approval: undefined, lines: [] }).success).toBe(
+      false,
+    );
+    expect(
+      PurchaseApprovalList.parse({
+        items: [
+          {
+            approval,
+            invoice: { ...invoice, status: 'pending_approval', approval, lines_count: 1 },
+          },
+        ],
+        page: 1,
+        pageSize: 50,
+        total: 1,
+      }).items,
+    ).toHaveLength(1);
+  });
+
+  it('U06: approval list query defaults to pending and is strict', () => {
+    expect(PurchaseApprovalListQuery.parse({})).toEqual({
+      status: 'pending',
+      page: 1,
+      pageSize: 50,
+    });
+    expect(
+      PurchaseApprovalListQuery.parse({ status: 'approved', branch_id: BRANCH }),
+    ).toMatchObject({
+      status: 'approved',
+      branch_id: BRANCH,
+    });
+    expect(PurchaseApprovalListQuery.safeParse({ status: 'waiting' }).success).toBe(false);
+    expect(PurchaseApprovalListQuery.safeParse({ organization_id: BRANCH }).success).toBe(false);
+    expect(errorCodeHttpStatus.APPROVAL_OWNER_ONLY).toBe(403);
+    expect(errorCodeHttpStatus.APPROVAL_NOTE_REQUIRED).toBe(400);
   });
 });

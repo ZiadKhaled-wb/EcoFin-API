@@ -99,6 +99,27 @@ export const PurchaseInvoiceLine = z.object({
 });
 export type PurchaseInvoiceLine = z.infer<typeof PurchaseInvoiceLine>;
 
+/** U06 (D55): approval statuses (the baseline `approval_status`). */
+export const PurchaseApprovalStatus = z.enum(['pending', 'approved', 'rejected', 'cancelled']);
+export type PurchaseApprovalStatus = z.infer<typeof PurchaseApprovalStatus>;
+
+/**
+ * The owner's decision on an invoice above the shop's purchase approval threshold. `threshold` is
+ * the one in force when the approval was requested; `note` is the owner's note or rejection reason.
+ */
+export const PurchaseApproval = z.object({
+  id: Uuid,
+  status: PurchaseApprovalStatus,
+  amount: Money,
+  threshold: Money.nullable(),
+  requested_by_name: z.string().nullable(),
+  requested_at: IsoTimestamp,
+  decided_by_name: z.string().nullable(),
+  decided_at: IsoTimestamp.nullable(),
+  note: z.string().nullable(),
+});
+export type PurchaseApproval = z.infer<typeof PurchaseApproval>;
+
 const header = {
   id: Uuid,
   number: z.string(),
@@ -119,6 +140,8 @@ const header = {
   created_by_name: z.string().nullable(),
   created_at: IsoTimestamp,
   updated_at: IsoTimestamp,
+  /** U06: the latest approval of the invoice, if it ever waited for the owner. */
+  approval: PurchaseApproval.nullable(),
 };
 
 export const PurchaseInvoice = z.object({ ...header, lines: z.array(PurchaseInvoiceLine) });
@@ -152,6 +175,30 @@ export const PurchaseInvoiceListQuery = PaginationQuery.extend({
     path: ['from'],
   });
 export type PurchaseInvoiceListQuery = z.infer<typeof PurchaseInvoiceListQuery>;
+
+/**
+ * U06: approve body. A note is needed only when the owner decides an invoice that waits for them
+ * (pending_approval); `{}` approves a draft.
+ */
+export const PurchaseInvoiceApproveBody = z
+  .object({ note: z.string().trim().min(3).max(500).optional() })
+  .strict();
+export type PurchaseInvoiceApproveBody = z.infer<typeof PurchaseInvoiceApproveBody>;
+
+export const PurchaseApprovalListItem = z.object({
+  approval: PurchaseApproval,
+  invoice: PurchaseInvoiceSummary,
+});
+export type PurchaseApprovalListItem = z.infer<typeof PurchaseApprovalListItem>;
+export const PurchaseApprovalList = paginated(PurchaseApprovalListItem);
+export type PurchaseApprovalList = z.infer<typeof PurchaseApprovalList>;
+
+/** Approvals of the caller's branches (purchase.invoice_approve); waiting ones by default. */
+export const PurchaseApprovalListQuery = PaginationQuery.extend({
+  status: PurchaseApprovalStatus.default('pending'),
+  branch_id: Uuid.optional(),
+}).strict();
+export type PurchaseApprovalListQuery = z.infer<typeof PurchaseApprovalListQuery>;
 
 /** Details of SERIALS_REQUIRED: the serialized lines that still need their serials. */
 export const SerialsRequiredDetail = z.object({ line_ids: z.array(Uuid) });

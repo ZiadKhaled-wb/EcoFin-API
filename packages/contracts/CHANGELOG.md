@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.23.0
+
+- U06 purchase approval by amount: PurchaseApprovalStatus, PurchaseApproval, PurchaseInvoiceApproveBody (optional note, 3-500), PurchaseApprovalListItem, PurchaseApprovalList, PurchaseApprovalListQuery (status, default pending; branch_id). PurchaseInvoice and PurchaseInvoiceSummary gain `approval` (the latest approval or null). Error codes APPROVAL_OWNER_ONLY (403), APPROVAL_NOTE_REQUIRED (400).
+
 ## 0.22.0
 
 - U02 purchase invoices: PurchaseInvoiceStatus, UnitCost, PurchaseInvoiceLineInput (one serial per unit), PurchaseInvoiceCreateBody (1-200 lines, each product once), PurchaseInvoiceUpdateBody, PurchaseInvoiceRejectBody, PurchaseInvoiceIdParams, PurchaseInvoiceLine, PurchaseInvoice, PurchaseInvoiceSummary, PurchaseInvoiceList, PurchaseInvoiceListQuery, SerialsRequiredDetail. Error codes PURCHASE_INVOICE_NOT_FOUND (404), PURCHASE_INVOICE_NOT_EDITABLE, SUPPLIER_INVOICE_NO_TAKEN, SUPPLIER_ARCHIVED (409), SERIALS_REQUIRED (422, details.line_ids).
