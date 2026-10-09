@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.22.0
+
+- U02 purchase invoices: PurchaseInvoiceStatus, UnitCost, PurchaseInvoiceLineInput (one serial per unit), PurchaseInvoiceCreateBody (1-200 lines, each product once), PurchaseInvoiceUpdateBody, PurchaseInvoiceRejectBody, PurchaseInvoiceIdParams, PurchaseInvoiceLine, PurchaseInvoice, PurchaseInvoiceSummary, PurchaseInvoiceList, PurchaseInvoiceListQuery, SerialsRequiredDetail. Error codes PURCHASE_INVOICE_NOT_FOUND (404), PURCHASE_INVOICE_NOT_EDITABLE, SUPPLIER_INVOICE_NO_TAKEN, SUPPLIER_ARCHIVED (409), SERIALS_REQUIRED (422, details.line_ids).
+
 ## 0.21.0
 
 - U01 suppliers: Supplier (with `balance`), SupplierList, SupplierListQuery (search, status), SupplierCreateBody, SupplierUpdateBody (phone without spaces or dashes, SUPPLIER_PHONE_PATTERN, SUPPLIER_TAX_NO_PATTERN, normalizeSupplierPhone), SupplierIdParams, SupplierStatus, SupplierStatementQuery (from <= to), SupplierStatement, SupplierStatementRow, SupplierStatementRowKind, PurchaseRefundMode. Error codes SUPPLIER_NOT_FOUND (404), SUPPLIER_NAME_TAKEN, SUPPLIER_PHONE_TAKEN, SUPPLIER_HAS_BALANCE, SUPPLIER_HAS_OPEN_DOCUMENTS (409).

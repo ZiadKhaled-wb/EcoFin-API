@@ -151,6 +151,12 @@ export const errorCodeHttpStatus = {
   SUPPLIER_PHONE_TAKEN: 409,
   SUPPLIER_HAS_BALANCE: 409,
   SUPPLIER_HAS_OPEN_DOCUMENTS: 409,
+  // U02 purchase invoices
+  PURCHASE_INVOICE_NOT_FOUND: 404,
+  PURCHASE_INVOICE_NOT_EDITABLE: 409,
+  SUPPLIER_INVOICE_NO_TAKEN: 409,
+  SUPPLIER_ARCHIVED: 409,
+  SERIALS_REQUIRED: 422,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;
