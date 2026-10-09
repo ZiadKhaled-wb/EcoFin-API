@@ -1,6 +1,8 @@
 import {
+  PurchaseApprovalList,
   PurchaseInvoice,
   PurchaseInvoiceList,
+  type PurchaseApprovalListQuery,
   type PurchaseInvoiceCreateBody,
   type PurchaseInvoiceListQuery,
   type PurchaseInvoiceUpdateBody,
@@ -98,12 +100,20 @@ export async function updatePurchaseInvoice(
   return PurchaseInvoice.parse(data);
 }
 
-/** Stock in once, serial units, moving-average cost, supplier balance up. A repeat changes nothing. */
+/**
+ * Stock in once, serial units, moving-average cost, supplier balance up. A repeat changes nothing.
+ * U06: above the threshold a non-owner's approve answers `pending_approval` (nothing posted); the
+ * owner decides a pending invoice with a note.
+ */
 export async function approvePurchaseInvoice(
   ctx: RequestContext,
   id: string,
+  note?: string,
 ): Promise<PurchaseInvoice> {
-  const { data, error } = await ctx.db.rpc('approve_purchase_invoice', { p_id: id });
+  const { data, error } = await ctx.db.rpc('approve_purchase_invoice', {
+    p_id: id,
+    ...(note ? { p_note: note } : {}),
+  });
   if (error) fail(error);
   return PurchaseInvoice.parse(data);
 }
@@ -119,4 +129,20 @@ export async function rejectPurchaseInvoice(
   });
   if (error) fail(error);
   return PurchaseInvoice.parse(data);
+}
+
+/** U06: approvals of the caller's branches (purchase.invoice_approve), newest first. */
+export async function listPurchaseApprovals(
+  ctx: RequestContext,
+  query: PurchaseApprovalListQuery,
+): Promise<PurchaseApprovalList> {
+  const { data, error } = await ctx.db.rpc('list_purchase_approvals', {
+    p_status: query.status,
+    ...(query.branch_id ? { p_branch_id: query.branch_id } : {}),
+    p_limit: query.pageSize,
+    p_offset: (query.page - 1) * query.pageSize,
+  });
+  if (error) fail(error);
+  const result = ListResult.parse(data);
+  return PurchaseApprovalList.parse({ ...result, page: query.page, pageSize: query.pageSize });
 }

@@ -1389,21 +1389,37 @@ export const openApiSpec = {
         '/api/purchase-invoices/{id}/approve': {
             post: {
                 tags: ['Purchasing'],
-                summary: 'Approve a purchase invoice (purchase.invoice_approve)',
-                description: 'U02 (D54). Recomputes VAT with the current class rates, then per line in product order: updates the product\'s moving-average cost on the net unit cost (all branches, half-up to 4 places; no stock → the unit cost) and posts the stock (purchase_in) once; serialized lines create their units. The supplier balance rises by the total including VAT. Already approved: answered unchanged. Errors: SERIALS_REQUIRED (422, details.line_ids), SERIAL_TAKEN (details.serials), SUPPLIER_ARCHIVED, PURCHASE_INVOICE_NOT_EDITABLE (rejected), BRANCH_DENIED / BRANCH_INACTIVE. Audited as purchase_invoice.approved with the costs before and after.',
+                summary: 'Approve a purchase invoice (purchase.invoice_approve; above the threshold, the owner)',
+                description: 'U02 (D54) + U06 (D55). Recomputes VAT with the current class rates, then per line in product order: updates the moving-average cost of the product on the net unit cost (all branches, half-up to 4 places; no stock → the unit cost) and posts the stock (purchase_in) once; serialized lines create their units. The supplier balance rises by the total including VAT. U06: when purchase_approval_threshold (shop settings) is set and the total (VAT included) is strictly greater, an approve of a draft by a non-owner answers status pending_approval with its approval (nothing posted, audited as purchase_invoice.approval_requested); only the owner decides a pending invoice, with a note (3-500; APPROVAL_NOTE_REQUIRED), and a non-owner gets APPROVAL_OWNER_ONLY. The owner approving a draft above the threshold posts it directly. Already approved: answered unchanged. Errors: SERIALS_REQUIRED (422, details.line_ids), SERIAL_TAKEN (details.serials), SUPPLIER_ARCHIVED, PURCHASE_INVOICE_NOT_EDITABLE (rejected), BRANCH_DENIED / BRANCH_INACTIVE. Schema: PurchaseInvoiceApproveBody → PurchaseInvoice.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
-                responses: { 200: { description: 'PurchaseInvoice' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+                responses: { 200: { description: 'PurchaseInvoice' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
             },
         },
         '/api/purchase-invoices/{id}/reject': {
             post: {
                 tags: ['Purchasing'],
                 summary: 'Reject a draft purchase invoice (purchase.invoice_approve)',
-                description: 'U02 (D54). reason 3-500 characters. A rejected invoice is final and frees its supplier invoice number. Approved or already rejected: PURCHASE_INVOICE_NOT_EDITABLE. Audited as purchase_invoice.rejected (warning) with the reason. Schema: PurchaseInvoiceRejectBody → PurchaseInvoice.',
+                description: 'U02 (D54) + U06 (D55). reason 3-500 characters. A pending invoice (waiting for the owner) is rejected by the owner only (APPROVAL_OWNER_ONLY); its approval closes with the reason. A rejected invoice is final and frees its supplier invoice number. Approved or already rejected: PURCHASE_INVOICE_NOT_EDITABLE. Audited as purchase_invoice.rejected (warning) with the reason. Schema: PurchaseInvoiceRejectBody → PurchaseInvoice.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
                 responses: { 200: { description: 'PurchaseInvoice' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/purchase-approvals': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'Purchase invoices waiting for the owner, and decided ones (purchase.invoice_approve)',
+                description: 'U06 (D55). Approvals in the branches of the caller (OWNER: all), newest first, each with its invoice summary. status: pending (default) | approved | rejected | cancelled; branch_id optional (BRANCH_DENIED / BRANCH_NOT_FOUND). Only the owner decides (POST /api/purchase-invoices/{id}/approve or /reject). Works in an expired shop. Schema: PurchaseApprovalListQuery → PurchaseApprovalList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['pending', 'approved', 'rejected', 'cancelled'], default: 'pending' } },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'PurchaseApprovalList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
         '/api/units': {

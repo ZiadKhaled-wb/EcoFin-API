@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  PurchaseInvoiceApproveBody,
   PurchaseInvoiceCreateBody,
   PurchaseInvoiceIdParams,
   PurchaseInvoiceListQuery,
@@ -47,13 +48,14 @@ router.put(
   validate({ params: PurchaseInvoiceIdParams, body: PurchaseInvoiceUpdateBody }),
   asyncHandler(controller.update),
 );
-// U06 adds the amount threshold in SQL.
+// U06 (D55): above the threshold a non-owner's approve sends the invoice to the owner; the owner
+// decides a waiting invoice with a note. Both checked in SQL.
 router.post(
   '/:id/approve',
   authenticate,
   loadRequestContext,
   requirePermission('purchase.invoice_approve'),
-  validate({ params: PurchaseInvoiceIdParams }),
+  validate({ params: PurchaseInvoiceIdParams, body: PurchaseInvoiceApproveBody }),
   asyncHandler(controller.approve),
 );
 router.post(

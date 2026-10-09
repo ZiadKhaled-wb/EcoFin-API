@@ -1,6 +1,8 @@
 import type { Request, Response } from 'express';
 import {
   IdempotencyKeyHeader,
+  PurchaseApprovalListQuery,
+  PurchaseInvoiceApproveBody,
   PurchaseInvoiceCreateBody,
   PurchaseInvoiceIdParams,
   PurchaseInvoiceListQuery,
@@ -41,9 +43,15 @@ export async function update(req: Request, res: Response) {
   );
 }
 export async function approve(req: Request, res: Response) {
-  res.json(await service.approvePurchaseInvoice(getCtx(req), id(req)));
+  const { note } = PurchaseInvoiceApproveBody.parse(req.body ?? {});
+  res.json(await service.approvePurchaseInvoice(getCtx(req), id(req), note));
 }
 export async function reject(req: Request, res: Response) {
   const { reason } = PurchaseInvoiceRejectBody.parse(req.body);
   res.json(await service.rejectPurchaseInvoice(getCtx(req), id(req), reason));
+}
+export async function approvals(req: Request, res: Response) {
+  res.json(
+    await service.listPurchaseApprovals(getCtx(req), PurchaseApprovalListQuery.parse(req.query)),
+  );
 }

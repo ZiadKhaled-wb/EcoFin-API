@@ -9,6 +9,7 @@ import {
   AuthLoginResponse,
   ErrorResponse,
   PurchaseInvoice,
+  PurchaseApprovalList,
   PurchaseInvoiceList,
   StockList,
   Supplier,
@@ -34,7 +35,7 @@ describe.skipIf(!RUN)('U02 purchase invoices against local stack', () => {
   let phone: string;
   let ip = 0;
   const call = (
-    method: 'get' | 'post' | 'put',
+    method: 'get' | 'post' | 'put' | 'patch',
     path: string,
     token = owner,
     body?: object,
@@ -242,5 +243,91 @@ describe.skipIf(!RUN)('U02 purchase invoices against local stack', () => {
     });
     expect(edit.status).toBe(409);
     expect(code(edit)).toBe('PURCHASE_INVOICE_NOT_EDITABLE');
+  });
+
+  it('U06: above the threshold the manager approve waits; the owner approves it with a note', async () => {
+    // A branch manager of the main branch (create + approve).
+    const mgrEmail = `u06.manager.${STAMP}@ecotech.test`;
+    const user = await service.auth.admin.createUser({
+      email: mgrEmail,
+      password: PASSWORD,
+      email_confirm: true,
+    });
+    expect(user.error).toBeNull();
+    const emp = await service
+      .from('employees')
+      .insert({
+        organization_id: org,
+        auth_user_id: user.data.user!.id,
+        email: mgrEmail,
+        full_name: 'Manager',
+        role: 'BRANCH_MANAGER',
+        default_branch_id: branch,
+      })
+      .select('id')
+      .single();
+    expect(emp.error).toBeNull();
+    await service
+      .from('employee_branches')
+      .insert({ organization_id: org, employee_id: emp.data!.id, branch_id: branch });
+    const manager = await login(mgrEmail);
+
+    const set = await call('patch', '/api/settings', owner, {
+      purchase_approval_threshold: '1000.00',
+    });
+    expect(set.status, JSON.stringify(set.body)).toBe(200);
+    try {
+      const onHand = async () =>
+        StockList.parse((await call('get', `/api/stock?branch_id=${branch}`)).body).items.find(
+          (r) => r.product_id === tv,
+        )!.on_hand;
+      const before = await onHand();
+      const created = await call(
+        'post',
+        '/api/purchase-invoices',
+        manager,
+        {
+          supplier_id: supplierId,
+          branch_id: branch,
+          invoice_date: TODAY,
+          lines: [{ product_id: tv, quantity: 10, unit_cost: '130.00' }],
+        },
+        `u06-it-${STAMP}`,
+      );
+      expect(created.status, JSON.stringify(created.body)).toBe(201);
+      const id = PurchaseInvoice.parse(created.body).id;
+
+      const waiting = await call('post', `/api/purchase-invoices/${id}/approve`, manager, {});
+      expect(waiting.status, JSON.stringify(waiting.body)).toBe(200);
+      expect(PurchaseInvoice.parse(waiting.body)).toMatchObject({
+        status: 'pending_approval',
+        approval: { status: 'pending', amount: '1482.00', threshold: '1000.00' },
+      });
+      expect(await onHand()).toBe(before);
+      const again = await call('post', `/api/purchase-invoices/${id}/approve`, manager, {});
+      expect(again.status).toBe(403);
+      expect(code(again)).toBe('APPROVAL_OWNER_ONLY');
+
+      const list = PurchaseApprovalList.parse(
+        (await call('get', '/api/purchase-approvals', manager)).body,
+      );
+      expect(list.items.map((i) => i.invoice.id)).toContain(id);
+
+      const noNote = await call('post', `/api/purchase-invoices/${id}/approve`, owner, {});
+      expect(noNote.status).toBe(400);
+      expect(code(noNote)).toBe('APPROVAL_NOTE_REQUIRED');
+      const approved = await call('post', `/api/purchase-invoices/${id}/approve`, owner, {
+        note: 'Checked with the supplier',
+      });
+      expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+      expect(PurchaseInvoice.parse(approved.body)).toMatchObject({
+        status: 'approved',
+        approval: { status: 'approved', note: 'Checked with the supplier' },
+      });
+      await call('post', `/api/purchase-invoices/${id}/approve`, owner, {});
+      expect(await onHand()).toBe(before + 10);
+    } finally {
+      await call('patch', '/api/settings', owner, { purchase_approval_threshold: null });
+    }
   });
 });
