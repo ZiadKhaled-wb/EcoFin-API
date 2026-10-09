@@ -12,6 +12,7 @@ import {
   CategoryInUseDetail,
   SerialTakenDetail,
   ExportTooLargeDetail,
+  PaymentExceedsOutstandingDetail,
   ReturnQtyExceededDetail,
   SerialsRequiredDetail,
   type ErrorCode,
@@ -84,6 +85,7 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   EXPORT_TOO_LARGE: ExportTooLargeDetail,
   SERIALS_REQUIRED: SerialsRequiredDetail,
   RETURN_QTY_EXCEEDED: ReturnQtyExceededDetail,
+  PAYMENT_EXCEEDS_OUTSTANDING: PaymentExceedsOutstandingDetail,
 };
 
 /**

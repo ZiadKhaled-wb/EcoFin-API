@@ -455,6 +455,15 @@ INSERT INTO t.denial VALUES
  ('list_purchase_returns','purchase_return_3_list','supplier.manage',$$SELECT public.list_purchase_returns()$$),
  ('get_returnable_invoice','purchase_return_4_returnable','purchase.return_create',$$SELECT public.get_returnable_invoice((SELECT id FROM public.purchase_invoices WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-pi-1'))$$),
  ('list_payable_cash_accounts','purchase_return_5_accounts','supplier.payment_create',$$SELECT public.list_payable_cash_accounts('d2000000-0000-0000-0000-000000000011')$$);
+-- U03: after the K01 cases funded the denial bank and the U02 cases approved denial-pi-1, and
+-- before U04's return uses up what is owed (case names order the calls): 1.00 is paid from the
+-- bank, read, and reversed by the owner.
+INSERT INTO t.denial VALUES
+ ('post_supplier_payment','purchase_invoice_8a_pay','supplier.payment_create',$$SELECT public.post_supplier_payment((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial PI supplier'),'d2000000-0000-0000-0000-000000000011',(SELECT id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial bank'),'1.00','denial-sp-1')$$),
+ ('get_supplier_payment','purchase_invoice_8b_payment','supplier.manage',$$SELECT public.get_supplier_payment((SELECT id FROM public.supplier_payments WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sp-1'))$$),
+ ('list_supplier_payments','purchase_invoice_8c_payments','supplier.manage',$$SELECT public.list_supplier_payments()$$),
+ ('list_open_supplier_invoices','purchase_invoice_8d_open','supplier.payment_create',$$SELECT public.list_open_supplier_invoices((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial PI supplier'))$$),
+ ('reverse_supplier_payment','purchase_invoice_8e_reverse','supplier.payment_create',$$SELECT public.reverse_supplier_payment((SELECT id FROM public.supplier_payments WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sp-1'),'Denial reversal','denial-sp-1-rev')$$);
 -- K01: case names order the calls (the owner's create makes the bank the others use; the opening
 -- funds it, the transfer moves 10.00 into a new safe (the seed shop has no cash accounts)).
 INSERT INTO t.denial VALUES

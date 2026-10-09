@@ -1485,6 +1485,73 @@ export const openApiSpec = {
                 responses: { 200: { description: 'PayableCashAccountList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/supplier-payments': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'List supplier payments of the branches of the caller (any purchasing read key)',
+                description: 'U03 (D58). Newest business date first; reversals are their own rows. Filters: supplier_id, branch_id, from/to (business date), include_reversals (default true; false leaves only the payments that count: no reversals and no reversed payments). Another shop answers SUPPLIER_NOT_FOUND / BRANCH_NOT_FOUND; a branch the caller does not work in BRANCH_DENIED. Works in an expired shop. Schema: SupplierPaymentListQuery → SupplierPaymentList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'supplier_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'include_reversals', in: 'query', schema: { type: 'string', enum: ['true', 'false'], default: 'true' } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'SupplierPaymentList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Purchasing'],
+                summary: 'Pay a supplier from a safe or bank (supplier.payment_create)',
+                description: 'U03 (D58). The money leaves cash_account_id, an active safe or bank of branch_id or a shop-wide bank (VAULT_INVALID / CASH_ACCOUNT_INACTIVE); the caller needs the branch. Every payment is fully allocated to approved invoices of the supplier in the branches of the caller: the given allocations (each invoice once, each at most what is owed on it, adding up to the amount; else ALLOCATION_INVALID), or oldest invoice first when none are given. Never more than what is owed: PAYMENT_EXCEEDS_OUTSTANDING (409, details purchase_invoice_id or null, and outstanding). A safe can not go below 0: INSUFFICIENT_FUNDS; a closed day: DAY_CLOSED. reference up to 100 characters. Numbered SP (the receipt number). The same Idempotency-Key returns the first payment and moves no money again. Audited as supplier_payment.posted. Schema: SupplierPaymentCreateBody → SupplierPayment.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'SupplierPayment' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/supplier-payments/open-invoices': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'What a supplier is still owed, invoice by invoice (supplier.payment_create)',
+                description: 'U03 (D58). Approved invoices of the supplier with something still owed, in the branches of the caller, oldest first: total, paid, returned_credit, outstanding, and the due date (invoice date + the payment terms of the supplier) with an overdue flag, for display only. Schema: OpenSupplierInvoiceQuery → OpenSupplierInvoiceList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'supplier_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'OpenSupplierInvoiceList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/supplier-payments/{id}': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'Read a supplier payment with its allocations (any purchasing read key)',
+                description: 'U03 (D58). Another shop, or a branch the caller does not work in: SUPPLIER_PAYMENT_NOT_FOUND. reversed_by_payment_id is set on a reversed payment; a reversal has reverses_payment_id, its reason and no allocations. Schema: SupplierPayment.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'SupplierPayment' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/supplier-payments/{id}/reverse': {
+            post: {
+                tags: ['Purchasing'],
+                summary: 'Reverse a supplier payment (the owner, supplier.payment_create)',
+                description: 'U03 (D58). Only the owner (others: APPROVAL_OWNER_ONLY), with a reason of 3-500 characters. Creates a linked reversal with its own SP number and puts the amount back into the account; the invoice and supplier balances go back up. Once per payment (PAYMENT_ALREADY_REVERSED); a reversal can not be reversed. The same Idempotency-Key returns the same reversal; the key of another payment: IDEMPOTENCY_CONFLICT. Audited as supplier_payment.reversed (warning) with the reason. Schema: SupplierPaymentReverseBody → SupplierPayment (the reversal).',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 200: { description: 'SupplierPayment' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/cash-accounts': {
             get: {
                 tags: ['Cash'],

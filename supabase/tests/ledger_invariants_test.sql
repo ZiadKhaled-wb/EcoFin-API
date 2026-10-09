@@ -275,6 +275,8 @@ INSERT INTO t.replay_tested VALUES
  ('public.register_units','i04_units_test.sql: same key -> same batch, nothing created twice'),
  ('public.create_stock_transfer','i03_transfers_test.sql: same key -> same transfer'),
  ('public.create_purchase_invoice','u02_purchase_invoices_test.sql: same key -> same invoice, no second row or audit'),
+ ('public.post_supplier_payment','u03_supplier_payments_test.sql: same key -> same payment, the safe, the balances and the movement count unchanged'),
+ ('public.reverse_supplier_payment','u03_supplier_payments_test.sql: same key -> same reversal, nothing moves; the key of another payment -> IDEMPOTENCY_CONFLICT'),
  ('public.post_purchase_return','u04_purchase_returns_test.sql: same key -> same return, stock and balance unchanged'),
  ('public.create_cash_transfer','k01_vaults_test.sql: same key -> same transfer, nothing new'),
  ('public.post_cash_opening','k01_vaults_test.sql: same key -> nothing new; the key used for another account -> VALIDATION_FAILED'),

@@ -167,6 +167,31 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
     return { sent: created, id: (created.res.body as { id: string }).id };
   }
+  /** U03: 5.00 paid on a new approved invoice from a new funded bank. */
+  async function newSupplierPayment(token: string) {
+    const { id } = await newPurchaseInvoice(token);
+    const approved = await send('post', `/api/purchase-invoices/${id}/approve`, { token });
+    expect(approved.res.status, JSON.stringify(approved.res.body)).toBe(200);
+    const bank = await newCashAccount(token);
+    const funded = await send('post', `/api/cash-accounts/${bank}/opening`, {
+      token,
+      key: `f07-sp-fund-${STAMP}-${ipCounter}`,
+      body: { amount: '100.00', note: 'F07 audit driver' },
+    });
+    expect(funded.res.status, JSON.stringify(funded.res.body)).toBe(200);
+    const sent = await send('post', '/api/supplier-payments', {
+      token,
+      key: `f07-sp-${STAMP}-${ipCounter}`,
+      body: {
+        supplier_id: (approved.res.body as { supplier_id: string }).supplier_id,
+        branch_id: BR1,
+        cash_account_id: bank,
+        amount: '5.00',
+      },
+    });
+    expect(sent.res.status, JSON.stringify(sent.res.body)).toBe(201);
+    return { sent, id: (sent.res.body as { id: string }).id };
+  }
   async function newProduct(token: string) {
     const { res } = await send('post', '/api/products', { token, body: productBody() });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
@@ -406,6 +431,23 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         }),
         org: SHOP_ONE,
         status: 201,
+      };
+    },
+    'POST /api/supplier-payments': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const paid = await newSupplierPayment(owner.accessToken);
+      return { sent: paid.sent, org: SHOP_ONE, status: 201 };
+    },
+    'POST /api/supplier-payments/:id/reverse': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const paid = await newSupplierPayment(owner.accessToken);
+      return {
+        sent: await send('post', `/api/supplier-payments/${paid.id}/reverse`, {
+          token: owner.accessToken,
+          key: `f07-sp-rev-${STAMP}-${ipCounter}`,
+          body: { reason: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
       };
     },
     'POST /api/suppliers': async () => {

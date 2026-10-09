@@ -8193,6 +8193,7 @@ export type Database = {
       get_stock_transfer: { Args: { p_id: string }; Returns: Json };
       get_subscription_status: { Args: Record<PropertyKey, never>; Returns: Json };
       get_supplier: { Args: { p_id: string }; Returns: Json };
+      get_supplier_payment: { Args: { p_id: string }; Returns: Json };
       get_unit: { Args: { p_id: string }; Returns: Json };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
       jobs_claim: {
@@ -8286,6 +8287,7 @@ export type Database = {
         }[];
       };
       list_installment_policies: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_open_supplier_invoices: { Args: { p_supplier_id: string }; Returns: Json };
       list_payable_cash_accounts: { Args: { p_branch_id: string }; Returns: Json };
       list_product_units: { Args: { p_product_id: string; p_status?: string }; Returns: Json };
       list_products: {
@@ -8365,6 +8367,18 @@ export type Database = {
         Args: { p_branch_id?: string; p_limit?: number; p_offset?: number; p_status?: string };
         Returns: Json;
       };
+      list_supplier_payments: {
+        Args: {
+          p_branch_id?: string;
+          p_from?: string;
+          p_include_reversals?: boolean;
+          p_limit?: number;
+          p_offset?: number;
+          p_supplier_id?: string;
+          p_to?: string;
+        };
+        Returns: Json;
+      };
       list_suppliers: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string; p_status?: string };
         Returns: Json;
@@ -8420,6 +8434,18 @@ export type Database = {
         Args: { p_count_id: string; p_idempotency_key: string; p_uncounted_as_zero: boolean };
         Returns: Json;
       };
+      post_supplier_payment: {
+        Args: {
+          p_allocations?: Json;
+          p_amount: string;
+          p_branch_id: string;
+          p_cash_account_id: string;
+          p_idempotency_key: string;
+          p_reference?: string;
+          p_supplier_id: string;
+        };
+        Returns: Json;
+      };
       publish_installment_policy: { Args: { p_policy: Json }; Returns: string };
       receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
       register_file: {
@@ -8452,6 +8478,10 @@ export type Database = {
       require_module: { Args: { p_module: string }; Returns: undefined };
       resend_employee_invite: {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
+        Returns: Json;
+      };
+      reverse_supplier_payment: {
+        Args: { p_id: string; p_idempotency_key: string; p_reason: string };
         Returns: Json;
       };
       save_stock_count_lines: { Args: { p_count_id: string; p_lines: Json }; Returns: Json };
