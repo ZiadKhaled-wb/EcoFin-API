@@ -27,6 +27,8 @@ export const PurchaseInvoiceLineInput = z
     tax_class_id: Uuid.optional(),
     /** Serialized products only: one serial per unit (may be added before approval). */
     serials: z.array(Serial).min(1).max(500).optional(),
+    /** U05: the order line this line receives (needs the invoice's `po_id`; the same product). */
+    po_line_id: Uuid.optional(),
   })
   .strict()
   .refine((l) => l.serials === undefined || l.serials.length === l.quantity, {
@@ -52,6 +54,8 @@ export const PurchaseInvoiceCreateBody = z
     /** Not in the future (checked by the server against the shop's date). */
     invoice_date: BusinessDate,
     lines: Lines,
+    /** U05: the purchase order this invoice receives (same supplier and branch). Fixed afterwards. */
+    po_id: Uuid.optional(),
   })
   .strict();
 export type PurchaseInvoiceCreateBody = z.infer<typeof PurchaseInvoiceCreateBody>;
@@ -97,6 +101,8 @@ export const PurchaseInvoiceLine = z.object({
   serials: z.array(z.string()).nullable(),
   /** The serial units created by the approval (empty before). */
   unit_ids: z.array(Uuid),
+  /** U05: the purchase order line this line receives, or null. */
+  po_line_id: Uuid.nullable().default(null),
 });
 export type PurchaseInvoiceLine = z.infer<typeof PurchaseInvoiceLine>;
 
@@ -143,6 +149,9 @@ const header = {
   updated_at: IsoTimestamp,
   /** U06: the latest approval of the invoice, if it ever waited for the owner. */
   approval: PurchaseApproval.nullable(),
+  /** U05: the purchase order this invoice receives, or null. */
+  po_id: Uuid.nullable().default(null),
+  po_number: z.string().nullable().default(null),
 };
 
 export const PurchaseInvoice = z.object({ ...header, lines: z.array(PurchaseInvoiceLine) });
@@ -355,3 +364,166 @@ export const PayableCashAccountList = z.object({ items: z.array(PayableCashAccou
 export type PayableCashAccountList = z.infer<typeof PayableCashAccountList>;
 export const PayableCashAccountQuery = z.object({ branch_id: Uuid }).strict();
 export type PayableCashAccountQuery = z.infer<typeof PayableCashAccountQuery>;
+
+/**
+ * U05 purchase orders (D59). Goods ordered from a supplier before they arrive: draft → sent →
+ * partially_received → received, or cancelled. An order is received through purchase invoices
+ * made from it; only approved invoices count as received, and never more than was ordered.
+ */
+export const PurchaseOrderStatus = z.enum([
+  'draft',
+  'sent',
+  'partially_received',
+  'received',
+  'cancelled',
+]);
+export type PurchaseOrderStatus = z.infer<typeof PurchaseOrderStatus>;
+
+export const PurchaseOrderLineInput = z
+  .object({
+    product_id: Uuid,
+    quantity: z.number().int().min(1).max(100_000),
+    /** What the supplier is expected to charge per unit, before VAT. */
+    expected_unit_cost: UnitCost.nullable().optional(),
+    /** A customer's special order line (to_order, same product, not yet linked) this line fills. */
+    sales_order_line_id: Uuid.optional(),
+  })
+  .strict();
+export type PurchaseOrderLineInput = z.infer<typeof PurchaseOrderLineInput>;
+
+const OrderLines = z
+  .array(PurchaseOrderLineInput)
+  .min(1)
+  .max(200)
+  .refine((lines) => new Set(lines.map((l) => l.product_id)).size === lines.length, {
+    message: 'A product appears at most once',
+  });
+const OrderNotes = z.string().trim().max(1000).nullable().transform(nullIfEmpty);
+
+/** `Idempotency-Key` header. */
+export const PurchaseOrderCreateBody = z
+  .object({
+    supplier_id: Uuid,
+    branch_id: Uuid,
+    expected_date: BusinessDate.nullable().optional(),
+    notes: OrderNotes.optional(),
+    lines: OrderLines,
+  })
+  .strict();
+export type PurchaseOrderCreateBody = z.infer<typeof PurchaseOrderCreateBody>;
+export type PurchaseOrderCreateInput = z.input<typeof PurchaseOrderCreateBody>;
+
+/** Drafts only. The supplier and the branch are fixed at creation. */
+export const PurchaseOrderUpdateBody = z
+  .object({
+    expected_date: BusinessDate.nullable().optional(),
+    notes: OrderNotes.optional(),
+    lines: OrderLines.optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'Nothing to change' });
+export type PurchaseOrderUpdateBody = z.infer<typeof PurchaseOrderUpdateBody>;
+export type PurchaseOrderUpdateInput = z.input<typeof PurchaseOrderUpdateBody>;
+
+export const PurchaseOrderCancelBody = z
+  .object({ reason: z.string().trim().min(3).max(500) })
+  .strict();
+export type PurchaseOrderCancelBody = z.infer<typeof PurchaseOrderCancelBody>;
+
+/**
+ * "Receive": a draft invoice from the order (`Idempotency-Key` header). Without `lines`: every
+ * line with something still to come, for what remains, at its expected cost.
+ */
+export const PurchaseOrderInvoiceBody = z
+  .object({
+    lines: z
+      .array(
+        z
+          .object({
+            po_line_id: Uuid,
+            quantity: z.number().int().min(1).max(100_000),
+            unit_cost: UnitCost.optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(200)
+      .refine((lines) => new Set(lines.map((l) => l.po_line_id)).size === lines.length, {
+        message: 'An order line appears at most once',
+      })
+      .optional(),
+  })
+  .strict();
+export type PurchaseOrderInvoiceBody = z.infer<typeof PurchaseOrderInvoiceBody>;
+
+export const PurchaseOrderIdParams = z.object({ id: Uuid }).strict();
+export type PurchaseOrderIdParams = z.infer<typeof PurchaseOrderIdParams>;
+
+export const PurchaseOrderLine = z.object({
+  id: Uuid,
+  product_id: Uuid,
+  name_ar: z.string(),
+  name_en: z.string().nullable(),
+  sku: z.string(),
+  is_serialized: z.boolean(),
+  quantity: z.number().int().positive(),
+  expected_unit_cost: Money.nullable(),
+  /** On approved invoices. */
+  received: z.number().int().nonnegative(),
+  /** quantity − received. */
+  remaining: z.number().int(),
+  /** On draft and pending invoices: not received yet. */
+  on_draft_invoices: z.number().int().nonnegative(),
+  /** The customer's special order this line fills, if any. */
+  customer_order: z.object({ order_id: Uuid, number: z.string(), line_id: Uuid }).nullable(),
+});
+export type PurchaseOrderLine = z.infer<typeof PurchaseOrderLine>;
+
+const orderHeader = {
+  id: Uuid,
+  number: z.string(),
+  supplier_id: Uuid,
+  supplier_name: z.string(),
+  branch_id: Uuid,
+  status: PurchaseOrderStatus,
+  expected_date: BusinessDate.nullable(),
+  notes: z.string().nullable(),
+  created_by_name: z.string().nullable(),
+  created_at: IsoTimestamp,
+  updated_at: IsoTimestamp,
+};
+export const PurchaseOrder = z.object({
+  ...orderHeader,
+  lines: z.array(PurchaseOrderLine),
+  /** The invoices made from the order, oldest first. */
+  invoices: z.array(
+    z.object({ id: Uuid, number: z.string(), status: PurchaseInvoiceStatus, total: Money }),
+  ),
+});
+export type PurchaseOrder = z.infer<typeof PurchaseOrder>;
+export const PurchaseOrderSummary = z.object({
+  ...orderHeader,
+  lines_count: z.number().int().nonnegative(),
+  /** Units ordered and received over all lines. */
+  ordered: z.number().int().nonnegative(),
+  received: z.number().int().nonnegative(),
+});
+export type PurchaseOrderSummary = z.infer<typeof PurchaseOrderSummary>;
+export const PurchaseOrderList = paginated(PurchaseOrderSummary);
+export type PurchaseOrderList = z.infer<typeof PurchaseOrderList>;
+
+export const PurchaseOrderListQuery = PaginationQuery.extend({
+  supplier_id: Uuid.optional(),
+  branch_id: Uuid.optional(),
+  status: PurchaseOrderStatus.optional(),
+  /** Part of the PO number. */
+  search: z.string().trim().min(1).max(40).optional(),
+}).strict();
+export type PurchaseOrderListQuery = z.infer<typeof PurchaseOrderListQuery>;
+
+/** Details of PO_OVER_RECEIPT: the order line and how many are still to come on it. */
+export const PoOverReceiptDetail = z.object({
+  po_line_id: Uuid,
+  remaining: z.number().int(),
+});
+export type PoOverReceiptDetail = z.infer<typeof PoOverReceiptDetail>;

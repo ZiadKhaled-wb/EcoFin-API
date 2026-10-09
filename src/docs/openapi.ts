@@ -1359,7 +1359,7 @@ export const openApiSpec = {
             post: {
                 tags: ['Purchasing'],
                 summary: 'Create a draft purchase invoice (purchase.invoice_create)',
-                description: 'U02 (D54). Supplier (active), branch (the caller\'s), optional supplier invoice number (unique per supplier among non-rejected invoices: SUPPLIER_INVOICE_NO_TAKEN), invoice date (not in the future), 1-200 lines with each product once: quantity 1-100 000, unit_cost BEFORE VAT, tax_class_id (default the product\'s), serials for serialized products (optional on a draft; one per unit; needs the serials module). VAT per line from the class. The same Idempotency-Key returns the same invoice. Audited as purchase_invoice.created. Schema: PurchaseInvoiceCreateBody → PurchaseInvoice.',
+                description: 'U02 (D54). Supplier (active), branch (the caller\'s), optional supplier invoice number (unique per supplier among non-rejected invoices: SUPPLIER_INVOICE_NO_TAKEN), invoice date (not in the future), 1-200 lines with each product once: quantity 1-100 000, unit_cost BEFORE VAT, tax_class_id (default the product\'s), serials for serialized products (optional on a draft; one per unit; needs the serials module). VAT per line from the class. U05: optional po_id (a sent or partly received order with the same supplier and branch, else PO_NOT_SENT / PO_CLOSED / PO_LINE_MISMATCH) and per line po_line_id (that order line, the same product, within what is still to come: PO_OVER_RECEIPT). The same Idempotency-Key returns the same invoice. Audited as purchase_invoice.created. Schema: PurchaseInvoiceCreateBody → PurchaseInvoice.',
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     { $ref: '#/components/parameters/OrgId' },
@@ -1390,7 +1390,7 @@ export const openApiSpec = {
             post: {
                 tags: ['Purchasing'],
                 summary: 'Approve a purchase invoice (purchase.invoice_approve; above the threshold, the owner)',
-                description: 'U02 (D54) + U06 (D55). Recomputes VAT with the current class rates, then per line in product order: updates the moving-average cost of the product on the net unit cost (all branches, half-up to 4 places; no stock → the unit cost) and posts the stock (purchase_in) once; serialized lines create their units. The supplier balance rises by the total including VAT. U06: when purchase_approval_threshold (shop settings) is set and the total (VAT included) is strictly greater, an approve of a draft by a non-owner answers status pending_approval with its approval (nothing posted, audited as purchase_invoice.approval_requested); only the owner decides a pending invoice, with a note (3-500; APPROVAL_NOTE_REQUIRED), and a non-owner gets APPROVAL_OWNER_ONLY. The owner approving a draft above the threshold posts it directly. Already approved: answered unchanged. Errors: SERIALS_REQUIRED (422, details.line_ids), SERIAL_TAKEN (details.serials), SUPPLIER_ARCHIVED, PURCHASE_INVOICE_NOT_EDITABLE (rejected), BRANCH_DENIED / BRANCH_INACTIVE. Schema: PurchaseInvoiceApproveBody → PurchaseInvoice.',
+                description: 'U02 (D54) + U06 (D55). Recomputes VAT with the current class rates, then per line in product order: updates the moving-average cost of the product on the net unit cost (all branches, half-up to 4 places; no stock → the unit cost) and posts the stock (purchase_in) once; serialized lines create their units. The supplier balance rises by the total including VAT. U06: when purchase_approval_threshold (shop settings) is set and the total (VAT included) is strictly greater, an approve of a draft by a non-owner answers status pending_approval with its approval (nothing posted, audited as purchase_invoice.approval_requested); only the owner decides a pending invoice, with a note (3-500; APPROVAL_NOTE_REQUIRED), and a non-owner gets APPROVAL_OWNER_ONLY. The owner approving a draft above the threshold posts it directly. U05: for an invoice of a purchase order the linked lines are checked again against what is still to come (PO_OVER_RECEIPT; a cancelled order: PO_CLOSED) and the order then moves to partially_received or received. Already approved: answered unchanged. Errors: SERIALS_REQUIRED (422, details.line_ids), SERIAL_TAKEN (details.serials), SUPPLIER_ARCHIVED, PURCHASE_INVOICE_NOT_EDITABLE (rejected), BRANCH_DENIED / BRANCH_INACTIVE. Schema: PurchaseInvoiceApproveBody → PurchaseInvoice.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
                 responses: { 200: { description: 'PurchaseInvoice' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
@@ -1483,6 +1483,87 @@ export const openApiSpec = {
                     { name: 'branch_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
                 ],
                 responses: { 200: { description: 'PayableCashAccountList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/purchase-orders': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'List purchase orders of the branches of the caller (any purchasing read key)',
+                description: 'U05 (D59). Newest first, each with its number of lines and the units ordered and received. Filters: supplier_id, branch_id, status (draft | sent | partially_received | received | cancelled), search (part of the PO number). Another shop answers SUPPLIER_NOT_FOUND / BRANCH_NOT_FOUND; a branch the caller does not work in BRANCH_DENIED. Works in an expired shop. Schema: PurchaseOrderListQuery → PurchaseOrderList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'supplier_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['draft', 'sent', 'partially_received', 'received', 'cancelled'] } },
+                    { name: 'search', in: 'query', schema: { type: 'string', maxLength: 40 } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'PurchaseOrderList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Purchasing'],
+                summary: 'Create a draft purchase order (purchase.order_manage)',
+                description: 'U05 (D59). Supplier (active), branch (of the caller), optional expected_date and notes (up to 1000 characters), 1-200 lines with each product once: quantity 1-100 000, optional expected_unit_cost before VAT, optional sales_order_line_id (a special order line of a customer: to_order, the same product, its order open, not yet linked; else SALES_ORDER_LINE_INVALID). Numbered PO. The same Idempotency-Key returns the same order. Audited as purchase_order.created. Schema: PurchaseOrderCreateBody → PurchaseOrder.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'PurchaseOrder' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/purchase-orders/{id}': {
+            get: {
+                tags: ['Purchasing'],
+                summary: 'Read a purchase order with its lines and invoices (any purchasing read key)',
+                description: 'U05 (D59). Per line: quantity, received (approved invoices only), remaining, on_draft_invoices (not received yet) and the customer order it fills, if any. invoices: every invoice made from the order. Another shop, or a branch the caller does not work in: PURCHASE_ORDER_NOT_FOUND. Schema: PurchaseOrder.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'PurchaseOrder' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            put: {
+                tags: ['Purchasing'],
+                summary: 'Change a draft purchase order (purchase.order_manage)',
+                description: 'U05 (D59). Drafts only (else PURCHASE_ORDER_NOT_EDITABLE): expected_date, notes and/or lines (all lines replaced). The supplier and the branch are fixed. Audited as purchase_order.updated with what changed; no change, no row. Schema: PurchaseOrderUpdateBody → PurchaseOrder.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'PurchaseOrder' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/purchase-orders/{id}/send': {
+            post: {
+                tags: ['Purchasing'],
+                summary: 'Send a draft purchase order (purchase.order_manage)',
+                description: 'U05 (D59). draft → sent; an order that is already sent or further is answered unchanged. A cancelled order: PURCHASE_ORDER_NOT_EDITABLE. Audited as purchase_order.sent. Schema: → PurchaseOrder.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'PurchaseOrder' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/purchase-orders/{id}/cancel': {
+            post: {
+                tags: ['Purchasing'],
+                summary: 'Cancel a purchase order (purchase.order_manage)',
+                description: 'U05 (D59). From draft, sent or partially_received, with a reason of 3-500 characters; it closes what is still to come. received and cancelled are final (PURCHASE_ORDER_NOT_EDITABLE). Draft invoices of the order can no longer be approved (PO_CLOSED). Audited as purchase_order.cancelled (warning) with the reason. Schema: PurchaseOrderCancelBody → PurchaseOrder.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'PurchaseOrder' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/purchase-orders/{id}/invoice': {
+            post: {
+                tags: ['Purchasing'],
+                summary: 'Receive a purchase order as a draft purchase invoice (purchase.invoice_create)',
+                description: 'U05 (D59). Only a sent or partially_received order (draft: PO_NOT_SENT; received or cancelled: PO_CLOSED). lines: order lines once each with a quantity and an optional unit_cost (default: the expected cost, 0 when none); without lines, every line with something still to come, for what remains. Never more than is still to come: PO_OVER_RECEIPT (409, details po_line_id and remaining); a line of another order: PO_LINE_MISMATCH. The draft takes the supplier and branch of the order and the shop date; it is edited and approved as any purchase invoice, and only an approved invoice counts as received (the order then moves to partially_received or received). The same Idempotency-Key returns the same invoice. Audited as purchase_invoice.created with po_id. Schema: PurchaseOrderInvoiceBody → PurchaseInvoice.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'PurchaseInvoice' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
         '/api/supplier-payments': {

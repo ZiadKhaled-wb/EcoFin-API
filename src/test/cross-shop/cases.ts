@@ -2424,3 +2424,194 @@ crossShopCase({
     h.expect((bank.res.body as { balance: string }).balance).toBe('45.00');
   },
 });
+
+// U05 purchase orders (D59). Shop B's order is made (and sent when asked) by B's owner.
+const poKey = () => `xs-u05-${Date.now()}-${Math.random()}`;
+async function shopBOrder(h: CrossShopHarness, tag: string, send = false) {
+  const supplier = await shopBSupplier(h, 'po-' + tag);
+  const product = await shopBProduct(h, 'po-' + tag);
+  const created = await h.call('POST', '/api/purchase-orders', {
+    token: supplier.token,
+    idempotencyKey: poKey(),
+    body: {
+      supplier_id: supplier.id,
+      branch_id: SHOP_B_BR1,
+      lines: [{ product_id: product.id, quantity: 3, expected_unit_cost: '10.00' }],
+    },
+  });
+  h.expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+  const order = created.res.body as { id: string; updated_at: string };
+  if (send) {
+    const sent = await h.call('POST', `/api/purchase-orders/${order.id}/send`, {
+      token: supplier.token,
+    });
+    h.expect(sent.res.status, JSON.stringify(sent.res.body)).toBe(200);
+  }
+  return { order, supplier, product, token: supplier.token };
+}
+async function orderOf(h: CrossShopHarness, token: string, id: string) {
+  const own = await h.call('GET', `/api/purchase-orders/${id}`, { token });
+  return own.res.body as { status: string; updated_at: string; invoices: unknown[] };
+}
+crossShopCase({
+  method: 'GET',
+  path: '/api/purchase-orders',
+  name: "purchase orders list refuses a foreign header, an org key and shop B's supplier or branch",
+  async run(h) {
+    const theirs = await shopBOrder(h, 'list');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/purchase-orders', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/purchase-orders', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    for (const [query, code] of [
+      ['supplier_id=' + theirs.supplier.id, 'SUPPLIER_NOT_FOUND'],
+      ['branch_id=' + SHOP_B_BR1, 'BRANCH_NOT_FOUND'],
+    ] as const) {
+      const res = await h.call('GET', '/api/purchase-orders', { token: a.accessToken, query });
+      h.expect(res.res.status).toBe(404);
+      h.expect(h.code(res.res)).toBe(code);
+    }
+    const own = await h.call('GET', '/api/purchase-orders', {
+      token: a.accessToken,
+      query: 'pageSize=100',
+    });
+    h.expect(own.res.status).toBe(200);
+    h.expect(
+      (own.res.body as { items: { id: string }[] }).items.some((x) => x.id === theirs.order.id),
+    ).toBe(false);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/purchase-orders/:id',
+  name: "shop B's purchase order is not found; a foreign header is refused",
+  async run(h) {
+    const theirs = await shopBOrder(h, 'get');
+    const a = await h.login(OWNER_A);
+    const res = await h.call('GET', `/api/purchase-orders/${theirs.order.id}`, {
+      token: a.accessToken,
+    });
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('PURCHASE_ORDER_NOT_FOUND');
+    const header = await h.call('GET', `/api/purchase-orders/${theirs.order.id}`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/purchase-orders',
+  name: "purchase order create rejects a foreign header, a tenant body and shop B's supplier, branch or product",
+  async run(h) {
+    const theirs = await shopBOrder(h, 'create');
+    const a = await h.login(OWNER_A);
+    const own = await h.call('POST', '/api/suppliers', {
+      token: a.accessToken,
+      body: { name: `Cross-shop PO supplier ${Date.now()}-${Math.random()}` },
+    });
+    h.expect(own.res.status, JSON.stringify(own.res.body)).toBe(201);
+    const ownProduct = await h.call('POST', '/api/products', {
+      token: a.accessToken,
+      body: { name_ar: 'Cross-shop PO', sku: `XS-PO-${Date.now()}`, cash_price: '1.00' },
+    });
+    h.expect(ownProduct.res.status, JSON.stringify(ownProduct.res.body)).toBe(201);
+    const line = { product_id: (ownProduct.res.body as { id: string }).id, quantity: 1 };
+    const body = {
+      supplier_id: (own.res.body as { id: string }).id,
+      branch_id: SHOP_A_BR1,
+      lines: [line],
+    };
+    const send = (b: object, orgId?: string) =>
+      h.call('POST', '/api/purchase-orders', {
+        token: a.accessToken,
+        idempotencyKey: poKey(),
+        body: b,
+        ...(orgId ? { orgId } : {}),
+      });
+    const foreign = await send(body, SHOP_B);
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await send({ ...body, organization_id: SHOP_B });
+    h.expect(injected.res.status).toBe(400);
+    const supplier = await send({ ...body, supplier_id: theirs.supplier.id });
+    h.expect(supplier.res.status).toBe(404);
+    h.expect(h.code(supplier.res)).toBe('SUPPLIER_NOT_FOUND');
+    const branch = await send({ ...body, branch_id: SHOP_B_BR1 });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    const product = await send({ ...body, lines: [{ ...line, product_id: theirs.product.id }] });
+    h.expect(product.res.status).toBe(404);
+    h.expect(h.code(product.res)).toBe('PRODUCT_NOT_FOUND');
+    // A customer order line that is not this shop's (no API creates one yet: an unknown id).
+    const salesLine = await send({
+      ...body,
+      lines: [{ ...line, sales_order_line_id: theirs.order.id }],
+    });
+    h.expect(salesLine.res.status).toBe(400);
+    h.expect(h.code(salesLine.res)).toBe('SALES_ORDER_LINE_INVALID');
+    for (const call of [foreign, injected, supplier, branch, product, salesLine]) {
+      h.expect(await h.auditRowsFrom(SHOP_A, call.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+  },
+});
+for (const [method, suffix] of [
+  ['PUT', ''],
+  ['POST', '/send'],
+  ['POST', '/cancel'],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/purchase-orders/:id${suffix}`,
+    name: `${method} purchase order${suffix} rejects another shop's id and leaves it unchanged`,
+    async run(h) {
+      const theirs = await shopBOrder(h, method.toLowerCase() + suffix.replace('/', '-'));
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call(method, `/api/purchase-orders/${theirs.order.id}${suffix}`, {
+        token: a.accessToken,
+        body:
+          suffix === '' ? { notes: 'FOREIGN' } : suffix === '/cancel' ? { reason: 'Not mine' } : {},
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('PURCHASE_ORDER_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_A, foreign.ip)).toBe(0);
+      const after = await orderOf(h, theirs.token, theirs.order.id);
+      h.expect(after).toMatchObject({ status: 'draft', updated_at: theirs.order.updated_at });
+    },
+  });
+}
+crossShopCase({
+  method: 'POST',
+  path: '/api/purchase-orders/:id/invoice',
+  name: "receiving shop B's sent purchase order is not found and creates no invoice",
+  async run(h) {
+    const theirs = await shopBOrder(h, 'invoice', true);
+    const a = await h.login(OWNER_A);
+    const send = (orgId?: string) =>
+      h.call('POST', `/api/purchase-orders/${theirs.order.id}/invoice`, {
+        token: a.accessToken,
+        idempotencyKey: poKey(),
+        body: {},
+        ...(orgId ? { orgId } : {}),
+      });
+    const foreign = await send(SHOP_B);
+    h.expect(foreign.res.status).toBe(403);
+    const res = await send();
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('PURCHASE_ORDER_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, res.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_A, res.ip)).toBe(0);
+    const after = await orderOf(h, theirs.token, theirs.order.id);
+    h.expect(after.status).toBe('sent');
+    h.expect(after.invoices).toHaveLength(0);
+  },
+});
