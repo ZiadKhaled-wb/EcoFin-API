@@ -8122,6 +8122,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      create_supplier: { Args: { p: Json }; Returns: Json };
       create_tax_class: {
         Args: {
           p_eta_subtype: string;
@@ -8160,6 +8161,7 @@ export type Database = {
       };
       get_stock_transfer: { Args: { p_id: string }; Returns: Json };
       get_subscription_status: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_supplier: { Args: { p_id: string }; Returns: Json };
       get_unit: { Args: { p_id: string }; Returns: Json };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
       jobs_claim: {
@@ -8282,6 +8284,10 @@ export type Database = {
       };
       list_stock_transfers: {
         Args: { p_branch_id?: string; p_limit?: number; p_offset?: number; p_status?: string };
+        Returns: Json;
+      };
+      list_suppliers: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string; p_status?: string };
         Returns: Json;
       };
       list_tax_classes: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -8422,7 +8428,9 @@ export type Database = {
         }[];
       };
       set_product_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
+      set_supplier_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
       set_tax_class_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
+      supplier_statement: { Args: { p_from?: string; p_id: string; p_to?: string }; Returns: Json };
       update_branch: {
         Args: {
           p_address: string | null;
@@ -8457,6 +8465,7 @@ export type Database = {
         Args: { p_id: string; p_lines: Json; p_notes: string | null };
         Returns: Json;
       };
+      update_supplier: { Args: { p_changes: Json; p_id: string }; Returns: Json };
       update_tax_class: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
     };
     Enums: {

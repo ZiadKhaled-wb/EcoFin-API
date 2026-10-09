@@ -1445,3 +1445,147 @@ for (const [method, suffix, body] of [
       h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
     },
   });
+
+// U01 suppliers: shop B's supplier is created the real way, then shop A aims at it.
+async function shopBSupplier(h: CrossShopHarness, tag: string) {
+  const b = await h.login(OWNER_B);
+  const created = await h.call('POST', '/api/suppliers', {
+    token: b.accessToken,
+    body: { name: `Cross-shop supplier ${tag} ${Date.now()}-${Math.random()}` },
+  });
+  h.expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+  const supplier = created.res.body as { id: string; name: string; updated_at: string };
+  return { ...supplier, token: b.accessToken };
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/suppliers',
+  name: "suppliers list refuses a foreign header and an org query key, and never shows shop B's",
+  async run(h) {
+    const theirs = await shopBSupplier(h, 'list');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/suppliers', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/suppliers', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const own = await h.call('GET', '/api/suppliers', {
+      token: a.accessToken,
+      query: 'status=all&search=' + encodeURIComponent(theirs.name),
+    });
+    h.expect(own.res.status).toBe(200);
+    h.expect((own.res.body as { total: number }).total).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+for (const suffix of ['', '/statement'] as const) {
+  crossShopCase({
+    method: 'GET',
+    path: `/api/suppliers/:id${suffix}`,
+    name: `supplier${suffix || ' read'} rejects another shop's id, a foreign header and an org query key`,
+    async run(h) {
+      const theirs = await shopBSupplier(h, 'get' + suffix);
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call('GET', `/api/suppliers/${theirs.id}${suffix}`, {
+        token: a.accessToken,
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('SUPPLIER_NOT_FOUND');
+      const header = await h.call('GET', `/api/suppliers/${theirs.id}${suffix}`, {
+        token: a.accessToken,
+        orgId: SHOP_B,
+      });
+      h.expect(header.res.status).toBe(403);
+      const injected = await h.call('GET', `/api/suppliers/${theirs.id}${suffix}`, {
+        token: a.accessToken,
+        query: 'organization_id=' + SHOP_B,
+      });
+      h.expect(injected.res.status).toBe(400);
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    },
+  });
+}
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/suppliers',
+  name: 'supplier create rejects foreign header and tenant body',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = { name: `Cross-shop new supplier ${Date.now()}` };
+    const foreign = await h.call('POST', '/api/suppliers', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/suppliers', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_A, injected.ip)).toBe(0);
+  },
+});
+
+for (const [method, suffix] of [
+  ['PATCH', ''],
+  ['POST', '/archive'],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/suppliers/:id${suffix}`,
+    name: `${method} supplier${suffix} rejects another shop's id and leaves it unchanged`,
+    async run(h) {
+      const theirs = await shopBSupplier(h, method.toLowerCase());
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call(method, `/api/suppliers/${theirs.id}${suffix}`, {
+        token: a.accessToken,
+        body: method === 'PATCH' ? { notes: 'Foreign' } : {},
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('SUPPLIER_NOT_FOUND');
+      const header = await h.call(method, `/api/suppliers/${theirs.id}${suffix}`, {
+        token: a.accessToken,
+        orgId: SHOP_B,
+        body: method === 'PATCH' ? { notes: 'Foreign' } : {},
+      });
+      h.expect(header.res.status).toBe(403);
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_A, foreign.ip)).toBe(0);
+      const after = await h.call('GET', `/api/suppliers/${theirs.id}`, { token: theirs.token });
+      h.expect(after.res.body).toMatchObject({
+        notes: null,
+        archived_at: null,
+        updated_at: theirs.updated_at,
+      });
+    },
+  });
+}
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/suppliers/:id/restore',
+  name: "supplier restore rejects another shop's id",
+  async run(h) {
+    const theirs = await shopBSupplier(h, 'restore');
+    const archived = await h.call('POST', `/api/suppliers/${theirs.id}/archive`, {
+      token: theirs.token,
+    });
+    h.expect(archived.res.status).toBe(200);
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('POST', `/api/suppliers/${theirs.id}/restore`, {
+      token: a.accessToken,
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('SUPPLIER_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    const after = await h.call('GET', `/api/suppliers/${theirs.id}`, { token: theirs.token });
+    h.expect((after.res.body as { archived_at: string | null }).archived_at).not.toBeNull();
+  },
+});

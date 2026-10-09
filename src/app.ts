@@ -17,6 +17,7 @@ import categoriesRoutes from './routes/categories.js';
 import productsRoutes from './routes/products.js';
 import stockRoutes from './routes/stock.js';
 import unitsRoutes from './routes/units.js';
+import suppliersRoutes from './routes/suppliers.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { noClientOrg } from './middleware/noClientOrg.js';
 import { requestId } from './middleware/requestId.js';
@@ -62,6 +63,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/products', productsRoutes);
   mountRouter(app, '/api/stock', stockRoutes);
   mountRouter(app, '/api/units', unitsRoutes);
+  mountRouter(app, '/api/suppliers', suppliersRoutes);
   mountRouter(app, '/api/me', meRoutes);
   mountRouter(app, '/api/employees', employeesRoutes);
   mountRouter(app, '/api/files', filesRoutes);
