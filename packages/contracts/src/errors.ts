@@ -160,6 +160,14 @@ export const errorCodeHttpStatus = {
   // U06 purchase approval by amount
   APPROVAL_OWNER_ONLY: 403,
   APPROVAL_NOTE_REQUIRED: 400,
+  // K01 vaults
+  CASH_ACCOUNT_NOT_FOUND: 404,
+  CASH_TRANSFER_NOT_FOUND: 404,
+  CASH_ACCOUNT_NAME_TAKEN: 409,
+  CASH_ACCOUNT_HAS_BALANCE: 409,
+  CASH_ACCOUNT_IS_DEFAULT: 409,
+  CASH_ACCOUNT_HAS_MOVEMENTS: 409,
+  TRANSFER_SAME_ACCOUNT: 400,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

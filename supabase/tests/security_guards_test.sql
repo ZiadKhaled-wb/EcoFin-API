@@ -75,7 +75,12 @@ INSERT INTO t.no_permission_ok VALUES
   ('supplier_statement', 'U01: read-only supplier statement; checks app.has_permission on any purchasing read key (D53) so an expired shop can still read'),
   ('list_purchase_invoices', 'U02: read-only purchase invoices of the caller''s branches; any purchasing read key (D53), works in an expired shop'),
   ('get_purchase_invoice', 'U02: read-only purchase invoice of the caller''s branches; any purchasing read key (D53)'),
-  ('list_purchase_approvals', 'U06: read-only purchase approvals of the caller''s branches; checks app.has_permission(purchase.invoice_approve) so an expired shop can still read');
+  ('list_purchase_approvals', 'U06: read-only purchase approvals of the caller''s branches; checks app.has_permission(purchase.invoice_approve) so an expired shop can still read'),
+  ('list_cash_accounts', 'K01: read-only safes and banks the caller may see; checks app.has_permission(cash.view) so an expired shop can still read'),
+  ('get_cash_account', 'K01: read-only safe or bank; checks app.has_permission(cash.view) so an expired shop can still read'),
+  ('list_cash_account_movements', 'K01: read-only ledger of a safe or bank with running balance; checks app.has_permission(cash.view)'),
+  ('list_cash_transfers', 'K01: read-only cash transfers with a visible side; checks app.has_permission(cash.view) so an expired shop can still read'),
+  ('get_cash_transfer', 'K01: read-only cash transfer with a visible side; checks app.has_permission(cash.view)');
 
 -- ---------------------------------------------------------------- catalog helpers (plpgsql, so a
 -- privilege function never runs on rows of another kind or schema before the filter)

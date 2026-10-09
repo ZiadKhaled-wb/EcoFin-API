@@ -1783,3 +1783,248 @@ crossShopCase({
     h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
   },
 });
+
+// K01 vaults (D56). Shop B's accounts and transfers are made by B's owner inside each case.
+const cashKey = () => `xs-k01-${Date.now()}-${Math.random()}`;
+async function cashAccountOf(h: CrossShopHarness, owner: string, opening?: string) {
+  const o = await h.login(owner);
+  const made = await h.call('POST', '/api/cash-accounts', {
+    token: o.accessToken,
+    body: { name: `XS bank ${Date.now()}-${Math.random()}`, kind: 'bank', branch_id: null },
+  });
+  h.expect(made.res.status).toBe(201);
+  const id = (made.res.body as { id: string }).id;
+  if (opening) {
+    const funded = await h.call('POST', `/api/cash-accounts/${id}/opening`, {
+      token: o.accessToken,
+      idempotencyKey: cashKey(),
+      body: { amount: opening, note: 'Cross-shop case' },
+    });
+    h.expect(funded.res.status).toBe(200);
+  }
+  return id;
+}
+async function shopBCashTransfer(h: CrossShopHarness) {
+  const b = await h.login(OWNER_B);
+  const from = await cashAccountOf(h, OWNER_B, '50.00');
+  const to = await cashAccountOf(h, OWNER_B);
+  const made = await h.call('POST', '/api/cash-transfers', {
+    token: b.accessToken,
+    idempotencyKey: cashKey(),
+    body: { from_account_id: from, to_account_id: to, amount: '5.00' },
+  });
+  h.expect(made.res.status).toBe(201);
+  return (made.res.body as { id: string }).id;
+}
+crossShopCase({
+  method: 'GET',
+  path: '/api/cash-accounts',
+  name: "cash accounts refuse a foreign header, an org key and B's branch, and never list B's",
+  async run(h) {
+    const b = await cashAccountOf(h, OWNER_B);
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/cash-accounts', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/cash-accounts', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const branch = await h.call('GET', '/api/cash-accounts', {
+      token: a.accessToken,
+      query: 'branch_id=' + SHOP_B_BR1,
+    });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    const own = await h.call('GET', '/api/cash-accounts', {
+      token: a.accessToken,
+      query: 'status=all',
+    });
+    h.expect(own.res.status).toBe(200);
+    h.expect((own.res.body as { id: string }[]).some((x) => x.id === b)).toBe(false);
+  },
+});
+for (const [method, suffix] of [
+  ['GET', ''],
+  ['GET', '/movements'],
+  ['POST', '/deactivate'],
+  ['POST', '/reactivate'],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/cash-accounts/:id${suffix}`,
+    name: `${method} cash-accounts/:id${suffix} on shop B's account is not found, no B audit row`,
+    async run(h) {
+      const b = await cashAccountOf(h, OWNER_B);
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call(method, `/api/cash-accounts/${b}${suffix}`, {
+        token: a.accessToken,
+        orgId: SHOP_B,
+      });
+      h.expect(foreign.res.status).toBe(403);
+      const res = await h.call(method, `/api/cash-accounts/${b}${suffix}`, {
+        token: a.accessToken,
+      });
+      h.expect(res.res.status).toBe(404);
+      h.expect(h.code(res.res)).toBe('CASH_ACCOUNT_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, res.ip)).toBe(0);
+    },
+  });
+}
+crossShopCase({
+  method: 'POST',
+  path: '/api/cash-accounts',
+  name: "creating a cash account refuses a foreign header, an org id and B's branch",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = { name: `XS safe ${Date.now()}`, kind: 'safe', branch_id: SHOP_B_BR1 };
+    const foreign = await h.call('POST', '/api/cash-accounts', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/cash-accounts', {
+      token: a.accessToken,
+      body: { ...body, branch_id: SHOP_A_BR1, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const branch = await h.call('POST', '/api/cash-accounts', { token: a.accessToken, body });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, branch.ip)).toBe(0);
+  },
+});
+crossShopCase({
+  method: 'PATCH',
+  path: '/api/cash-accounts/:id',
+  name: "renaming shop B's cash account is not found; an org id is refused",
+  async run(h) {
+    const b = await cashAccountOf(h, OWNER_B);
+    const a = await h.login(OWNER_A);
+    const injected = await h.call('PATCH', `/api/cash-accounts/${b}`, {
+      token: a.accessToken,
+      body: { name: 'XS', organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const res = await h.call('PATCH', `/api/cash-accounts/${b}`, {
+      token: a.accessToken,
+      body: { name: 'XS renamed' },
+    });
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('CASH_ACCOUNT_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, res.ip)).toBe(0);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/cash-accounts/:id/opening',
+  name: "an opening balance on shop B's account is not found and posts nothing",
+  async run(h) {
+    const b = await cashAccountOf(h, OWNER_B);
+    const a = await h.login(OWNER_A);
+    const res = await h.call('POST', `/api/cash-accounts/${b}/opening`, {
+      token: a.accessToken,
+      idempotencyKey: cashKey(),
+      body: { amount: '10.00', note: 'Cross-shop case' },
+    });
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('CASH_ACCOUNT_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, res.ip)).toBe(0);
+    const own = await h.call('GET', `/api/cash-accounts/${b}`, {
+      token: (await h.login(OWNER_B)).accessToken,
+    });
+    h.expect((own.res.body as { balance: string }).balance).toBe('0.00');
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/cash-transfers',
+  name: "cash transfers refuse a foreign header, an org key and B's account, and never list B's",
+  async run(h) {
+    const t = await shopBCashTransfer(h);
+    const b = await cashAccountOf(h, OWNER_B);
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/cash-transfers', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/cash-transfers', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const account = await h.call('GET', '/api/cash-transfers', {
+      token: a.accessToken,
+      query: 'account_id=' + b,
+    });
+    h.expect(account.res.status).toBe(404);
+    h.expect(h.code(account.res)).toBe('CASH_ACCOUNT_NOT_FOUND');
+    const own = await h.call('GET', '/api/cash-transfers', {
+      token: a.accessToken,
+      query: 'pageSize=100',
+    });
+    h.expect(own.res.status).toBe(200);
+    h.expect((own.res.body as { items: { id: string }[] }).items.some((x) => x.id === t)).toBe(
+      false,
+    );
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/cash-transfers/:id',
+  name: "shop B's cash transfer is not found",
+  async run(h) {
+    const t = await shopBCashTransfer(h);
+    const a = await h.login(OWNER_A);
+    const res = await h.call('GET', `/api/cash-transfers/${t}`, { token: a.accessToken });
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('CASH_TRANSFER_NOT_FOUND');
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/cash-transfers',
+  name: "a transfer with shop B's account on either side is not found and moves no money",
+  async run(h) {
+    const b = await cashAccountOf(h, OWNER_B, '20.00');
+    const mine = await cashAccountOf(h, OWNER_A, '20.00');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('POST', '/api/cash-transfers', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      idempotencyKey: cashKey(),
+      body: { from_account_id: mine, to_account_id: b, amount: '1.00' },
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/cash-transfers', {
+      token: a.accessToken,
+      idempotencyKey: cashKey(),
+      body: { from_account_id: mine, to_account_id: b, amount: '1.00', organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    for (const body of [
+      { from_account_id: mine, to_account_id: b, amount: '1.00' },
+      { from_account_id: b, to_account_id: mine, amount: '1.00' },
+    ]) {
+      const res = await h.call('POST', '/api/cash-transfers', {
+        token: a.accessToken,
+        idempotencyKey: cashKey(),
+        body,
+      });
+      h.expect(res.res.status).toBe(404);
+      h.expect(h.code(res.res)).toBe('CASH_ACCOUNT_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, res.ip)).toBe(0);
+    }
+    const bAfter = await h.call('GET', `/api/cash-accounts/${b}`, {
+      token: (await h.login(OWNER_B)).accessToken,
+    });
+    h.expect((bAfter.res.body as { balance: string }).balance).toBe('20.00');
+    const mineAfter = await h.call('GET', `/api/cash-accounts/${mine}`, { token: a.accessToken });
+    h.expect((mineAfter.res.body as { balance: string }).balance).toBe('20.00');
+  },
+});

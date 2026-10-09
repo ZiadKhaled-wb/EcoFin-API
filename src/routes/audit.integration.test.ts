@@ -137,6 +137,19 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     return (res.body as { id: string }).id;
   }
+  /** K01: a new shop-wide bank (balance 0, not a branch default). */
+  async function newCashAccount(token: string) {
+    const { res } = await send('post', '/api/cash-accounts', {
+      token,
+      body: {
+        name: `F07 bank ${STAMP}-${ipCounter}-${Math.random()}`,
+        kind: 'bank',
+        branch_id: null,
+      },
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return (res.body as { id: string }).id;
+  }
   /** A draft purchase invoice in BR1 (a new supplier and product each time). */
   async function newPurchaseInvoice(token: string) {
     const supplier = await newSupplier(token);
@@ -412,6 +425,87 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       return {
         sent: await send('post', `/api/suppliers/${id}/restore`, { token: owner.accessToken }),
         org: SHOP_ONE,
+      };
+    },
+    'POST /api/cash-accounts': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', '/api/cash-accounts', {
+          token: owner.accessToken,
+          body: { name: `F07 safe ${STAMP}-${ipCounter}`, kind: 'safe', branch_id: BR1 },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'PATCH /api/cash-accounts/:id': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newCashAccount(owner.accessToken);
+      return {
+        sent: await send('patch', `/api/cash-accounts/${id}`, {
+          token: owner.accessToken,
+          body: { name: `F07 renamed ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/cash-accounts/:id/deactivate': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newCashAccount(owner.accessToken);
+      return {
+        sent: await send('post', `/api/cash-accounts/${id}/deactivate`, {
+          token: owner.accessToken,
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/cash-accounts/:id/reactivate': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newCashAccount(owner.accessToken);
+      expect(
+        (await send('post', `/api/cash-accounts/${id}/deactivate`, { token: owner.accessToken }))
+          .res.status,
+      ).toBe(200);
+      return {
+        sent: await send('post', `/api/cash-accounts/${id}/reactivate`, {
+          token: owner.accessToken,
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/cash-accounts/:id/opening': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newCashAccount(owner.accessToken);
+      return {
+        sent: await send('post', `/api/cash-accounts/${id}/opening`, {
+          token: owner.accessToken,
+          key: `f07-open-${STAMP}-${ipCounter}`,
+          body: { amount: '100.00', note: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/cash-transfers': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const from = await newCashAccount(owner.accessToken);
+      const to = await newCashAccount(owner.accessToken);
+      expect(
+        (
+          await send('post', `/api/cash-accounts/${from}/opening`, {
+            token: owner.accessToken,
+            key: `f07-fund-${STAMP}-${ipCounter}`,
+            body: { amount: '100.00', note: 'F07 audit driver' },
+          })
+        ).res.status,
+      ).toBe(200);
+      return {
+        sent: await send('post', '/api/cash-transfers', {
+          token: owner.accessToken,
+          key: `f07-cx-${STAMP}-${ipCounter}`,
+          body: { from_account_id: from, to_account_id: to, amount: '10.00' },
+        }),
+        org: SHOP_ONE,
+        status: 201,
       };
     },
     'POST /api/stock/adjustments': async () => {
