@@ -137,6 +137,23 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     return (res.body as { id: string }).id;
   }
+  /** A draft purchase invoice in BR1 (a new supplier and product each time). */
+  async function newPurchaseInvoice(token: string) {
+    const supplier = await newSupplier(token);
+    const product = await newProduct(token);
+    const created = await send('post', '/api/purchase-invoices', {
+      token,
+      key: `f07-pi-${STAMP}-${ipCounter}-${Math.random()}`,
+      body: {
+        supplier_id: supplier,
+        branch_id: BR1,
+        invoice_date: new Date().toISOString().slice(0, 10),
+        lines: [{ product_id: product, quantity: 2, unit_cost: '10.00' }],
+      },
+    });
+    expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+    return { sent: created, id: (created.res.body as { id: string }).id };
+  }
   async function newProduct(token: string) {
     const { res } = await send('post', '/api/products', { token, body: productBody() });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
@@ -315,6 +332,43 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       ).toBe(200);
       return {
         sent: await send('post', `/api/products/${id}/restore`, { token: owner.accessToken }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/purchase-invoices': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const { sent } = await newPurchaseInvoice(owner.accessToken);
+      return { sent, org: SHOP_ONE, status: 201 };
+    },
+    'PUT /api/purchase-invoices/:id': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const { id } = await newPurchaseInvoice(owner.accessToken);
+      return {
+        sent: await send('put', `/api/purchase-invoices/${id}`, {
+          token: owner.accessToken,
+          body: { supplier_invoice_no: `F07-${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/purchase-invoices/:id/approve': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const { id } = await newPurchaseInvoice(owner.accessToken);
+      return {
+        sent: await send('post', `/api/purchase-invoices/${id}/approve`, {
+          token: owner.accessToken,
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/purchase-invoices/:id/reject': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const { id } = await newPurchaseInvoice(owner.accessToken);
+      return {
+        sent: await send('post', `/api/purchase-invoices/${id}/reject`, {
+          token: owner.accessToken,
+          body: { reason: 'F07 audit driver' },
+        }),
         org: SHOP_ONE,
       };
     },

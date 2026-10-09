@@ -8067,6 +8067,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      approve_purchase_invoice: { Args: { p_id: string }; Returns: Json };
       auth_clear_must_change_password: { Args: { p_auth_user_id: string }; Returns: number };
       auth_record_login: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
@@ -8108,6 +8109,17 @@ export type Database = {
         Returns: Json;
       };
       create_product: { Args: { p: Json }; Returns: string };
+      create_purchase_invoice: {
+        Args: {
+          p_branch_id: string;
+          p_idempotency_key: string;
+          p_invoice_date: string;
+          p_lines: Json;
+          p_supplier_id: string;
+          p_supplier_invoice_no: string;
+        };
+        Returns: Json;
+      };
       create_stock_count: {
         Args: { p_branch_id: string; p_category_id: string | null; p_idempotency_key: string };
         Returns: Json;
@@ -8146,6 +8158,7 @@ export type Database = {
       };
       find_unit: { Args: { p_serial: string }; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
+      get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
       get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       get_shop_settings: { Args: Record<PropertyKey, never>; Returns: Json };
       get_stock_adjustment: { Args: { p_id: string }; Returns: Json };
@@ -8246,6 +8259,19 @@ export type Database = {
           p_offset?: number;
           p_search?: string;
           p_status?: string;
+        };
+        Returns: Json;
+      };
+      list_purchase_invoices: {
+        Args: {
+          p_branch_id?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_search?: string;
+          p_status?: string;
+          p_supplier_id?: string;
+          p_to?: string;
         };
         Returns: Json;
       };
@@ -8353,6 +8379,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      reject_purchase_invoice: { Args: { p_id: string; p_reason: string }; Returns: Json };
       require_module: { Args: { p_module: string }; Returns: undefined };
       resend_employee_invite: {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
@@ -8461,6 +8488,7 @@ export type Database = {
       update_org_settings: { Args: { p_changes: Json }; Returns: undefined };
       update_org_settings_p03: { Args: { p_changes: Json }; Returns: undefined };
       update_product: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
+      update_purchase_invoice: { Args: { p_changes: Json; p_id: string }; Returns: Json };
       update_stock_transfer: {
         Args: { p_id: string; p_lines: Json; p_notes: string | null };
         Returns: Json;
