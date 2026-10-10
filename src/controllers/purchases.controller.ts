@@ -9,6 +9,11 @@ import {
   PurchaseInvoiceListQuery,
   PurchaseInvoiceRejectBody,
   PurchaseInvoiceUpdateBody,
+  PurchaseOrderCancelBody,
+  PurchaseOrderCreateBody,
+  PurchaseOrderInvoiceBody,
+  PurchaseOrderListQuery,
+  PurchaseOrderUpdateBody,
   PurchaseReturnCreateBody,
   PurchaseReturnListQuery,
 } from '@ziadkhaled-wb/contracts';
@@ -80,4 +85,47 @@ export async function postReturn(req: Request, res: Response) {
 export async function cashAccounts(req: Request, res: Response) {
   const { branch_id } = PayableCashAccountQuery.parse(req.query);
   res.json(await service.listPayableCashAccounts(getCtx(req), branch_id));
+}
+export async function listOrders(req: Request, res: Response) {
+  res.json(await service.listPurchaseOrders(getCtx(req), PurchaseOrderListQuery.parse(req.query)));
+}
+export async function getOrder(req: Request, res: Response) {
+  res.json(await service.getPurchaseOrder(getCtx(req), id(req)));
+}
+export async function createOrder(req: Request, res: Response) {
+  const key = keyOf(req);
+  res
+    .status(201)
+    .json(
+      await service.createPurchaseOrder(getCtx(req), PurchaseOrderCreateBody.parse(req.body), key),
+    );
+}
+export async function updateOrder(req: Request, res: Response) {
+  res.json(
+    await service.updatePurchaseOrder(
+      getCtx(req),
+      id(req),
+      PurchaseOrderUpdateBody.parse(req.body),
+    ),
+  );
+}
+export async function sendOrder(req: Request, res: Response) {
+  res.json(await service.sendPurchaseOrder(getCtx(req), id(req)));
+}
+export async function cancelOrder(req: Request, res: Response) {
+  const { reason } = PurchaseOrderCancelBody.parse(req.body);
+  res.json(await service.cancelPurchaseOrder(getCtx(req), id(req), reason));
+}
+export async function invoiceOrder(req: Request, res: Response) {
+  const key = keyOf(req);
+  res
+    .status(201)
+    .json(
+      await service.createInvoiceFromPurchaseOrder(
+        getCtx(req),
+        id(req),
+        PurchaseOrderInvoiceBody.parse(req.body ?? {}),
+        key,
+      ),
+    );
 }

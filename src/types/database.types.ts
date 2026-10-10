@@ -8073,6 +8073,7 @@ export type Database = {
       auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_password_change: { Args: Record<PropertyKey, never>; Returns: undefined };
       branch_deactivation_check: { Args: { p_branch_id: string }; Returns: Json };
+      cancel_purchase_order: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_stock_count: { Args: { p_count_id: string }; Returns: Json };
       cancel_stock_transfer: { Args: { p_id: string }; Returns: Json };
       consume_password_reset: { Args: { p_token_hash: string }; Returns: string };
@@ -8118,6 +8119,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      create_invoice_from_po: {
+        Args: { p_idempotency_key: string; p_lines?: Json; p_po_id: string };
+        Returns: Json;
+      };
       create_password_reset: {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
         Returns: Json;
@@ -8129,8 +8134,20 @@ export type Database = {
           p_idempotency_key: string;
           p_invoice_date: string;
           p_lines: Json;
+          p_po_id?: string;
           p_supplier_id: string;
           p_supplier_invoice_no: string;
+        };
+        Returns: Json;
+      };
+      create_purchase_order: {
+        Args: {
+          p_branch_id: string;
+          p_expected_date?: string;
+          p_idempotency_key: string;
+          p_lines: Json;
+          p_notes?: string;
+          p_supplier_id: string;
         };
         Returns: Json;
       };
@@ -8175,6 +8192,7 @@ export type Database = {
       get_cash_transfer: { Args: { p_id: string }; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
+      get_purchase_order: { Args: { p_id: string }; Returns: Json };
       get_purchase_return: { Args: { p_id: string }; Returns: Json };
       get_returnable_invoice: { Args: { p_invoice_id: string }; Returns: Json };
       get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -8315,6 +8333,17 @@ export type Database = {
           p_status?: string;
           p_supplier_id?: string;
           p_to?: string;
+        };
+        Returns: Json;
+      };
+      list_purchase_orders: {
+        Args: {
+          p_branch_id?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_search?: string;
+          p_status?: string;
+          p_supplier_id?: string;
         };
         Returns: Json;
       };
@@ -8496,6 +8525,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      send_purchase_order: { Args: { p_id: string }; Returns: Json };
       send_stock_transfer: { Args: { p_id: string }; Returns: Json };
       session_context: {
         Args: Record<PropertyKey, never>;
@@ -8589,6 +8619,7 @@ export type Database = {
       update_org_settings_p03: { Args: { p_changes: Json }; Returns: undefined };
       update_product: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
       update_purchase_invoice: { Args: { p_changes: Json; p_id: string }; Returns: Json };
+      update_purchase_order: { Args: { p_changes: Json; p_id: string }; Returns: Json };
       update_stock_transfer: {
         Args: { p_id: string; p_lines: Json; p_notes: string | null };
         Returns: Json;

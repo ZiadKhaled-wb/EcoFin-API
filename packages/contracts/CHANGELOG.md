@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.27.0
+
+- U05 purchase orders: PurchaseOrderStatus, PurchaseOrderLineInput (expected_unit_cost, sales_order_line_id), PurchaseOrderCreateBody, PurchaseOrderUpdateBody, PurchaseOrderCancelBody, PurchaseOrderInvoiceBody (receive lines; none = everything still to come), PurchaseOrderIdParams, PurchaseOrderLine, PurchaseOrder (lines, invoices), PurchaseOrderSummary, PurchaseOrderList, PurchaseOrderListQuery, PoOverReceiptDetail. U02 schemas: PurchaseInvoiceCreateBody gains po_id, PurchaseInvoiceLineInput gains po_line_id, PurchaseInvoice and its summary gain po_id and po_number, lines gain po_line_id (all null without an order). Error codes PURCHASE_ORDER_NOT_FOUND (404), PURCHASE_ORDER_NOT_EDITABLE, PO_NOT_SENT, PO_CLOSED, PO_OVER_RECEIPT (409, details), PO_LINE_MISMATCH, SALES_ORDER_LINE_INVALID (400).
+
 ## 0.26.0
 
 - U03 supplier payments: SupplierPaymentAllocationInput, SupplierPaymentCreateBody (allocations add up to the amount, each invoice once), SupplierPaymentReverseBody, SupplierPaymentIdParams, SupplierPaymentAllocation, SupplierPayment, SupplierPaymentSummary, SupplierPaymentList, SupplierPaymentListQuery (include_reversals, default true), OpenSupplierInvoice, OpenSupplierInvoiceList, OpenSupplierInvoiceQuery, PaymentExceedsOutstandingDetail. Error codes SUPPLIER_PAYMENT_NOT_FOUND (404), PAYMENT_EXCEEDS_OUTSTANDING (409, details), ALLOCATION_INVALID (400), PAYMENT_ALREADY_REVERSED (409).

@@ -6,6 +6,13 @@ import { mapDbError } from '../utils/errors';
 import {
   listPurchaseApprovals,
   approvePurchaseInvoice,
+  cancelPurchaseOrder,
+  createInvoiceFromPurchaseOrder,
+  createPurchaseOrder,
+  getPurchaseOrder,
+  listPurchaseOrders,
+  sendPurchaseOrder,
+  updatePurchaseOrder,
   createPurchaseInvoice,
   getPurchaseInvoice,
   getReturnableInvoice,
@@ -450,5 +457,167 @@ describe('U04 purchase return service', () => {
     const accounts = await listPayableCashAccounts(ctx, BRANCH);
     expect(accounts.items).toHaveLength(1);
     expect(db.rpc).toHaveBeenLastCalledWith('list_payable_cash_accounts', { p_branch_id: BRANCH });
+  });
+});
+
+describe('U05 purchase order service', () => {
+  const PO = 'a0590000-0000-4000-8000-000000000001';
+  const PO_LINE = 'a0590000-0000-4000-8000-000000000002';
+  const SALES_LINE = 'a0590000-0000-4000-8000-000000000003';
+  const orderHeader = {
+    id: PO,
+    number: 'BR1-PO-26-000001',
+    supplier_id: SUPPLIER,
+    supplier_name: 'Nile Traders',
+    branch_id: BRANCH,
+    status: 'draft',
+    expected_date: null,
+    notes: null,
+    created_by_name: 'Owner',
+    created_at: ts,
+    updated_at: ts,
+  };
+  const order = { ...orderHeader, lines: [], invoices: [] };
+
+  it('creates with the key; optional line and header keys left out', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: order, error: null });
+    await createPurchaseOrder(
+      ctx,
+      {
+        supplier_id: SUPPLIER,
+        branch_id: BRANCH,
+        notes: null,
+        lines: [
+          { product_id: TV, quantity: 10 },
+          {
+            product_id: PHONE,
+            quantity: 1,
+            expected_unit_cost: '900.00',
+            sales_order_line_id: SALES_LINE,
+          },
+        ],
+      },
+      KEY,
+    );
+    expect(db.rpc).toHaveBeenCalledWith('create_purchase_order', {
+      p_supplier_id: SUPPLIER,
+      p_branch_id: BRANCH,
+      p_lines: [
+        { product_id: TV, quantity: 10 },
+        {
+          product_id: PHONE,
+          quantity: 1,
+          expected_unit_cost: '900.00',
+          sales_order_line_id: SALES_LINE,
+        },
+      ],
+      p_idempotency_key: KEY,
+    });
+  });
+
+  it('updates only the given keys; null clears the date and notes', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: order, error: null });
+    await updatePurchaseOrder(ctx, PO, { expected_date: null, notes: null });
+    expect(db.rpc).toHaveBeenCalledWith('update_purchase_order', {
+      p_id: PO,
+      p_changes: { expected_date: null, notes: null },
+    });
+  });
+
+  it('sends, cancels with the reason, reads one and lists with filters as limit/offset', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: { ...order, status: 'sent' }, error: null });
+    await sendPurchaseOrder(ctx, PO);
+    expect(db.rpc).toHaveBeenLastCalledWith('send_purchase_order', { p_id: PO });
+    db.queue({ data: { ...order, status: 'cancelled' }, error: null });
+    await cancelPurchaseOrder(ctx, PO, 'Ordered twice');
+    expect(db.rpc).toHaveBeenLastCalledWith('cancel_purchase_order', {
+      p_id: PO,
+      p_reason: 'Ordered twice',
+    });
+    db.queue({ data: order, error: null });
+    await getPurchaseOrder(ctx, PO);
+    expect(db.rpc).toHaveBeenLastCalledWith('get_purchase_order', { p_id: PO });
+    db.queue({
+      data: { items: [{ ...orderHeader, lines_count: 2, ordered: 15, received: 6 }], total: 41 },
+      error: null,
+    });
+    const list = await listPurchaseOrders(ctx, {
+      status: 'sent',
+      search: 'PO-26',
+      page: 3,
+      pageSize: 20,
+    });
+    expect(list).toMatchObject({ page: 3, pageSize: 20, total: 41 });
+    expect(db.rpc).toHaveBeenLastCalledWith('list_purchase_orders', {
+      p_status: 'sent',
+      p_search: 'PO-26',
+      p_limit: 20,
+      p_offset: 40,
+    });
+  });
+
+  it('receives: no lines -> everything still to come; PO_OVER_RECEIPT keeps its details', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: invoice({ po_id: PO, po_number: 'BR1-PO-26-000001' }), error: null });
+    const made = await createInvoiceFromPurchaseOrder(ctx, PO, {}, KEY);
+    expect(made.po_id).toBe(PO);
+    expect(db.rpc).toHaveBeenLastCalledWith('create_invoice_from_po', {
+      p_po_id: PO,
+      p_idempotency_key: KEY,
+    });
+    db.queue({
+      data: null,
+      error: {
+        code: 'P0001',
+        message: `PO_OVER_RECEIPT: ${PO_LINE} can take 4 more`,
+        details: JSON.stringify({ po_line_id: PO_LINE, remaining: 4 }),
+      },
+    });
+    await expect(
+      createInvoiceFromPurchaseOrder(
+        ctx,
+        PO,
+        { lines: [{ po_line_id: PO_LINE, quantity: 5, unit_cost: '100.00' }] },
+        KEY,
+      ),
+    ).rejects.toMatchObject({
+      code: 'PO_OVER_RECEIPT',
+      details: { po_line_id: PO_LINE, remaining: 4 },
+    });
+    expect(db.rpc).toHaveBeenLastCalledWith('create_invoice_from_po', {
+      p_po_id: PO,
+      p_idempotency_key: KEY,
+      p_lines: [{ po_line_id: PO_LINE, quantity: 5, unit_cost: '100.00' }],
+    });
+  });
+
+  it('U02 create passes the order and the order lines; an invoice without one reads null', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: invoice(), error: null });
+    const plain = await createPurchaseInvoice(
+      ctx,
+      {
+        supplier_id: SUPPLIER,
+        branch_id: BRANCH,
+        invoice_date: '2026-10-10',
+        po_id: PO,
+        lines: [{ product_id: TV, quantity: 2, unit_cost: '130.00', po_line_id: PO_LINE }],
+      },
+      KEY,
+    );
+    expect(plain).toMatchObject({ po_id: null, po_number: null });
+    expect(plain.lines[0]!.po_line_id).toBeNull();
+    expect(db.rpc).toHaveBeenLastCalledWith('create_purchase_invoice', {
+      p_supplier_id: SUPPLIER,
+      p_branch_id: BRANCH,
+      p_supplier_invoice_no: '',
+      p_invoice_date: '2026-10-10',
+      p_lines: [{ product_id: TV, quantity: 2, unit_cost: '130.00', po_line_id: PO_LINE }],
+      p_idempotency_key: KEY,
+      p_po_id: PO,
+    });
   });
 });

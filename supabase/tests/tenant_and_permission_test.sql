@@ -455,6 +455,16 @@ INSERT INTO t.denial VALUES
  ('list_purchase_returns','purchase_return_3_list','supplier.manage',$$SELECT public.list_purchase_returns()$$),
  ('get_returnable_invoice','purchase_return_4_returnable','purchase.return_create',$$SELECT public.get_returnable_invoice((SELECT id FROM public.purchase_invoices WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-pi-1'))$$),
  ('list_payable_cash_accounts','purchase_return_5_accounts','supplier.payment_create',$$SELECT public.list_payable_cash_accounts('d2000000-0000-0000-0000-000000000011')$$);
+-- U05: an order for the denial supplier is created, edited, sent, received as a draft invoice and
+-- cancelled (case names order the calls).
+INSERT INTO t.denial VALUES
+ ('create_purchase_order','purchase_order_1_create','purchase.order_manage',$$SELECT public.create_purchase_order((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial PI supplier'),'d2000000-0000-0000-0000-000000000011',jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND NOT is_serialized AND archived_at IS NULL ORDER BY id LIMIT 1),'quantity',2,'expected_unit_cost','10.00')),'denial-po-1')$$),
+ ('update_purchase_order','purchase_order_2_update','purchase.order_manage',$$SELECT public.update_purchase_order((SELECT id FROM public.purchase_orders WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-po-1'),'{"notes":"Denial note"}')$$),
+ ('send_purchase_order','purchase_order_3_send','purchase.order_manage',$$SELECT public.send_purchase_order((SELECT id FROM public.purchase_orders WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-po-1'))$$),
+ ('create_invoice_from_po','purchase_order_4_invoice','purchase.invoice_create',$$SELECT public.create_invoice_from_po((SELECT id FROM public.purchase_orders WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-po-1'),'denial-po-invoice')$$),
+ ('get_purchase_order','purchase_order_5_get','supplier.manage',$$SELECT public.get_purchase_order((SELECT id FROM public.purchase_orders WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-po-1'))$$),
+ ('list_purchase_orders','purchase_order_6_list','supplier.manage',$$SELECT public.list_purchase_orders()$$),
+ ('cancel_purchase_order','purchase_order_7_cancel','purchase.order_manage',$$SELECT public.cancel_purchase_order((SELECT id FROM public.purchase_orders WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-po-1'),'Denial cancel')$$);
 -- U03: after the K01 cases funded the denial bank and the U02 cases approved denial-pi-1, and
 -- before U04's return uses up what is owed (case names order the calls): 1.00 is paid from the
 -- bank, read, and reversed by the owner.

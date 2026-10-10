@@ -292,5 +292,8 @@ See [K01 plan](plans/K01.md). Covers the Done when (a transfer changes both bala
 ## U03 — supplier payments (EC-55)
 See [U03 plan](plans/U03.md). Covers the Done when (a double-click pays once; invoice and supplier balances update) and the D58 rules (fully allocated, oldest first, never above the outstanding, safe not below 0, owner-only reversal).
 
+## U05 — purchase orders (EC-57)
+See [U05 plan](plans/U05.md). Covers the Done when (receiving part of an order leaves the rest open; a special customer order shows its purchase order status) and the D59 rules (received means approved, no over-receipt, statuses, cancel with a reason, U02/U06 unchanged).
+
 ## U04 — purchase returns (EC-56)
 See [U04 plan](plans/U04.md). Covers the Done when (stock and supplier balance each change exactly once; you can't return more than you bought) and the D57 rules (approved invoices only, the invoice's branch, exact serial units, D41 tax, recomputed average, credit or cash refund).

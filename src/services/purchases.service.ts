@@ -3,6 +3,8 @@ import {
   PurchaseApprovalList,
   PurchaseInvoice,
   PurchaseInvoiceList,
+  PurchaseOrder,
+  PurchaseOrderList,
   PurchaseReturn,
   PurchaseReturnList,
   ReturnableInvoice,
@@ -10,6 +12,10 @@ import {
   type PurchaseInvoiceCreateBody,
   type PurchaseInvoiceListQuery,
   type PurchaseInvoiceUpdateBody,
+  type PurchaseOrderCreateBody,
+  type PurchaseOrderInvoiceBody,
+  type PurchaseOrderListQuery,
+  type PurchaseOrderUpdateBody,
   type PurchaseReturnCreateBody,
   type PurchaseReturnListQuery,
 } from '@ziadkhaled-wb/contracts';
@@ -35,6 +41,7 @@ const sqlLines = (lines: PurchaseInvoiceCreateBody['lines']) =>
     unit_cost: l.unit_cost,
     ...(l.tax_class_id ? { tax_class_id: l.tax_class_id } : {}),
     ...(l.serials ? { serials: l.serials } : {}),
+    ...(l.po_line_id ? { po_line_id: l.po_line_id } : {}),
   }));
 
 /** U02: invoices of the caller's branches (any purchasing read key, D53). */
@@ -80,6 +87,8 @@ export async function createPurchaseInvoice(
     p_invoice_date: body.invoice_date,
     p_lines: sqlLines(body.lines) as Json,
     p_idempotency_key: idempotencyKey,
+    // U05: the purchase order this invoice receives.
+    ...(body.po_id ? { p_po_id: body.po_id } : {}),
   });
   if (error) fail(error);
   return PurchaseInvoice.parse(data);
@@ -223,4 +232,122 @@ export async function listPayableCashAccounts(
   });
   if (error) fail(error);
   return PayableCashAccountList.parse(data);
+}
+
+/** Order lines as the SQL functions take them (optional keys left out). */
+const sqlOrderLines = (lines: PurchaseOrderCreateBody['lines']) =>
+  lines.map((l) => ({
+    product_id: l.product_id,
+    quantity: l.quantity,
+    ...(l.expected_unit_cost ? { expected_unit_cost: l.expected_unit_cost } : {}),
+    ...(l.sales_order_line_id ? { sales_order_line_id: l.sales_order_line_id } : {}),
+  }));
+
+/** U05: orders of the caller's branches (any purchasing read key, D53), newest first. */
+export async function listPurchaseOrders(
+  ctx: RequestContext,
+  query: PurchaseOrderListQuery,
+): Promise<PurchaseOrderList> {
+  const { data, error } = await ctx.db.rpc('list_purchase_orders', {
+    ...(query.supplier_id ? { p_supplier_id: query.supplier_id } : {}),
+    ...(query.branch_id ? { p_branch_id: query.branch_id } : {}),
+    ...(query.status ? { p_status: query.status } : {}),
+    ...(query.search ? { p_search: query.search } : {}),
+    p_limit: query.pageSize,
+    p_offset: (query.page - 1) * query.pageSize,
+  });
+  if (error) fail(error);
+  const result = ListResult.parse(data);
+  return PurchaseOrderList.parse({ ...result, page: query.page, pageSize: query.pageSize });
+}
+
+export async function getPurchaseOrder(ctx: RequestContext, id: string): Promise<PurchaseOrder> {
+  const { data, error } = await ctx.db.rpc('get_purchase_order', { p_id: id });
+  if (error) fail(error);
+  return PurchaseOrder.parse(data);
+}
+
+/** A draft order; the same idempotency key again returns the same order. */
+export async function createPurchaseOrder(
+  ctx: RequestContext,
+  body: PurchaseOrderCreateBody,
+  idempotencyKey: string,
+): Promise<PurchaseOrder> {
+  const { data, error } = await ctx.db.rpc('create_purchase_order', {
+    p_supplier_id: body.supplier_id,
+    p_branch_id: body.branch_id,
+    p_lines: sqlOrderLines(body.lines) as Json,
+    p_idempotency_key: idempotencyKey,
+    ...(body.expected_date ? { p_expected_date: body.expected_date } : {}),
+    ...(body.notes ? { p_notes: body.notes } : {}),
+  });
+  if (error) fail(error);
+  return PurchaseOrder.parse(data);
+}
+
+/** Drafts only: the expected date, the notes and/or all lines. */
+export async function updatePurchaseOrder(
+  ctx: RequestContext,
+  id: string,
+  body: PurchaseOrderUpdateBody,
+): Promise<PurchaseOrder> {
+  const changes = {
+    ...('expected_date' in body ? { expected_date: body.expected_date ?? null } : {}),
+    ...('notes' in body ? { notes: body.notes ?? null } : {}),
+    ...(body.lines ? { lines: sqlOrderLines(body.lines) } : {}),
+  };
+  const { data, error } = await ctx.db.rpc('update_purchase_order', {
+    p_id: id,
+    p_changes: changes as Json,
+  });
+  if (error) fail(error);
+  return PurchaseOrder.parse(data);
+}
+
+/** draft → sent; a repeat changes nothing. */
+export async function sendPurchaseOrder(ctx: RequestContext, id: string): Promise<PurchaseOrder> {
+  const { data, error } = await ctx.db.rpc('send_purchase_order', { p_id: id });
+  if (error) fail(error);
+  return PurchaseOrder.parse(data);
+}
+
+/** Closes what is left of a draft, sent or partly received order. */
+export async function cancelPurchaseOrder(
+  ctx: RequestContext,
+  id: string,
+  reason: string,
+): Promise<PurchaseOrder> {
+  const { data, error } = await ctx.db.rpc('cancel_purchase_order', {
+    p_id: id,
+    p_reason: reason,
+  });
+  if (error) fail(error);
+  return PurchaseOrder.parse(data);
+}
+
+/**
+ * U05 "Receive": a draft purchase invoice from a sent or partly received order (never more than
+ * is still to come). The same idempotency key again returns the same invoice.
+ */
+export async function createInvoiceFromPurchaseOrder(
+  ctx: RequestContext,
+  id: string,
+  body: PurchaseOrderInvoiceBody,
+  idempotencyKey: string,
+): Promise<PurchaseInvoice> {
+  const { data, error } = await ctx.db.rpc('create_invoice_from_po', {
+    p_po_id: id,
+    p_idempotency_key: idempotencyKey,
+    ...(body.lines
+      ? {
+          p_lines: body.lines.map((l) => ({
+            po_line_id: l.po_line_id,
+            quantity: l.quantity,
+            ...(l.unit_cost ? { unit_cost: l.unit_cost } : {}),
+          })) as Json,
+        }
+      : {}),
+  });
+  if (error) fail(error);
+  return PurchaseInvoice.parse(data);
 }

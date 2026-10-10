@@ -13,6 +13,7 @@ import {
   SerialTakenDetail,
   ExportTooLargeDetail,
   PaymentExceedsOutstandingDetail,
+  PoOverReceiptDetail,
   ReturnQtyExceededDetail,
   SerialsRequiredDetail,
   type ErrorCode,
@@ -86,6 +87,7 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   SERIALS_REQUIRED: SerialsRequiredDetail,
   RETURN_QTY_EXCEEDED: ReturnQtyExceededDetail,
   PAYMENT_EXCEEDS_OUTSTANDING: PaymentExceedsOutstandingDetail,
+  PO_OVER_RECEIPT: PoOverReceiptDetail,
 };
 
 /**

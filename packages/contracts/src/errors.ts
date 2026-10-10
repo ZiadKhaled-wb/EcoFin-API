@@ -177,6 +177,14 @@ export const errorCodeHttpStatus = {
   PAYMENT_EXCEEDS_OUTSTANDING: 409,
   ALLOCATION_INVALID: 400,
   PAYMENT_ALREADY_REVERSED: 409,
+  // U05 purchase orders
+  PURCHASE_ORDER_NOT_FOUND: 404,
+  PURCHASE_ORDER_NOT_EDITABLE: 409,
+  PO_NOT_SENT: 409,
+  PO_CLOSED: 409,
+  PO_OVER_RECEIPT: 409,
+  PO_LINE_MISMATCH: 400,
+  SALES_ORDER_LINE_INVALID: 400,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;
