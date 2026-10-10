@@ -146,7 +146,7 @@ describe('GET /api/files/:id/url', () => {
       data: { id: FILE_ID, purpose: 'customer_id', path: `${ORG}/customer_id/2026/10/a.jpg` },
       error: null,
     });
-    permsState.keys = ['customer.edit'];
+    permsState.keys = ['customer.create'];
     const res = await request(app).get(`/api/files/${FILE_ID}/url`);
     expect(res.status).toBe(403);
     expect(codeOf(res.body)).toBe('PERMISSION_DENIED');

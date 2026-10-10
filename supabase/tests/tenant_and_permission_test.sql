@@ -322,7 +322,7 @@ INSERT INTO t.denial VALUES
 INSERT INTO t.denial
 SELECT 'register_file', 'register_file(' || p || ')', k,
        format($f$SELECT public.register_file(gen_random_uuid(), 'd1000000-0000-0000-0000-000000000001/%s/2026/10/' || gen_random_uuid() || '.png', 'd.png', 'image/png', 10, NULL, %L, NULL, NULL)$f$, p, p)
-FROM (VALUES ('logo', 'org.settings_manage'), ('product_image', 'catalog.manage'), ('customer_id', 'customer.edit'),
+FROM (VALUES ('logo', 'org.settings_manage'), ('product_image', 'catalog.manage'), ('customer_id', 'customer.create'),
              ('survey_photo', 'survey.submit'), ('signature', 'installment.create'), ('contract_pdf', 'installment.create'),
              ('promissory_note', 'installment.create'), ('delivery_proof', 'delivery.manage'), ('expense_receipt', 'expense.create'),
              ('legal_document', 'legal.manage'), ('import', 'import.data'), ('export', 'export.data'), ('other', 'org.settings_manage')) v(p, k);

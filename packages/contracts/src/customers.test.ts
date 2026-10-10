@@ -20,6 +20,7 @@ const customer = {
   national_id_masked: '**********0015',
   birth_date: '1990-01-01',
   gender: 'male',
+  governorate_code: '01',
   address: '12 Tahrir St',
   city: 'Cairo',
   job: null,
@@ -106,16 +107,16 @@ describe('CustomerCreateBody', () => {
     expect(body('٢٨٥٠٦١٥٢١٠٠٠٢٣').data?.national_id).toBe('28506152100023');
   });
 
-  it('checks income, birth date, gender and the tax number', () => {
+  it('checks income and the tax number; birth date and gender are not inputs', () => {
     const body = (extra: object) =>
       CustomerCreateBody.safeParse({ full_name: 'Mona', phones: ['01000000001'], ...extra });
     expect(body({ monthly_income: '-5' }).success).toBe(false);
     expect(body({ monthly_income: '100.125' }).success).toBe(false);
     expect(body({ monthly_income: 8500 }).success).toBe(false);
-    expect(body({ birth_date: '1990-02-30' }).success).toBe(false);
-    expect(body({ gender: 'other' }).success).toBe(false);
+    expect(body({ birth_date: '1988-03-04' }).success).toBe(false);
+    expect(body({ gender: 'female' }).success).toBe(false);
     expect(body({ tax_registration_no: '12-34' }).success).toBe(false);
-    expect(body({ birth_date: '1988-03-04', gender: 'female' }).success).toBe(true);
+    expect(body({ national_id: '29001010100015' }).success).toBe(true);
   });
 
   it('a business customer needs a tax number', () => {

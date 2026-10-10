@@ -1,9 +1,16 @@
 import { z } from 'zod';
 import { BusinessDate, IsoTimestamp, Money, PaginationQuery, Uuid, paginated } from './common.js';
-import { isValidNationalId, normalizeNationalId, toAsciiDigits } from './nationalId.js';
+import {
+  EGYPT_GOVERNORATE_CODES,
+  isValidNationalId,
+  normalizeNationalId,
+  toAsciiDigits,
+} from './nationalId.js';
 
 /**
  * R01 customers (D63).
+ *
+ * Birth date, gender and governorate are never inputs: the server reads them from the national ID.
  *
  * PII: `national_id` is the full number only for a caller with `customer.view_pii`; everyone else
  * gets null there and `national_id_masked` (ten stars + the last four digits). ID photos are
@@ -64,9 +71,6 @@ const fields = {
     .refine((v) => v === '' || isValidNationalId(v), { message: 'Not a valid national ID' })
     .nullable()
     .transform(nullIfEmpty),
-  /** Only without a national ID: with one, the server takes both from it. */
-  birth_date: BusinessDate.nullable(),
-  gender: CustomerGender.nullable(),
   address: text(300),
   city: text(100),
   job: text(100),
@@ -92,8 +96,6 @@ export const CustomerCreateBody = z
     full_name: fields.full_name,
     phones: fields.phones,
     national_id: fields.national_id.optional(),
-    birth_date: fields.birth_date.optional(),
-    gender: fields.gender.optional(),
     address: fields.address.optional(),
     city: fields.city.optional(),
     job: fields.job.optional(),
@@ -145,8 +147,11 @@ export const Customer = z.object({
   phones: z.array(z.string()),
   national_id: z.string().nullable(),
   national_id_masked: z.string().nullable(),
+  /** Read from the national ID by the server (never typed): null without one. */
   birth_date: BusinessDate.nullable(),
   gender: CustomerGender.nullable(),
+  /** Governorate of birth (digits 8-9 of the ID), shown to everyone; the number itself stays masked. */
+  governorate_code: z.enum(EGYPT_GOVERNORATE_CODES).nullable(),
   address: z.string().nullable(),
   city: z.string().nullable(),
   job: z.string().nullable(),

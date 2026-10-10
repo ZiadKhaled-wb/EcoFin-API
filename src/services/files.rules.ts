@@ -16,7 +16,7 @@ export type DetectedType = 'jpeg' | 'png' | 'webp' | 'pdf' | 'xlsx' | 'csv';
 export const UPLOAD_PERMISSION: Record<FilePurpose, PermissionKey> = {
   logo: 'org.settings_manage',
   product_image: 'catalog.manage',
-  customer_id: 'customer.edit',
+  customer_id: 'customer.create',
   survey_photo: 'survey.submit',
   signature: 'installment.create',
   contract_pdf: 'installment.create',

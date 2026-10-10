@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.32.0
+
+- R01 follow-up: `Customer` gains `governorate_code` (read from the national ID, shown to everyone). `CustomerCreateBody` and `CustomerUpdateBody` no longer take `birth_date` or `gender`: the server reads both from the national ID.
+
 ## 0.31.0
 
 - R01 customers: CustomerStatus, CustomerGender, CustomerCreateBody, CustomerUpdateBody, CustomerStatusBody (blocking needs a reason), CustomerIdParams, Customer (national_id only with customer.view_pii, national_id_masked for everyone, id_photos_count), CustomerList, CustomerListQuery, CustomerStatusFilter, CustomerNationalIdTakenDetail, normalizeCustomerPhone(), CUSTOMER_MAX_PHONES, CUSTOMER_PHONE_PATTERN, CUSTOMER_TAX_NO_PATTERN. National ID helpers: parseNationalId() (birth date, gender, governorate), isValidNationalId(), normalizeNationalId(), maskNationalId(), toAsciiDigits(), EGYPT_GOVERNORATE_CODES. Error codes CUSTOMER_NOT_FOUND (404), CUSTOMER_NATIONAL_ID_TAKEN (409, details).

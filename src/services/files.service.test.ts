@@ -190,7 +190,7 @@ describe('getFileUrl', () => {
   });
 
   it('refuses a customer_id link without customer.view_pii, with no link made', async () => {
-    perms.keys = ['customer.edit'];
+    perms.keys = ['customer.create'];
     db.queue({
       data: { id: FILE_ID, purpose: 'customer_id', path: `${ORG}/customer_id/2026/10/a.jpg` },
       error: null,
