@@ -1590,6 +1590,150 @@ crossShopCase({
   },
 });
 
+// R01 customers: shop B's customer (with a national ID) is created the real way, then shop A aims at it.
+/** A valid national ID that is new on every call (random birth date and serial). */
+function freshNationalId() {
+  const two = (n: number) => String(n).padStart(2, '0');
+  const pick = (from: number, to: number) => from + Math.floor(Math.random() * (to - from + 1));
+  const serial = String(pick(0, 99999)).padStart(5, '0');
+  return `2${two(pick(50, 99))}${two(pick(1, 12))}${two(pick(1, 28))}01${serial}`;
+}
+
+async function shopBCustomer(h: CrossShopHarness, tag: string) {
+  const b = await h.login(OWNER_B);
+  const national_id = freshNationalId();
+  const created = await h.call('POST', '/api/customers', {
+    token: b.accessToken,
+    body: {
+      full_name: `Cross-shop customer ${tag} ${Date.now()}-${Math.random()}`,
+      phones: ['01000000099'],
+      national_id,
+    },
+  });
+  h.expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+  const customer = created.res.body as { id: string; full_name: string; updated_at: string };
+  return { ...customer, national_id, token: b.accessToken };
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/customers',
+  name: "customers list refuses a foreign header and an org query key, and never shows shop B's, not even by national ID",
+  async run(h) {
+    const theirs = await shopBCustomer(h, 'list');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/customers', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/customers', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    for (const search of [theirs.full_name, theirs.national_id]) {
+      const own = await h.call('GET', '/api/customers', {
+        token: a.accessToken,
+        query: 'search=' + encodeURIComponent(search),
+      });
+      h.expect(own.res.status).toBe(200);
+      h.expect((own.res.body as { total: number }).total).toBe(0);
+    }
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/customers/:id',
+  name: "customer read rejects another shop's id, a foreign header and an org query key",
+  async run(h) {
+    const theirs = await shopBCustomer(h, 'get');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', `/api/customers/${theirs.id}`, { token: a.accessToken });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('CUSTOMER_NOT_FOUND');
+    const header = await h.call('GET', `/api/customers/${theirs.id}`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('GET', `/api/customers/${theirs.id}`, {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/customers',
+  name: "customer create rejects foreign header and tenant body; shop B's national ID is free in shop A",
+  async run(h) {
+    const theirs = await shopBCustomer(h, 'create');
+    const a = await h.login(OWNER_A);
+    const body = { full_name: `Cross-shop new customer ${Date.now()}`, phones: ['01000000098'] };
+    const foreign = await h.call('POST', '/api/customers', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/customers', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_A, injected.ip)).toBe(0);
+    // The ID is unique per shop: the duplicate check must not see (or reveal) shop B's customer.
+    const same = await h.call('POST', '/api/customers', {
+      token: a.accessToken,
+      body: { ...body, national_id: theirs.national_id },
+    });
+    h.expect(same.res.status, JSON.stringify(same.res.body)).toBe(201);
+    h.expect((same.res.body as { id: string }).id).not.toBe(theirs.id);
+  },
+});
+
+for (const [method, suffix] of [
+  ['PATCH', ''],
+  ['POST', '/status'],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/customers/:id${suffix}`,
+    name: `${method} customer${suffix} rejects another shop's id and leaves it unchanged`,
+    async run(h) {
+      const theirs = await shopBCustomer(h, method.toLowerCase());
+      const a = await h.login(OWNER_A);
+      const body =
+        method === 'PATCH' ? { notes: 'Foreign' } : { status: 'blocked', reason: 'Foreign' };
+      const foreign = await h.call(method, `/api/customers/${theirs.id}${suffix}`, {
+        token: a.accessToken,
+        body,
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('CUSTOMER_NOT_FOUND');
+      const header = await h.call(method, `/api/customers/${theirs.id}${suffix}`, {
+        token: a.accessToken,
+        orgId: SHOP_B,
+        body,
+      });
+      h.expect(header.res.status).toBe(403);
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_A, foreign.ip)).toBe(0);
+      const after = await h.call('GET', `/api/customers/${theirs.id}`, { token: theirs.token });
+      h.expect(after.res.body).toMatchObject({
+        notes: null,
+        status: 'active',
+        national_id: theirs.national_id,
+        updated_at: theirs.updated_at,
+      });
+    },
+  });
+}
+
 // U02 purchase invoices: shop B's supplier, product and draft invoice are made the real way.
 async function shopBPurchase(h: CrossShopHarness, tag: string) {
   const supplier = await shopBSupplier(h, 'pi-' + tag);

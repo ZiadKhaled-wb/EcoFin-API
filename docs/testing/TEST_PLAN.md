@@ -315,3 +315,6 @@ See [TEST-3 plan](plans/TEST-3.md): each Sprint 3 test requirement mapped to the
 ## S01 — sale core (EC-68)
 
 See [S01 plan](plans/S01.md). Covers the Done when (the four ledger / reconciliation checks, a double submit creates one sale, the last unit can't be sold twice) and the D62 rules (the open shift, server prices and overrides, PRICE_CHANGED, the tax snapshot in both VAT modes, IMEI units, every refusal leaving nothing behind, who may sell and read).
+## R01 — customers (EC-63)
+
+See [R01 plan](plans/R01.md). Covers the Done when (a user without `customer.view_pii` sees masked IDs; duplicate national IDs are rejected) and the D62 rules (the national ID parser, birth date and gender from the ID, who may change an ID, phones, block with a reason, who may read, search by name, phone and ID, the `customers` module).

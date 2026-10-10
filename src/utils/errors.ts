@@ -19,6 +19,7 @@ import {
   PoOverReceiptDetail,
   ReturnQtyExceededDetail,
   SerialsRequiredDetail,
+  CustomerNationalIdTakenDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 import type { ZodTypeAny } from 'zod';
@@ -94,6 +95,7 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   SHIFT_DIFFERENCE_REASON_REQUIRED: ShiftDifferenceDetail,
   PRICE_CHANGED: PriceChangedDetail,
   OUT_OF_STOCK: OutOfStockDetail,
+  CUSTOMER_NATIONAL_ID_TAKEN: CustomerNationalIdTakenDetail,
 };
 
 /**

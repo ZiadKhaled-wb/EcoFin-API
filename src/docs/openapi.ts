@@ -1260,6 +1260,58 @@ export const openApiSpec = {
                 responses: { 200: { description: 'StockTransfer' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/customers': {
+            get: {
+                tags: ['Customers'],
+                summary: 'List customers (any customer read key)',
+                description: 'R01 (D63). Readable with any of customer.create, customer.edit, customer.view_pii, credit.approve, guarantor.manage, sale.create, quotation.manage, order.manage, installment.create, collection.create, survey.assign, survey.submit, survey.decide, legal.view, report.financial; needs the plan module customers (MODULE_NOT_IN_PLAN); works in an expired shop. PII: national_id is the full number only with customer.view_pii, otherwise null next to national_id_masked (ten stars and the last four digits). search matches the name (contains; letter case and Arabic letter forms ignored), a phone (contains, 3+ digits, however it is written) or the national ID: all 14 digits for everyone, a prefix of 4+ digits only with customer.view_pii. status: all (default) | active | watch | blocked. Ordered by name. Schema: CustomerListQuery → CustomerList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'search', in: 'query', schema: { type: 'string', maxLength: 100 } },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['all', 'active', 'watch', 'blocked'], default: 'all' } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'CustomerList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Customers'],
+                summary: 'Create a customer (customer.create)',
+                description: 'R01 (D63). full_name 2-150 (trimmed, inner spaces joined); phones 1-5, stored normalised (ASCII digits; an Egyptian mobile as 01XXXXXXXXX), no repeats; national_id optional: 14 digits that parse (century digit 2 or 3, a real birth date not in the future, a known governorate code; the check digit is not verified) and unique per shop: CUSTOMER_NATIONAL_ID_TAKEN (409, details customer_id and full_name of the customer who has it). With an ID the birth date and gender come from it (a body that contradicts it is refused); without one birth_date and gender may be sent. Also address, city, job, employer, monthly_income (decimal string), is_business with tax_registration_no, notes. The answer is masked like every read. Audited as customer.created (the ID never reaches the audit log, only its mask). Schema: CustomerCreateBody → Customer.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 201: { description: 'Customer' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}': {
+            get: {
+                tags: ['Customers'],
+                summary: 'Read a customer (any customer read key)',
+                description: 'R01 (D63). national_id only with customer.view_pii; national_id_masked and id_photos_count for everyone (the photos themselves: GET /api/files with entityType customer, which needs customer.view_pii). Another shop answers CUSTOMER_NOT_FOUND. Schema: Customer.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Customer' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            patch: {
+                tags: ['Customers'],
+                summary: 'Update a customer (customer.edit)',
+                description: 'R01 (D63). Any create field, at least one; null clears an optional field. Sending national_id for a customer who already has one also needs customer.view_pii, whatever the value (PERMISSION_DENIED); filling an empty ID needs customer.edit only. Audited as customer.updated with the changed keys only (an ID change shows as its masks plus national_id_changed, severity warning when an existing ID is replaced or removed); no change, no audit row. Schema: CustomerUpdateBody → Customer.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Customer' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}/status': {
+            post: {
+                tags: ['Customers'],
+                summary: 'Block or unblock a customer (customer.edit)',
+                description: 'R01 (D63). status: blocked (reason 3-300 characters required) or active. A blocked customer can not buy on installments. watch is set by the system only and can be cleared to active here. The same status again changes nothing. Audited as customer.status_set with the reason (warning when blocking). Schema: CustomerStatusBody → Customer.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Customer' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/suppliers': {
             get: {
                 tags: ['Purchasing'],

@@ -517,6 +517,14 @@ INSERT INTO t.denial VALUES
  ('quote_sale','unit_6_sale_quote','sale.create',$$SELECT public.quote_sale(jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-PH'),'quantity',1,'unit_id',(SELECT id FROM public.units WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND serial='DENIAL-SN-1'))))$$),
  ('post_sale','unit_7_sale_post','sale.create',$$SELECT public.post_sale(x.l,public.quote_sale(x.l)->>'total','denial-sale-1') FROM (SELECT jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-PH'),'quantity',1,'unit_id',(SELECT id FROM public.units WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND serial='DENIAL-SN-1'))) l) x$$),
  ('get_sale','unit_8_sale_get','sale.create',$$SELECT public.get_sale((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'))$$);
+-- R01: case names order the calls (the owner's create makes the customer the others use). The reads
+-- need any customer read key (D63 rule 6); the role picked for customer.create (WAREHOUSE) has none.
+INSERT INTO t.denial VALUES
+ ('create_customer','customer_1_create','customer.create',$$SELECT public.create_customer('{"full_name":"TEST-1 denial customer","phones":["01000000001"]}')$$),
+ ('update_customer','customer_2_update','customer.edit',$$SELECT public.update_customer((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial customer'),'{"notes":"Denied"}')$$),
+ ('set_customer_status','customer_3_status','customer.edit',$$SELECT public.set_customer_status((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial customer'),'blocked','Denial test')$$),
+ ('list_customers','customer_4_list','customer.create',$$SELECT public.list_customers()$$),
+ ('get_customer','customer_5_get','customer.create',$$SELECT public.get_customer((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial customer'))$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

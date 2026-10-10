@@ -8108,6 +8108,7 @@ export type Database = {
         Returns: Json;
       };
       create_category: { Args: { p_name: string; p_parent_id?: string }; Returns: string };
+      create_customer: { Args: { p: Json }; Returns: Json };
       create_employee: {
         Args: {
           p_branch_ids: string[];
@@ -8200,6 +8201,7 @@ export type Database = {
       get_cash_account: { Args: { p_id: string }; Returns: Json };
       get_cash_transfer: { Args: { p_id: string }; Returns: Json };
       get_current_shift: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_customer: { Args: { p_id: string }; Returns: Json };
       get_expense: { Args: { p_id: string }; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
@@ -8293,6 +8295,10 @@ export type Database = {
         Returns: Json;
       };
       list_categories: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_customers: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string; p_status?: string };
+        Returns: Json;
+      };
       list_employees: {
         Args: {
           p_limit: number;
@@ -8650,6 +8656,10 @@ export type Database = {
         Args: { p_archived: boolean; p_id: string; p_move_to?: string };
         Returns: undefined;
       };
+      set_customer_status: {
+        Args: { p_id: string; p_reason?: string; p_status: string };
+        Returns: Json;
+      };
       set_employee_active: {
         Args: { p_active: boolean; p_employee_id: string; p_reason: string | null };
         Returns: {
@@ -8696,6 +8706,7 @@ export type Database = {
         Returns: undefined;
       };
       update_category: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
+      update_customer: { Args: { p_changes: Json; p_id: string }; Returns: Json };
       update_employee: {
         Args: {
           p_default_branch_id: string | null;
