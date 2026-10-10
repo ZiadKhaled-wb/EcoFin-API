@@ -1566,6 +1566,93 @@ export const openApiSpec = {
                 responses: { 201: { description: 'PurchaseInvoice' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/shifts': {
+            get: {
+                tags: ['Cash'],
+                summary: 'List shifts (shift.operate: own shifts; cash.view: the branches of the caller)',
+                description: 'K02 (D60). Newest first. Filters: branch_id, employee_id, status (open | closed), from/to (the shop day the shift was opened on). Each shift carries its expected cash (open: the drawer ledger sum now; closed: the snapshot at closing), counted cash and difference. Works in an expired shop. Schema: ShiftListQuery → ShiftList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'employee_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['open', 'closed'] } },
+                    { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'ShiftList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Cash'],
+                summary: 'Open a shift (shift.operate)',
+                description: 'K02 (D60). The caller opens their own shift in a branch they work in, optionally on a POS device of that branch (DEVICE_INVALID). opening_float is 0 or more; above 0 it leaves vault_id, an active safe of the branch (VAULT_INVALID / CASH_ACCOUNT_INACTIVE; a safe can not go below 0: INSUFFICIENT_FUNDS), as a cash transfer (CX) into the drawer of the shift. One open shift per cashier and per device: SHIFT_ALREADY_OPEN. Numbered SH. The same Idempotency-Key returns the same shift. Audited as shift.opened. Schema: ShiftOpenBody → Shift.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'Shift' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/shifts/current': {
+            get: {
+                tags: ['Cash'],
+                summary: 'The open shift of the caller, or null (shift.operate or cash.view)',
+                description: 'K02 (D60). The shift with its drawer movements and the cash it should hold now (float + every movement of the shift; never the whole safe). Schema: CurrentShift.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'CurrentShift' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/shifts/vaults': {
+            get: {
+                tags: ['Cash'],
+                summary: 'Safes of a branch a float comes from or cash goes to (shift.operate or cash.view)',
+                description: 'K02 (D60). The active safes of the branch by name, without balances (a cashier does not see vault balances). The caller needs the branch (BRANCH_DENIED / BRANCH_NOT_FOUND). Schema: ShiftVaultQuery → ShiftVaultList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'branch_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'ShiftVaultList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/shifts/{id}': {
+            get: {
+                tags: ['Cash'],
+                summary: 'Read a shift with its drawer movements',
+                description: 'K02 (D60). The own shift of the caller, or with cash.view any shift of a branch the caller works in; others: SHIFT_NOT_FOUND. Schema: Shift.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Shift' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/shifts/{id}/cash': {
+            post: {
+                tags: ['Cash'],
+                summary: 'Move cash between the drawer of a shift and a safe (shift.operate)',
+                description: 'K02 (D60). direction in: from the safe into the drawer (change); out: from the drawer into the safe (a cash drop). amount above 0, vault_id an active safe of the branch, note 3-500. A cash transfer (CX); neither side can go below 0 (INSUFFICIENT_FUNDS). Only an open shift (SHIFT_CLOSED). The own shift of the caller, or with cash.transfer too any shift of a branch the caller works in. The same Idempotency-Key moves nothing again. Audited as shift.cash_moved. Schema: ShiftCashBody → Shift.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 200: { description: 'Shift' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/shifts/{id}/close': {
+            post: {
+                tags: ['Cash'],
+                summary: 'Close a shift: count the cash and return it to a safe (shift.operate)',
+                description: 'K02 (D60). counts: how many of each note and coin (200, 100, 50, 20, 10, 5, 1, 0.5, 0.25). Expected cash is the drawer ledger sum of the shift; when counted differs, difference_reason (3-500) is required: SHIFT_DIFFERENCE_REASON_REQUIRED (400, details expected, counted, difference). The difference is booked as an adjustment on the drawer and the counted cash goes to vault_id (an active safe of the branch; needed when anything was counted), leaving the drawer at 0. The own shift of the caller, or with cash.transfer too any shift of a branch the caller works in. A closed shift is answered unchanged and takes no more cash movements. Audited as shift.closed (warning when there is a difference). Schema: ShiftCloseBody → Shift.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Shift' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/supplier-payments': {
             get: {
                 tags: ['Purchasing'],

@@ -185,6 +185,13 @@ export const errorCodeHttpStatus = {
   PO_OVER_RECEIPT: 409,
   PO_LINE_MISMATCH: 400,
   SALES_ORDER_LINE_INVALID: 400,
+  // K02 shifts
+  SHIFT_NOT_FOUND: 404,
+  SHIFT_ALREADY_OPEN: 409,
+  SHIFT_CLOSED: 409,
+  SHIFT_REQUIRED: 409,
+  SHIFT_DIFFERENCE_REASON_REQUIRED: 400,
+  DEVICE_INVALID: 400,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

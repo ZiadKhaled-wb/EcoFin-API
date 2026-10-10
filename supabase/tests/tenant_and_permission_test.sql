@@ -455,6 +455,16 @@ INSERT INTO t.denial VALUES
  ('list_purchase_returns','purchase_return_3_list','supplier.manage',$$SELECT public.list_purchase_returns()$$),
  ('get_returnable_invoice','purchase_return_4_returnable','purchase.return_create',$$SELECT public.get_returnable_invoice((SELECT id FROM public.purchase_invoices WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-pi-1'))$$),
  ('list_payable_cash_accounts','purchase_return_5_accounts','supplier.payment_create',$$SELECT public.list_payable_cash_accounts('d2000000-0000-0000-0000-000000000011')$$);
+-- K02: after the K01 cases made the denial safe (10.00 in it): the owner opens a shift, takes 5.00
+-- of change from the safe and closes with exactly that (case names order the calls).
+INSERT INTO t.denial VALUES
+ ('open_shift','shift_1_open','shift.operate',$$SELECT public.open_shift('d2000000-0000-0000-0000-000000000011','0','denial-shift-1')$$),
+ ('move_shift_cash','shift_2_cash','shift.operate',$$SELECT public.move_shift_cash((SELECT id FROM public.shifts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-shift-1'),'in','5.00',(SELECT id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial safe'),'Denial change','denial-shift-cash')$$),
+ ('get_current_shift','shift_2a_current','shift.operate',$$SELECT public.get_current_shift()$$),
+ ('get_shift','shift_2b_get','shift.operate',$$SELECT public.get_shift((SELECT id FROM public.shifts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-shift-1'))$$),
+ ('list_shifts','shift_2c_list','shift.operate',$$SELECT public.list_shifts()$$),
+ ('list_shift_vaults','shift_2d_vaults','shift.operate',$$SELECT public.list_shift_vaults('d2000000-0000-0000-0000-000000000011')$$),
+ ('close_shift','shift_3_close','shift.operate',$$SELECT public.close_shift((SELECT id FROM public.shifts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-shift-1'),'{"5":1}',(SELECT id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial safe'))$$);
 -- U05: an order for the denial supplier is created, edited, sent, received as a draft invoice and
 -- cancelled (case names order the calls).
 INSERT INTO t.denial VALUES

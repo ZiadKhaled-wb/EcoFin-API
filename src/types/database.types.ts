@@ -8076,6 +8076,10 @@ export type Database = {
       cancel_purchase_order: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_stock_count: { Args: { p_count_id: string }; Returns: Json };
       cancel_stock_transfer: { Args: { p_id: string }; Returns: Json };
+      close_shift: {
+        Args: { p_counts: Json; p_difference_reason?: string; p_id: string; p_vault_id?: string };
+        Returns: Json;
+      };
       consume_password_reset: { Args: { p_token_hash: string }; Returns: string };
       create_branch: {
         Args: {
@@ -8190,11 +8194,13 @@ export type Database = {
       find_unit: { Args: { p_serial: string }; Returns: Json };
       get_cash_account: { Args: { p_id: string }; Returns: Json };
       get_cash_transfer: { Args: { p_id: string }; Returns: Json };
+      get_current_shift: { Args: Record<PropertyKey, never>; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
       get_purchase_order: { Args: { p_id: string }; Returns: Json };
       get_purchase_return: { Args: { p_id: string }; Returns: Json };
       get_returnable_invoice: { Args: { p_invoice_id: string }; Returns: Json };
+      get_shift: { Args: { p_id: string }; Returns: Json };
       get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       get_shop_settings: { Args: Record<PropertyKey, never>; Returns: Json };
       get_stock_adjustment: { Args: { p_id: string }; Returns: Json };
@@ -8359,6 +8365,19 @@ export type Database = {
         };
         Returns: Json;
       };
+      list_shift_vaults: { Args: { p_branch_id: string }; Returns: Json };
+      list_shifts: {
+        Args: {
+          p_branch_id?: string;
+          p_employee_id?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_status?: string;
+          p_to?: string;
+        };
+        Returns: Json;
+      };
       list_stock: {
         Args: {
           p_branch_id?: string;
@@ -8416,6 +8435,17 @@ export type Database = {
       list_transfer_destinations: { Args: Record<PropertyKey, never>; Returns: Json };
       lookup_product: { Args: { p_code: string }; Returns: Json };
       low_stock_summary: { Args: { p_limit?: number }; Returns: Json };
+      move_shift_cash: {
+        Args: {
+          p_amount: string;
+          p_direction: string;
+          p_idempotency_key: string;
+          p_note: string;
+          p_shift_id: string;
+          p_vault_id: string;
+        };
+        Returns: Json;
+      };
       my_permissions: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -8432,6 +8462,16 @@ export type Database = {
           role: Database['public']['Enums']['employee_role'];
           tenant_slug: string;
         }[];
+      };
+      open_shift: {
+        Args: {
+          p_branch_id: string;
+          p_device_id?: string;
+          p_idempotency_key: string;
+          p_opening_float: string;
+          p_vault_id?: string;
+        };
+        Returns: Json;
       };
       password_reset_lookup: { Args: { p_token_hash: string }; Returns: Json };
       post_cash_opening: {

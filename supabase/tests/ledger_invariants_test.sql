@@ -275,6 +275,8 @@ INSERT INTO t.replay_tested VALUES
  ('public.register_units','i04_units_test.sql: same key -> same batch, nothing created twice'),
  ('public.create_stock_transfer','i03_transfers_test.sql: same key -> same transfer'),
  ('public.create_purchase_invoice','u02_purchase_invoices_test.sql: same key -> same invoice, no second row or audit'),
+ ('public.open_shift','k02_shifts_test.sql: same key -> same shift, nothing moves'),
+ ('public.move_shift_cash','k02_shifts_test.sql: same key -> nothing moves, one audit row'),
  ('public.create_purchase_order','u05_purchase_orders_test.sql: same key -> same order, one row, one audit'),
  ('public.create_invoice_from_po','u05_purchase_orders_test.sql: same key -> same invoice, one invoice on the order'),
  ('public.post_supplier_payment','u03_supplier_payments_test.sql: same key -> same payment, the safe, the balances and the movement count unchanged'),

@@ -292,6 +292,9 @@ See [K01 plan](plans/K01.md). Covers the Done when (a transfer changes both bala
 ## U03 — supplier payments (EC-55)
 See [U03 plan](plans/U03.md). Covers the Done when (a double-click pays once; invoice and supplier balances update) and the D58 rules (fully allocated, oldest first, never above the outstanding, safe not below 0, owner-only reversal).
 
+## K02 — shifts / cash drawer (EC-60)
+See [K02 plan](plans/K02.md). Covers the Done when (expected cash = float + drawer ledger sum, not the whole vault; a closed shift can't take sales) and the D60 rules (one open shift per cashier and device, floats and drops as cash transfers, count by denomination, a difference needs a reason, takeover with cash.transfer).
+
 ## U05 — purchase orders (EC-57)
 See [U05 plan](plans/U05.md). Covers the Done when (receiving part of an order leaves the rest open; a special customer order shows its purchase order status) and the D59 rules (received means approved, no over-receipt, statuses, cancel with a reason, U02/U06 unchanged).
 
