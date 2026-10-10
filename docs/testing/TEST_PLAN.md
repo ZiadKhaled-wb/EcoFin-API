@@ -303,3 +303,7 @@ See [U05 plan](plans/U05.md). Covers the Done when (receiving part of an order l
 
 ## U04 — purchase returns (EC-56)
 See [U04 plan](plans/U04.md). Covers the Done when (stock and supplier balance each change exactly once; you can't return more than you bought) and the D57 rules (approved invoices only, the invoice's branch, exact serial units, D41 tax, recomputed average, credit or cash refund).
+
+## INT-3 — stock and cash end to end (EC-131)
+
+See [INT-3 plan](plans/INT-3.md): one flow in a fresh shop, purchase order → invoice with IMEI units → payment from the safe → return → branch transfer → adjustment → shift with an expense, with the stock view, movement history, low-stock alert, supplier balance and safe checked at every step.
