@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.29.1
+
+- No schema change. Republishes 0.29.0 (K02 shifts and K03 expenses included): the `contracts-v0.29.0` tag was put on a commit that still held 0.27.0, so that version was never published.
+
+## 0.29.0
+
+- K03 expenses: ExpenseCategory, ExpenseCategoryList, ExpenseCategoryBody, ExpenseCategoryIdParams, ExpenseCategoryListQuery, ExpenseCreateBody (a vault with its branch, or the open shift), ExpenseReverseBody, ExpenseIdParams, Expense, ExpenseList, ExpenseListQuery (include_reversals, default true), ExpenseReportQuery, ExpenseReport. Error codes EXPENSE_NOT_FOUND, EXPENSE_CATEGORY_NOT_FOUND (404), EXPENSE_CATEGORY_NAME_TAKEN, EXPENSE_CATEGORY_ARCHIVED, EXPENSE_ALREADY_REVERSED (409).
+
+## 0.28.0
+
+- K02 shifts: ShiftStatus, SHIFT_DENOMINATIONS, ShiftDenomination, ShiftCounts, ShiftOpenBody (a float needs a safe), ShiftCashBody (in / out with a note), ShiftCloseBody (counts, safe, difference reason), ShiftIdParams, ShiftMovement, Shift, ShiftSummary, ShiftList, CurrentShift, ShiftListQuery, ShiftVault, ShiftVaultList, ShiftVaultQuery, ShiftDifferenceDetail, shiftCountTotal(). Error codes SHIFT_NOT_FOUND (404), SHIFT_ALREADY_OPEN, SHIFT_CLOSED, SHIFT_REQUIRED (409), SHIFT_DIFFERENCE_REASON_REQUIRED (400, details), DEVICE_INVALID (400).
+
 ## 0.27.0
 
 - U05 purchase orders: PurchaseOrderStatus, PurchaseOrderLineInput (expected_unit_cost, sales_order_line_id), PurchaseOrderCreateBody, PurchaseOrderUpdateBody, PurchaseOrderCancelBody, PurchaseOrderInvoiceBody (receive lines; none = everything still to come), PurchaseOrderIdParams, PurchaseOrderLine, PurchaseOrder (lines, invoices), PurchaseOrderSummary, PurchaseOrderList, PurchaseOrderListQuery, PoOverReceiptDetail. U02 schemas: PurchaseInvoiceCreateBody gains po_id, PurchaseInvoiceLineInput gains po_line_id, PurchaseInvoice and its summary gain po_id and po_number, lines gain po_line_id (all null without an order). Error codes PURCHASE_ORDER_NOT_FOUND (404), PURCHASE_ORDER_NOT_EDITABLE, PO_NOT_SENT, PO_CLOSED, PO_OVER_RECEIPT (409, details), PO_LINE_MISMATCH, SALES_ORDER_LINE_INVALID (400).

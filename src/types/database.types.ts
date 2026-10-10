@@ -8076,6 +8076,10 @@ export type Database = {
       cancel_purchase_order: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_stock_count: { Args: { p_count_id: string }; Returns: Json };
       cancel_stock_transfer: { Args: { p_id: string }; Returns: Json };
+      close_shift: {
+        Args: { p_counts: Json; p_difference_reason?: string; p_id: string; p_vault_id?: string };
+        Returns: Json;
+      };
       consume_password_reset: { Args: { p_token_hash: string }; Returns: string };
       create_branch: {
         Args: {
@@ -8119,6 +8123,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      create_expense_category: { Args: { p_name: string }; Returns: Json };
       create_invoice_from_po: {
         Args: { p_idempotency_key: string; p_lines?: Json; p_po_id: string };
         Returns: Json;
@@ -8176,6 +8181,10 @@ export type Database = {
         };
         Returns: string;
       };
+      expense_report: {
+        Args: { p_branch_id?: string; p_from: string; p_to: string };
+        Returns: Json;
+      };
       export_stock_movements: {
         Args: {
           p_branch_id?: string;
@@ -8190,11 +8199,14 @@ export type Database = {
       find_unit: { Args: { p_serial: string }; Returns: Json };
       get_cash_account: { Args: { p_id: string }; Returns: Json };
       get_cash_transfer: { Args: { p_id: string }; Returns: Json };
+      get_current_shift: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_expense: { Args: { p_id: string }; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
       get_purchase_order: { Args: { p_id: string }; Returns: Json };
       get_purchase_return: { Args: { p_id: string }; Returns: Json };
       get_returnable_invoice: { Args: { p_invoice_id: string }; Returns: Json };
+      get_shift: { Args: { p_id: string }; Returns: Json };
       get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       get_shop_settings: { Args: Record<PropertyKey, never>; Returns: Json };
       get_stock_adjustment: { Args: { p_id: string }; Returns: Json };
@@ -8304,6 +8316,19 @@ export type Database = {
           username: string;
         }[];
       };
+      list_expense_categories: { Args: { p_include_archived?: boolean }; Returns: Json };
+      list_expenses: {
+        Args: {
+          p_branch_id?: string;
+          p_category_id?: string;
+          p_from?: string;
+          p_include_reversals?: boolean;
+          p_limit?: number;
+          p_offset?: number;
+          p_to?: string;
+        };
+        Returns: Json;
+      };
       list_installment_policies: { Args: Record<PropertyKey, never>; Returns: Json };
       list_open_supplier_invoices: { Args: { p_supplier_id: string }; Returns: Json };
       list_payable_cash_accounts: { Args: { p_branch_id: string }; Returns: Json };
@@ -8355,6 +8380,19 @@ export type Database = {
           p_offset?: number;
           p_purchase_invoice_id?: string;
           p_supplier_id?: string;
+          p_to?: string;
+        };
+        Returns: Json;
+      };
+      list_shift_vaults: { Args: { p_branch_id: string }; Returns: Json };
+      list_shifts: {
+        Args: {
+          p_branch_id?: string;
+          p_employee_id?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_status?: string;
           p_to?: string;
         };
         Returns: Json;
@@ -8416,6 +8454,17 @@ export type Database = {
       list_transfer_destinations: { Args: Record<PropertyKey, never>; Returns: Json };
       lookup_product: { Args: { p_code: string }; Returns: Json };
       low_stock_summary: { Args: { p_limit?: number }; Returns: Json };
+      move_shift_cash: {
+        Args: {
+          p_amount: string;
+          p_direction: string;
+          p_idempotency_key: string;
+          p_note: string;
+          p_shift_id: string;
+          p_vault_id: string;
+        };
+        Returns: Json;
+      };
       my_permissions: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -8433,9 +8482,32 @@ export type Database = {
           tenant_slug: string;
         }[];
       };
+      open_shift: {
+        Args: {
+          p_branch_id: string;
+          p_device_id?: string;
+          p_idempotency_key: string;
+          p_opening_float: string;
+          p_vault_id?: string;
+        };
+        Returns: Json;
+      };
       password_reset_lookup: { Args: { p_token_hash: string }; Returns: Json };
       post_cash_opening: {
         Args: { p_amount: string; p_id: string; p_idempotency_key: string; p_note: string };
+        Returns: Json;
+      };
+      post_expense: {
+        Args: {
+          p_amount: string;
+          p_branch_id?: string;
+          p_cash_account_id?: string;
+          p_category_id: string;
+          p_from_shift?: boolean;
+          p_idempotency_key: string;
+          p_note?: string;
+          p_receipt_file_id?: string;
+        };
         Returns: Json;
       };
       post_purchase_return: {
@@ -8504,9 +8576,19 @@ export type Database = {
       };
       reject_purchase_invoice: { Args: { p_id: string; p_reason: string }; Returns: Json };
       rename_cash_account: { Args: { p_id: string; p_name: string }; Returns: Json };
+      rename_expense_category: { Args: { p_id: string; p_name: string }; Returns: Json };
       require_module: { Args: { p_module: string }; Returns: undefined };
       resend_employee_invite: {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
+        Returns: Json;
+      };
+      reverse_expense: {
+        Args: {
+          p_cash_account_id?: string;
+          p_id: string;
+          p_idempotency_key: string;
+          p_reason: string;
+        };
         Returns: Json;
       };
       reverse_supplier_payment: {
@@ -8584,6 +8666,7 @@ export type Database = {
           permission_key: string;
         }[];
       };
+      set_expense_category_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
       set_product_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
       set_supplier_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
       set_tax_class_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };

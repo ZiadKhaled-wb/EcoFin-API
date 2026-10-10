@@ -2615,3 +2615,494 @@ crossShopCase({
     h.expect(after.invoices).toHaveLength(0);
   },
 });
+
+// K02 shifts (D60). Shop B's shift is its owner's; shop A acts as its cashier, so these cases
+// never touch the shift the audit suite opens for shop A's owner. Every case closes what it opens.
+const CASHIER_A_EMAIL = 'cashier.one@ecotech.test';
+const OWNER_B_EMPLOYEE_ID = 'd3000000-0000-0000-0000-000000000021';
+const shiftKey = () => `xs-k02-${Date.now()}-${Math.random()}`;
+async function openShiftOf(h: CrossShopHarness, email: string, branchId: string) {
+  const who = await h.login(email);
+  const current = await h.call('GET', '/api/shifts/current', { token: who.accessToken });
+  const existing = (current.res.body as { shift: { id: string } | null }).shift;
+  if (existing) return { id: existing.id, token: who.accessToken };
+  const opened = await h.call('POST', '/api/shifts', {
+    token: who.accessToken,
+    idempotencyKey: shiftKey(),
+    body: { branch_id: branchId, opening_float: '0' },
+  });
+  h.expect(opened.res.status, JSON.stringify(opened.res.body)).toBe(201);
+  return { id: (opened.res.body as { id: string }).id, token: who.accessToken };
+}
+async function closeShiftOf(h: CrossShopHarness, shift: { id: string; token: string }) {
+  const closed = await h.call('POST', `/api/shifts/${shift.id}/close`, {
+    token: shift.token,
+    body: { counts: {} },
+  });
+  h.expect(closed.res.status, JSON.stringify(closed.res.body)).toBe(200);
+}
+async function shopBSafe(h: CrossShopHarness) {
+  const b = await h.login(OWNER_B);
+  const made = await h.call('POST', '/api/cash-accounts', {
+    token: b.accessToken,
+    body: { name: `XS safe ${Date.now()}-${Math.random()}`, kind: 'safe', branch_id: SHOP_B_BR1 },
+  });
+  h.expect(made.res.status, JSON.stringify(made.res.body)).toBe(201);
+  return (made.res.body as { id: string }).id;
+}
+crossShopCase({
+  method: 'GET',
+  path: '/api/shifts',
+  name: "shifts list refuses a foreign header, an org key and shop B's branch or cashier, and never lists B's",
+  async run(h) {
+    const theirs = await openShiftOf(h, OWNER_B, SHOP_B_BR1);
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/shifts', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/shifts', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    for (const [query, code] of [
+      ['branch_id=' + SHOP_B_BR1, 'BRANCH_NOT_FOUND'],
+      ['employee_id=' + OWNER_B_EMPLOYEE_ID, 'EMPLOYEE_NOT_FOUND'],
+    ] as const) {
+      const res = await h.call('GET', '/api/shifts', { token: a.accessToken, query });
+      h.expect(res.res.status).toBe(404);
+      h.expect(h.code(res.res)).toBe(code);
+    }
+    const own = await h.call('GET', '/api/shifts', { token: a.accessToken, query: 'pageSize=100' });
+    h.expect(own.res.status).toBe(200);
+    h.expect(
+      (own.res.body as { items: { id: string }[] }).items.some((x) => x.id === theirs.id),
+    ).toBe(false);
+    await closeShiftOf(h, theirs);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/shifts/current',
+  name: "the current shift refuses a foreign header and an org key, and is never shop B's",
+  async run(h) {
+    const theirs = await openShiftOf(h, OWNER_B, SHOP_B_BR1);
+    const a = await h.login(CASHIER_A_EMAIL);
+    const foreign = await h.call('GET', '/api/shifts/current', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/shifts/current', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const own = await h.call('GET', '/api/shifts/current', { token: a.accessToken });
+    h.expect(own.res.status).toBe(200);
+    h.expect((own.res.body as { shift: { id: string } | null }).shift?.id).not.toBe(theirs.id);
+    await closeShiftOf(h, theirs);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/shifts/vaults',
+  name: "shift vaults refuse a foreign header, an org key and shop B's branch",
+  async run(h) {
+    const a = await h.login(CASHIER_A_EMAIL);
+    const foreign = await h.call('GET', '/api/shifts/vaults', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      query: 'branch_id=' + SHOP_A_BR1,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/shifts/vaults', {
+      token: a.accessToken,
+      query: `branch_id=${SHOP_A_BR1}&organization_id=${SHOP_B}`,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const branch = await h.call('GET', '/api/shifts/vaults', {
+      token: a.accessToken,
+      query: 'branch_id=' + SHOP_B_BR1,
+    });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/shifts/:id',
+  name: "shop B's shift is not found; a foreign header is refused",
+  async run(h) {
+    const theirs = await openShiftOf(h, OWNER_B, SHOP_B_BR1);
+    const a = await h.login(OWNER_A);
+    const res = await h.call('GET', `/api/shifts/${theirs.id}`, { token: a.accessToken });
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('SHIFT_NOT_FOUND');
+    const header = await h.call('GET', `/api/shifts/${theirs.id}`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+    await closeShiftOf(h, theirs);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/shifts',
+  name: "opening a shift refuses a foreign header, an org id, shop B's branch and a float from B's safe",
+  async run(h) {
+    const theirSafe = await shopBSafe(h);
+    const a = await h.login(CASHIER_A_EMAIL);
+    const before = await h.call('GET', '/api/shifts/current', { token: a.accessToken });
+    const had = (before.res.body as { shift: { id: string } | null }).shift?.id ?? null;
+    const send = (body: object, orgId?: string) =>
+      h.call('POST', '/api/shifts', {
+        token: a.accessToken,
+        idempotencyKey: shiftKey(),
+        body,
+        ...(orgId ? { orgId } : {}),
+      });
+    const body = { branch_id: SHOP_A_BR1, opening_float: '0' };
+    const foreign = await send(body, SHOP_B);
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await send({ ...body, organization_id: SHOP_B });
+    h.expect(injected.res.status).toBe(400);
+    const branch = await send({ ...body, branch_id: SHOP_B_BR1 });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    for (const call of [foreign, injected, branch]) {
+      h.expect(await h.auditRowsFrom(SHOP_A, call.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+    if (!had) {
+      // With no open shift the float is checked: shop B's safe is not a vault of this branch.
+      const vault = await send({ ...body, opening_float: '5.00', vault_id: theirSafe });
+      h.expect(vault.res.status).toBe(400);
+      h.expect(h.code(vault.res)).toBe('VAULT_INVALID');
+      h.expect(await h.auditRowsFrom(SHOP_A, vault.ip)).toBe(0);
+    }
+    const after = await h.call('GET', '/api/shifts/current', { token: a.accessToken });
+    h.expect((after.res.body as { shift: { id: string } | null }).shift?.id ?? null).toBe(had);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/shifts/:id/cash',
+  name: "cash on shop B's shift is not found; shop B's safe is not a vault for shop A's shift",
+  async run(h) {
+    const theirs = await openShiftOf(h, OWNER_B, SHOP_B_BR1);
+    const theirSafe = await shopBSafe(h);
+    const mine = await openShiftOf(h, CASHIER_A_EMAIL, SHOP_A_BR1);
+    const body = { direction: 'in', amount: '1.00', vault_id: theirSafe, note: 'Cross-shop case' };
+    const send = (id: string, orgId?: string) =>
+      h.call('POST', `/api/shifts/${id}/cash`, {
+        token: mine.token,
+        idempotencyKey: shiftKey(),
+        body,
+        ...(orgId ? { orgId } : {}),
+      });
+    const foreign = await send(theirs.id, SHOP_B);
+    h.expect(foreign.res.status).toBe(403);
+    const res = await send(theirs.id);
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('SHIFT_NOT_FOUND');
+    const vault = await send(mine.id);
+    h.expect(vault.res.status).toBe(400);
+    h.expect(h.code(vault.res)).toBe('VAULT_INVALID');
+    for (const call of [res, vault]) {
+      h.expect(await h.auditRowsFrom(SHOP_A, call.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+    await closeShiftOf(h, mine);
+    await closeShiftOf(h, theirs);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/shifts/:id/close',
+  name: "closing shop B's shift is not found and leaves it open",
+  async run(h) {
+    const theirs = await openShiftOf(h, OWNER_B, SHOP_B_BR1);
+    const a = await h.login(OWNER_A);
+    const send = (orgId?: string) =>
+      h.call('POST', `/api/shifts/${theirs.id}/close`, {
+        token: a.accessToken,
+        body: { counts: {} },
+        ...(orgId ? { orgId } : {}),
+      });
+    const foreign = await send(SHOP_B);
+    h.expect(foreign.res.status).toBe(403);
+    const res = await send();
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('SHIFT_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, res.ip)).toBe(0);
+    const own = await h.call('GET', `/api/shifts/${theirs.id}`, { token: theirs.token });
+    h.expect((own.res.body as { status: string }).status).toBe('open');
+    await closeShiftOf(h, theirs);
+  },
+});
+
+// K03 expenses (D61). Shop B's category and expense belong to its owner; shop A's owner acts.
+const expenseKey = () => `xs-k03-${Date.now()}-${Math.random()}`;
+async function shopBExpenseCategory(h: CrossShopHarness) {
+  const b = await h.login(OWNER_B);
+  const name = `XS category ${Date.now()}-${Math.random()}`;
+  const made = await h.call('POST', '/api/expense-categories', {
+    token: b.accessToken,
+    body: { name },
+  });
+  h.expect(made.res.status, JSON.stringify(made.res.body)).toBe(201);
+  return { id: (made.res.body as { id: string }).id, name, token: b.accessToken };
+}
+async function shopBExpense(h: CrossShopHarness) {
+  const category = await shopBExpenseCategory(h);
+  const safe = await shopBSafe(h);
+  const funded = await h.call('POST', `/api/cash-accounts/${safe}/opening`, {
+    token: category.token,
+    idempotencyKey: expenseKey(),
+    body: { amount: '20.00', note: 'Cross-shop case' },
+  });
+  h.expect(funded.res.status, JSON.stringify(funded.res.body)).toBe(200);
+  const posted = await h.call('POST', '/api/expenses', {
+    token: category.token,
+    idempotencyKey: expenseKey(),
+    body: {
+      category_id: category.id,
+      amount: '5.00',
+      branch_id: SHOP_B_BR1,
+      cash_account_id: safe,
+    },
+  });
+  h.expect(posted.res.status, JSON.stringify(posted.res.body)).toBe(201);
+  return { id: (posted.res.body as { id: string }).id, category, safe, token: category.token };
+}
+crossShopCase({
+  method: 'GET',
+  path: '/api/expense-categories',
+  name: "expense categories refuse a foreign header and an org key, and never list shop B's",
+  async run(h) {
+    const theirs = await shopBExpenseCategory(h);
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/expense-categories', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/expense-categories', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const own = await h.call('GET', '/api/expense-categories', {
+      token: a.accessToken,
+      query: 'include_archived=true',
+    });
+    h.expect(own.res.status).toBe(200);
+    h.expect((own.res.body as { id: string }[]).some((c) => c.id === theirs.id)).toBe(false);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/expense-categories',
+  name: 'creating an expense category refuses a foreign header and an org id',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const name = `XS refused ${Date.now()}-${Math.random()}`;
+    const foreign = await h.call('POST', '/api/expense-categories', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: { name },
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/expense-categories', {
+      token: a.accessToken,
+      body: { name, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    for (const call of [foreign, injected]) {
+      h.expect(await h.auditRowsFrom(SHOP_A, call.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+  },
+});
+for (const [method, suffix, body, what] of [
+  ['PATCH', '', { name: 'Taken over' }, 'renaming'],
+  ['POST', '/archive', undefined, 'archiving'],
+  ['POST', '/restore', undefined, 'restoring'],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/expense-categories/:id${suffix}`,
+    name: `${what} shop B's expense category is not found and changes nothing`,
+    async run(h) {
+      const theirs = await shopBExpenseCategory(h);
+      const a = await h.login(OWNER_A);
+      const send = (orgId?: string) =>
+        h.call(method, `/api/expense-categories/${theirs.id}${suffix}`, {
+          token: a.accessToken,
+          ...(body ? { body } : {}),
+          ...(orgId ? { orgId } : {}),
+        });
+      const foreign = await send(SHOP_B);
+      h.expect(foreign.res.status).toBe(403);
+      const res = await send();
+      h.expect(res.res.status).toBe(404);
+      h.expect(h.code(res.res)).toBe('EXPENSE_CATEGORY_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_A, res.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, res.ip)).toBe(0);
+      const list = await h.call('GET', '/api/expense-categories', { token: theirs.token });
+      const row = (list.res.body as { id: string; name: string }[]).find((c) => c.id === theirs.id);
+      h.expect(row?.name).toBe(theirs.name);
+    },
+  });
+}
+crossShopCase({
+  method: 'GET',
+  path: '/api/expenses',
+  name: "expenses refuse a foreign header, an org key and shop B's branch or category, and never list B's",
+  async run(h) {
+    const theirs = await shopBExpense(h);
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/expenses', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/expenses', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    for (const [query, code] of [
+      ['branch_id=' + SHOP_B_BR1, 'BRANCH_NOT_FOUND'],
+      ['category_id=' + theirs.category.id, 'EXPENSE_CATEGORY_NOT_FOUND'],
+    ] as const) {
+      const res = await h.call('GET', '/api/expenses', { token: a.accessToken, query });
+      h.expect(res.res.status).toBe(404);
+      h.expect(h.code(res.res)).toBe(code);
+    }
+    const own = await h.call('GET', '/api/expenses', {
+      token: a.accessToken,
+      query: 'pageSize=100',
+    });
+    h.expect(own.res.status).toBe(200);
+    h.expect(
+      (own.res.body as { items: { id: string }[] }).items.some((x) => x.id === theirs.id),
+    ).toBe(false);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/expenses/report',
+  name: "the expense report refuses a foreign header, an org key and shop B's branch",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const period = 'from=2026-01-01&to=2026-12-31';
+    const foreign = await h.call('GET', '/api/expenses/report', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      query: period,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/expenses/report', {
+      token: a.accessToken,
+      query: `${period}&organization_id=${SHOP_B}`,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const branch = await h.call('GET', '/api/expenses/report', {
+      token: a.accessToken,
+      query: `${period}&branch_id=${SHOP_B_BR1}`,
+    });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/expenses/:id',
+  name: "shop B's expense is not found; a foreign header is refused",
+  async run(h) {
+    const theirs = await shopBExpense(h);
+    const a = await h.login(OWNER_A);
+    const res = await h.call('GET', `/api/expenses/${theirs.id}`, { token: a.accessToken });
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('EXPENSE_NOT_FOUND');
+    const header = await h.call('GET', `/api/expenses/${theirs.id}`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/expenses',
+  name: "an expense refuses a foreign header, an org id and shop B's category, branch and safe",
+  async run(h) {
+    const theirs = await shopBExpense(h);
+    const a = await h.login(OWNER_A);
+    const mine = await h.call('POST', '/api/expense-categories', {
+      token: a.accessToken,
+      body: { name: `XS own ${Date.now()}-${Math.random()}` },
+    });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(201);
+    const body = {
+      category_id: (mine.res.body as { id: string }).id,
+      amount: '1.00',
+      branch_id: SHOP_A_BR1,
+      cash_account_id: theirs.safe,
+    };
+    const send = (sent: object, orgId?: string) =>
+      h.call('POST', '/api/expenses', {
+        token: a.accessToken,
+        idempotencyKey: expenseKey(),
+        body: sent,
+        ...(orgId ? { orgId } : {}),
+      });
+    const foreign = await send(body, SHOP_B);
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await send({ ...body, organization_id: SHOP_B });
+    h.expect(injected.res.status).toBe(400);
+    const category = await send({ ...body, category_id: theirs.category.id });
+    h.expect(category.res.status).toBe(404);
+    h.expect(h.code(category.res)).toBe('EXPENSE_CATEGORY_NOT_FOUND');
+    const branch = await send({ ...body, branch_id: SHOP_B_BR1 });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    const safe = await send(body);
+    h.expect(safe.res.status).toBe(400);
+    h.expect(h.code(safe.res)).toBe('VAULT_INVALID');
+    for (const call of [foreign, injected, category, branch, safe]) {
+      h.expect(await h.auditRowsFrom(SHOP_A, call.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+    const account = await h.call('GET', `/api/cash-accounts/${theirs.safe}`, {
+      token: theirs.token,
+    });
+    h.expect((account.res.body as { balance: string }).balance).toBe('15.00');
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/expenses/:id/reverse',
+  name: "reversing shop B's expense is not found and leaves it as it is",
+  async run(h) {
+    const theirs = await shopBExpense(h);
+    const a = await h.login(OWNER_A);
+    const send = (orgId?: string) =>
+      h.call('POST', `/api/expenses/${theirs.id}/reverse`, {
+        token: a.accessToken,
+        idempotencyKey: expenseKey(),
+        body: { reason: 'Cross-shop case' },
+        ...(orgId ? { orgId } : {}),
+      });
+    const foreign = await send(SHOP_B);
+    h.expect(foreign.res.status).toBe(403);
+    const res = await send();
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('EXPENSE_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, res.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, res.ip)).toBe(0);
+    const own = await h.call('GET', `/api/expenses/${theirs.id}`, { token: theirs.token });
+    h.expect(
+      (own.res.body as { reversed_by_expense_id: string | null }).reversed_by_expense_id,
+    ).toBeNull();
+  },
+});

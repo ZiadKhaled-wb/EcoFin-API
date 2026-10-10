@@ -208,6 +208,62 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
     return { sent: created, id: (created.res.body as { id: string }).id };
   }
+  /** K02: the caller's open shift (opened with no float when there is none). */
+  async function openShift(token: string) {
+    const current = await send('get', '/api/shifts/current', { token });
+    const existing = (current.res.body as { shift: { id: string } | null }).shift;
+    if (existing) return existing.id;
+    const opened = await send('post', '/api/shifts', {
+      token,
+      key: `f07-shift-open-${STAMP}-${ipCounter}-${Math.random()}`,
+      body: { branch_id: BR1, opening_float: '0' },
+    });
+    expect(opened.res.status, JSON.stringify(opened.res.body)).toBe(201);
+    return (opened.res.body as { id: string }).id;
+  }
+  /** K02: closes the caller's open shift, if any (one open shift per cashier). */
+  async function closeOpenShift(token: string) {
+    const current = await send('get', '/api/shifts/current', { token });
+    const existing = (current.res.body as { shift: { id: string } | null }).shift;
+    if (!existing) return;
+    const closed = await send('post', `/api/shifts/${existing.id}/close`, {
+      token,
+      body: { counts: {}, difference_reason: 'F07 audit driver' },
+    });
+    expect(closed.res.status, JSON.stringify(closed.res.body)).toBe(200);
+  }
+  /** K03: a fresh expense category. */
+  async function newExpenseCategory(token: string) {
+    const made = await send('post', '/api/expense-categories', {
+      token,
+      body: { name: `F07 category ${STAMP}-${ipCounter}-${Math.random()}` },
+    });
+    expect(made.res.status, JSON.stringify(made.res.body)).toBe(201);
+    return (made.res.body as { id: string }).id;
+  }
+  /** K03: an expense of 5.00 paid from a fresh safe that holds 50.00. */
+  async function newExpense(token: string) {
+    const category = await newExpenseCategory(token);
+    const safe = await send('post', '/api/cash-accounts', {
+      token,
+      body: { name: `F07 expense safe ${STAMP}-${ipCounter}`, kind: 'safe', branch_id: BR1 },
+    });
+    expect(safe.res.status, JSON.stringify(safe.res.body)).toBe(201);
+    const vault = (safe.res.body as { id: string }).id;
+    const funded = await send('post', `/api/cash-accounts/${vault}/opening`, {
+      token,
+      key: `f07-expense-fund-${STAMP}-${ipCounter}`,
+      body: { amount: '50.00', note: 'F07 audit driver' },
+    });
+    expect(funded.res.status, JSON.stringify(funded.res.body)).toBe(200);
+    const sent = await send('post', '/api/expenses', {
+      token,
+      key: `f07-expense-${STAMP}-${ipCounter}`,
+      body: { category_id: category, amount: '5.00', branch_id: BR1, cash_account_id: vault },
+    });
+    expect(sent.res.status, JSON.stringify(sent.res.body)).toBe(201);
+    return { sent, id: (sent.res.body as { id: string }).id };
+  }
   async function newProduct(token: string) {
     const { res } = await send('post', '/api/products', { token, body: productBody() });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
@@ -447,6 +503,115 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         }),
         org: SHOP_ONE,
         status: 201,
+      };
+    },
+    'POST /api/expense-categories': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', '/api/expense-categories', {
+          token: owner.accessToken,
+          body: { name: `F07 category ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'PATCH /api/expense-categories/:id': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newExpenseCategory(owner.accessToken);
+      return {
+        sent: await send('patch', `/api/expense-categories/${id}`, {
+          token: owner.accessToken,
+          body: { name: `F07 renamed ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/expense-categories/:id/archive': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newExpenseCategory(owner.accessToken);
+      return {
+        sent: await send('post', `/api/expense-categories/${id}/archive`, {
+          token: owner.accessToken,
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/expense-categories/:id/restore': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newExpenseCategory(owner.accessToken);
+      const archived = await send('post', `/api/expense-categories/${id}/archive`, {
+        token: owner.accessToken,
+      });
+      expect(archived.res.status, JSON.stringify(archived.res.body)).toBe(200);
+      return {
+        sent: await send('post', `/api/expense-categories/${id}/restore`, {
+          token: owner.accessToken,
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/expenses': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const { sent } = await newExpense(owner.accessToken);
+      return { sent, org: SHOP_ONE, status: 201 };
+    },
+    'POST /api/expenses/:id/reverse': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const { id } = await newExpense(owner.accessToken);
+      return {
+        sent: await send('post', `/api/expenses/${id}/reverse`, {
+          token: owner.accessToken,
+          key: `f07-expense-rev-${STAMP}-${ipCounter}`,
+          body: { reason: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/shifts': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      await closeOpenShift(owner.accessToken);
+      const sent = await send('post', '/api/shifts', {
+        token: owner.accessToken,
+        key: `f07-shift-${STAMP}-${ipCounter}`,
+        body: { branch_id: BR1, opening_float: '0' },
+      });
+      return { sent, org: SHOP_ONE, status: 201 };
+    },
+    'POST /api/shifts/:id/cash': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await openShift(owner.accessToken);
+      const safe = await send('post', '/api/cash-accounts', {
+        token: owner.accessToken,
+        body: { name: `F07 shift safe ${STAMP}-${ipCounter}`, kind: 'safe', branch_id: BR1 },
+      });
+      expect(safe.res.status, JSON.stringify(safe.res.body)).toBe(201);
+      const vault = (safe.res.body as { id: string }).id;
+      const funded = await send('post', `/api/cash-accounts/${vault}/opening`, {
+        token: owner.accessToken,
+        key: `f07-shift-fund-${STAMP}-${ipCounter}`,
+        body: { amount: '50.00', note: 'F07 audit driver' },
+      });
+      expect(funded.res.status, JSON.stringify(funded.res.body)).toBe(200);
+      return {
+        sent: await send('post', `/api/shifts/${id}/cash`, {
+          token: owner.accessToken,
+          key: `f07-shift-cash-${STAMP}-${ipCounter}`,
+          body: { direction: 'in', amount: '5.00', vault_id: vault, note: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/shifts/:id/close': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await openShift(owner.accessToken);
+      return {
+        // Nothing counted: whatever the drawer held is a difference, explained by the reason.
+        sent: await send('post', `/api/shifts/${id}/close`, {
+          token: owner.accessToken,
+          body: { counts: {}, difference_reason: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
       };
     },
     'POST /api/purchase-orders': async () => {

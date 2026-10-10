@@ -159,9 +159,26 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/purchase-orders/:id/send',
         'POST /api/purchase-orders/:id/cancel',
         'POST /api/purchase-orders/:id/invoice',
+        'GET /api/shifts',
+        'GET /api/shifts/current',
+        'GET /api/shifts/vaults',
+        'GET /api/shifts/:id',
+        'POST /api/shifts',
+        'POST /api/shifts/:id/cash',
+        'POST /api/shifts/:id/close',
+        'GET /api/expense-categories',
+        'POST /api/expense-categories',
+        'PATCH /api/expense-categories/:id',
+        'POST /api/expense-categories/:id/archive',
+        'POST /api/expense-categories/:id/restore',
+        'GET /api/expenses',
+        'GET /api/expenses/report',
+        'GET /api/expenses/:id',
+        'POST /api/expenses',
+        'POST /api/expenses/:id/reverse',
       ]),
     );
-    expect(keys).toHaveLength(139);
+    expect(keys).toHaveLength(156);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

@@ -1566,6 +1566,212 @@ export const openApiSpec = {
                 responses: { 201: { description: 'PurchaseInvoice' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/expense-categories': {
+            get: {
+                tags: ['Cash'],
+                summary: 'List expense categories (expense.create, cash.view or report.financial)',
+                description: 'K03 (D61). By name. include_archived=true also lists the archived ones. Works in an expired shop. Schema: ExpenseCategoryListQuery → ExpenseCategoryList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'include_archived', in: 'query', schema: { type: 'boolean', default: false } },
+                ],
+                responses: { 200: { description: 'ExpenseCategoryList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Cash'],
+                summary: 'Create an expense category (expense.create)',
+                description: 'K03 (D61). name 1-80, unique in the shop: EXPENSE_CATEGORY_NAME_TAKEN. Audited as expense_category.created. Schema: ExpenseCategoryBody → ExpenseCategory.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 201: { description: 'ExpenseCategory' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/expense-categories/{id}': {
+            patch: {
+                tags: ['Cash'],
+                summary: 'Rename an expense category (expense.create)',
+                description: 'K03 (D61). EXPENSE_CATEGORY_NOT_FOUND, EXPENSE_CATEGORY_NAME_TAKEN. The same name changes nothing. Audited as expense_category.renamed. Schema: ExpenseCategoryBody → ExpenseCategory.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'ExpenseCategory' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/expense-categories/{id}/archive': {
+            post: {
+                tags: ['Cash'],
+                summary: 'Archive an expense category (expense.create)',
+                description: 'K03 (D61). An archived category keeps its expenses and takes no new one (EXPENSE_CATEGORY_ARCHIVED). Audited as expense_category.archived. Schema: ExpenseCategory.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'ExpenseCategory' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/expense-categories/{id}/restore': {
+            post: {
+                tags: ['Cash'],
+                summary: 'Restore an archived expense category (expense.create)',
+                description: 'K03 (D61). Audited as expense_category.restored. Schema: ExpenseCategory.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'ExpenseCategory' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/expenses': {
+            get: {
+                tags: ['Cash'],
+                summary: 'List expenses (expense.create, cash.view or report.financial)',
+                description: 'K03 (D61). The branches of the caller, newest first. Filters: branch_id, category_id, from/to (business dates). A reversal is its own row; include_reversals=false leaves out reversals and reversed expenses. Works in an expired shop. Schema: ExpenseListQuery → ExpenseList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'category_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'include_reversals', in: 'query', schema: { type: 'boolean', default: true } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'ExpenseList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Cash'],
+                summary: 'Record an expense (expense.create)',
+                description: 'K03 (D61). The money leaves cash_account_id, an active safe or bank of branch_id or a shop-wide bank (VAULT_INVALID / CASH_ACCOUNT_INACTIVE), or with from_shift the drawer of the open shift of the caller (SHIFT_REQUIRED), so it is part of the expected cash of that shift: one of the two. A safe or a drawer can not go below 0 (INSUFFICIENT_FUNDS). The category must be active (EXPENSE_CATEGORY_NOT_FOUND / EXPENSE_CATEGORY_ARCHIVED). receipt_file_id is a file registered with the purpose expense_receipt (FILE_NOT_FOUND). Numbered EX. The same Idempotency-Key returns the same expense. Audited as expense.posted. Schema: ExpenseCreateBody → Expense.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'Expense' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/expenses/report': {
+            get: {
+                tags: ['Cash'],
+                summary: 'Expenses per category in a period (expense.create, cash.view or report.financial)',
+                description: 'K03 (D61). from and to are business dates (at most a year apart); branch_id narrows to one branch of the caller. Reversals and reversed expenses are left out. Largest total first. Schema: ExpenseReportQuery → ExpenseReport.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'from', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
+                    { name: 'to', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'ExpenseReport' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/expenses/{id}': {
+            get: {
+                tags: ['Cash'],
+                summary: 'Read an expense',
+                description: 'K03 (D61). An expense of a branch the caller works in; others: EXPENSE_NOT_FOUND. Schema: Expense.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Expense' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/expenses/{id}/reverse': {
+            post: {
+                tags: ['Cash'],
+                summary: 'Reverse an expense (owner only)',
+                description: 'K03 (D61). An expense is never edited or deleted. The owner (APPROVAL_OWNER_ONLY) reverses it once (EXPENSE_ALREADY_REVERSED) with a reason (3-500): a linked EX row and the money back into the account it left. When the expense was paid from a shift that is closed by now, cash_account_id (a vault of the branch) is required: VAULT_INVALID. The same Idempotency-Key returns the same reversal; the key of another expense: IDEMPOTENCY_CONFLICT. Audited as expense.reversed (warning). Schema: ExpenseReverseBody → Expense (the reversal).',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 200: { description: 'Expense' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/shifts': {            get: {
+                tags: ['Cash'],
+                summary: 'List shifts (shift.operate: own shifts; cash.view: the branches of the caller)',
+                description: 'K02 (D60). Newest first. Filters: branch_id, employee_id, status (open | closed), from/to (the shop day the shift was opened on). Each shift carries its expected cash (open: the drawer ledger sum now; closed: the snapshot at closing), counted cash and difference. Works in an expired shop. Schema: ShiftListQuery → ShiftList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'employee_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['open', 'closed'] } },
+                    { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'ShiftList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Cash'],
+                summary: 'Open a shift (shift.operate)',
+                description: 'K02 (D60). The caller opens their own shift in a branch they work in, optionally on a POS device of that branch (DEVICE_INVALID). opening_float is 0 or more; above 0 it leaves vault_id, an active safe of the branch (VAULT_INVALID / CASH_ACCOUNT_INACTIVE; a safe can not go below 0: INSUFFICIENT_FUNDS), as a cash transfer (CX) into the drawer of the shift. One open shift per cashier and per device: SHIFT_ALREADY_OPEN. Numbered SH. The same Idempotency-Key returns the same shift. Audited as shift.opened. Schema: ShiftOpenBody → Shift.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'Shift' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/shifts/current': {
+            get: {
+                tags: ['Cash'],
+                summary: 'The open shift of the caller, or null (shift.operate or cash.view)',
+                description: 'K02 (D60). The shift with its drawer movements and the cash it should hold now (float + every movement of the shift; never the whole safe). Schema: CurrentShift.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'CurrentShift' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/shifts/vaults': {
+            get: {
+                tags: ['Cash'],
+                summary: 'Safes of a branch a float comes from or cash goes to (shift.operate or cash.view)',
+                description: 'K02 (D60). The active safes of the branch by name, without balances (a cashier does not see vault balances). The caller needs the branch (BRANCH_DENIED / BRANCH_NOT_FOUND). Schema: ShiftVaultQuery → ShiftVaultList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'branch_id', in: 'query', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'ShiftVaultList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/shifts/{id}': {
+            get: {
+                tags: ['Cash'],
+                summary: 'Read a shift with its drawer movements',
+                description: 'K02 (D60). The own shift of the caller, or with cash.view any shift of a branch the caller works in; others: SHIFT_NOT_FOUND. Schema: Shift.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Shift' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/shifts/{id}/cash': {
+            post: {
+                tags: ['Cash'],
+                summary: 'Move cash between the drawer of a shift and a safe (shift.operate)',
+                description: 'K02 (D60). direction in: from the safe into the drawer (change); out: from the drawer into the safe (a cash drop). amount above 0, vault_id an active safe of the branch, note 3-500. A cash transfer (CX); neither side can go below 0 (INSUFFICIENT_FUNDS). Only an open shift (SHIFT_CLOSED). The own shift of the caller, or with cash.transfer too any shift of a branch the caller works in. The same Idempotency-Key moves nothing again. Audited as shift.cash_moved. Schema: ShiftCashBody → Shift.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 200: { description: 'Shift' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/shifts/{id}/close': {
+            post: {
+                tags: ['Cash'],
+                summary: 'Close a shift: count the cash and return it to a safe (shift.operate)',
+                description: 'K02 (D60). counts: how many of each note and coin (200, 100, 50, 20, 10, 5, 1, 0.5, 0.25). Expected cash is the drawer ledger sum of the shift; when counted differs, difference_reason (3-500) is required: SHIFT_DIFFERENCE_REASON_REQUIRED (400, details expected, counted, difference). The difference is booked as an adjustment on the drawer and the counted cash goes to vault_id (an active safe of the branch; needed when anything was counted), leaving the drawer at 0. The own shift of the caller, or with cash.transfer too any shift of a branch the caller works in. A closed shift is answered unchanged and takes no more cash movements. Audited as shift.closed (warning when there is a difference). Schema: ShiftCloseBody → Shift.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Shift' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/supplier-payments': {
             get: {
                 tags: ['Purchasing'],

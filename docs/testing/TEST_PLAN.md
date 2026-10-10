@@ -292,8 +292,22 @@ See [K01 plan](plans/K01.md). Covers the Done when (a transfer changes both bala
 ## U03 — supplier payments (EC-55)
 See [U03 plan](plans/U03.md). Covers the Done when (a double-click pays once; invoice and supplier balances update) and the D58 rules (fully allocated, oldest first, never above the outstanding, safe not below 0, owner-only reversal).
 
+## K03 — expenses (EC-61)
+See [K03 plan](plans/K03.md). Covers the Done when (an expense reduces the vault balance; a shift expense reduces the shift's expected cash) and the D61 rules (a vault or the open shift, categories, receipt, no edit or delete, owner-only reversal once, the report by category).
+
+## K02 — shifts / cash drawer (EC-60)
+See [K02 plan](plans/K02.md). Covers the Done when (expected cash = float + drawer ledger sum, not the whole vault; a closed shift can't take sales) and the D60 rules (one open shift per cashier and device, floats and drops as cash transfers, count by denomination, a difference needs a reason, takeover with cash.transfer).
+
 ## U05 — purchase orders (EC-57)
 See [U05 plan](plans/U05.md). Covers the Done when (receiving part of an order leaves the rest open; a special customer order shows its purchase order status) and the D59 rules (received means approved, no over-receipt, statuses, cancel with a reason, U02/U06 unchanged).
 
 ## U04 — purchase returns (EC-56)
 See [U04 plan](plans/U04.md). Covers the Done when (stock and supplier balance each change exactly once; you can't return more than you bought) and the D57 rules (approved invoices only, the invoice's branch, exact serial units, D41 tax, recomputed average, credit or cash refund).
+
+## INT-3 — stock and cash end to end (EC-131)
+
+See [INT-3 plan](plans/INT-3.md): one flow in a fresh shop, purchase order → invoice with IMEI units → payment from the safe → return → branch transfer → adjustment → shift with an expense, with the stock view, movement history, low-stock alert, supplier balance and safe checked at every step.
+
+## TEST-3 — stock and cash reconciliation tests (EC-132)
+
+See [TEST-3 plan](plans/TEST-3.md): each Sprint 3 test requirement mapped to the CI test that proves it (levels and balances equal their ledgers and never go below zero, two requests for the last unit or the last pound, IMEI units in one place and sold once, approval by amount).

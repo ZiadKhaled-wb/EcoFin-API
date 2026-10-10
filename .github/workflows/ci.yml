@@ -146,6 +146,10 @@ jobs:
       - name: F11 numbering concurrency proof
         run: node scripts/db-numbering-proof.mjs
 
+      # TEST-3: the real write functions race for the last unit and the last pound in a safe.
+      - name: TEST-3 stock and cash concurrency proof
+        run: node scripts/db-stock-cash-proof.mjs
+
       # F10: after everything above wrote to the database, every cache must still equal its ledger.
       - name: Ledger reconciliation after the SQL tests
         run: node scripts/db-reconcile.mjs

@@ -11,6 +11,7 @@ import {
   BranchDeactivationCheck,
   CategoryInUseDetail,
   SerialTakenDetail,
+  ShiftDifferenceDetail,
   ExportTooLargeDetail,
   PaymentExceedsOutstandingDetail,
   PoOverReceiptDetail,
@@ -88,6 +89,7 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   RETURN_QTY_EXCEEDED: ReturnQtyExceededDetail,
   PAYMENT_EXCEEDS_OUTSTANDING: PaymentExceedsOutstandingDetail,
   PO_OVER_RECEIPT: PoOverReceiptDetail,
+  SHIFT_DIFFERENCE_REASON_REQUIRED: ShiftDifferenceDetail,
 };
 
 /**
