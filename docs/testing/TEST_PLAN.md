@@ -307,3 +307,7 @@ See [U04 plan](plans/U04.md). Covers the Done when (stock and supplier balance e
 ## INT-3 — stock and cash end to end (EC-131)
 
 See [INT-3 plan](plans/INT-3.md): one flow in a fresh shop, purchase order → invoice with IMEI units → payment from the safe → return → branch transfer → adjustment → shift with an expense, with the stock view, movement history, low-stock alert, supplier balance and safe checked at every step.
+
+## TEST-3 — stock and cash reconciliation tests (EC-132)
+
+See [TEST-3 plan](plans/TEST-3.md): each Sprint 3 test requirement mapped to the CI test that proves it (levels and balances equal their ledgers and never go below zero, two requests for the last unit or the last pound, IMEI units in one place and sold once, approval by amount).

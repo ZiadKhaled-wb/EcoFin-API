@@ -36,6 +36,7 @@
     "db:smoke": "node scripts/db-smoke.mjs",
     "db:numbering": "node scripts/db-numbering-proof.mjs",
     "db:ledger": "node scripts/db-ledger-proof.mjs",
+    "db:stock-cash": "node scripts/db-stock-cash-proof.mjs",
     "db:reconcile": "node scripts/db-reconcile.mjs",
     "precheck:cross-shop": "npm run build:contracts",
     "check:cross-shop": "tsx scripts/check-cross-shop.ts",
