@@ -1742,7 +1742,7 @@ export const openApiSpec = {
             post: {
                 tags: ['Sales'],
                 summary: 'Price a cart without selling it (sale.create)',
-                description: 'S01 (D62). The cart is priced for the open shift of the caller (SHIFT_REQUIRED without one): list prices from the catalogue, or another unit_price when the caller holds price.override (PRICE_OVERRIDE_DENIED otherwise), taxed by the VAT engine with the VAT mode of the shop. Each line answers the stock available in the branch right now; more than is available is reported, not refused. Serialized products name their unit (UNIT_REQUIRED, UNIT_NOT_AVAILABLE). Nothing is written or reserved; works in an expired shop. Schema: SaleQuoteBody → SaleQuote.',
+                description: 'S01 (D62). The cart is priced for the open shift of the caller (SHIFT_REQUIRED without one): list prices from the catalogue, or another unit_price when the caller holds price.override (PRICE_OVERRIDE_DENIED otherwise), taxed by the VAT engine with the VAT mode of the shop. Each line answers the stock available in the branch right now; more than is available is reported, not refused. Serialized products name their unit (UNIT_REQUIRED, UNIT_NOT_AVAILABLE). S02 (D64): with payments (1-5 lines: cash with an optional tendered, bank_transfer with an active bank and a reference, store_credit with a customer) the answer also has paid, remaining (total - paid) and change, and store_credit_balance (reported, not reserved). Nothing is written or reserved; works in an expired shop. Schema: SaleQuoteBody → SaleQuote.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }],
                 responses: { 200: { description: 'SaleQuote' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
@@ -1751,14 +1751,24 @@ export const openApiSpec = {
         '/api/sales': {
             post: {
                 tags: ['Sales'],
-                summary: 'Complete a cash sale (sale.create)',
-                description: 'S01 (D62). One database transaction in the open shift of the caller (SHIFT_REQUIRED; its branch is the branch of the sale and its drawer takes the cash). The server prices the cart again and compares with expected_total, the total the cashier confirmed: a different total answers PRICE_CHANGED (409, details expected_total and total) and nothing is sold. Stock is checked on locked rows: OUT_OF_STOCK (409, details product_id, requested, available). A serialized line sells its exact unit, which becomes sold (UNIT_NOT_AVAILABLE when it is not in stock in the branch). Then the sale gets its number (SL), its lines with the tax snapshot, one stock ledger row per line, one cash payment (PY) into the drawer of the shift and one audit row (sale.created; a warning when a price was overridden). The same Idempotency-Key returns the same sale and sells nothing again. Other codes: PRODUCT_NOT_FOUND, PRODUCT_ARCHIVED, CUSTOMER_NOT_FOUND, PRICE_OVERRIDE_DENIED, SHIFT_CLOSED, DAY_CLOSED. Schema: SaleCreateBody → Sale.',
+                summary: 'Complete a sale, paid in one or more ways (sale.create)',
+                description: 'S01 (D62). One database transaction in the open shift of the caller (SHIFT_REQUIRED; its branch is the branch of the sale and its drawer takes the cash). The server prices the cart again and compares with expected_total, the total the cashier confirmed: a different total answers PRICE_CHANGED (409, details expected_total and total) and nothing is sold. Stock is checked on locked rows: OUT_OF_STOCK (409, details product_id, requested, available). A serialized line sells its exact unit, which becomes sold (UNIT_NOT_AVAILABLE when it is not in stock in the branch). Then the sale gets its number (SL), its lines with the tax snapshot, one stock ledger row per line, one cash payment (PY) into the drawer of the shift and one audit row (sale.created; a warning when a price was overridden). The same Idempotency-Key returns the same sale and sells nothing again. S02 (D64): `payments` (1-5 lines; at most one cash, one store_credit, three bank_transfer) replace the single cash payment. The lines must add up to the total exactly (PAYMENT_TOTAL_MISMATCH, 400, details total and paid); each line is one payment with its allocation and posts to its ledger: cash into the drawer of the shift (an optional tendered gives the change; only the amount is posted), a bank transfer into an active bank of the branch or a shop-wide one with its reference (VAULT_INVALID, CASH_ACCOUNT_INACTIVE; no shift on the bank movement), store credit from the balance of the customer (INSUFFICIENT_STORE_CREDIT, 409, details balance; needs a customer). Without payments the whole total is paid in cash. The audit row sale.created lists the payment lines. Other codes: PRODUCT_NOT_FOUND, PRODUCT_ARCHIVED, CUSTOMER_NOT_FOUND, PRICE_OVERRIDE_DENIED, SHIFT_CLOSED, DAY_CLOSED. Schema: SaleCreateBody → Sale.',
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     { $ref: '#/components/parameters/OrgId' },
                     { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
                 ],
                 responses: { 201: { description: 'Sale' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/sales/payment-accounts': {
+            get: {
+                tags: ['Sales'],
+                summary: 'The banks a transfer can go into (sale.create)',
+                description: 'S02 (D64). The active banks of the branch of the open shift of the caller and the shop-wide ones, by name only (no balances). No open shift: an empty list. Schema: SalePaymentAccountList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'SalePaymentAccountList' }, 403: { $ref: '#/components/responses/Error' } },
             },
         },
         '/api/sales/{id}': {
@@ -1775,7 +1785,7 @@ export const openApiSpec = {
             get: {
                 tags: ['Cash'],
                 summary: 'List shifts (shift.operate: own shifts; cash.view: the branches of the caller)',
-                description: 'K02 (D60). Newest first. Filters: branch_id, employee_id, status (open | closed), from/to (the shop day the shift was opened on). Each shift carries its expected cash (open: the drawer ledger sum now; closed: the snapshot at closing), counted cash and difference. Works in an expired shop. Schema: ShiftListQuery → ShiftList.',
+                description: 'K02 (D60). Newest first. S02 (D64): every shift carries sales_total and payment_totals (cash, bank_transfer, store_credit: the incoming payments of its sales). Filters: branch_id, employee_id, status (open | closed), from/to (the shop day the shift was opened on). Each shift carries its expected cash (open: the drawer ledger sum now; closed: the snapshot at closing), counted cash and difference. Works in an expired shop. Schema: ShiftListQuery → ShiftList.',
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     { $ref: '#/components/parameters/OrgId' },

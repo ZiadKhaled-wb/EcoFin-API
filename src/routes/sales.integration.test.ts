@@ -2,7 +2,8 @@
 // a fresh shop stocks chairs and one IMEI phone; a cashier can't sell without a shift, opens one,
 // quotes a cart and sells it (two requests with one key: one sale); the shift, the stock and the
 // unit follow; the same IMEI, a stale total, too many chairs and a cashier's own price are
-// refused with their codes; closing the shift counts the sale's cash into the safe.
+// refused with their codes; S02: a sale paid half cash, half bank transfer posts each half to its
+// own place and the shift shows both; closing the shift counts only the cash into the safe.
 import { beforeAll, describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -11,6 +12,7 @@ import {
   CashAccount,
   ErrorResponse,
   Sale,
+  SalePaymentAccountList,
   SaleQuote,
   Shift,
   StockList,
@@ -302,16 +304,93 @@ describe.skipIf(!RUN)('S01 sale core against local stack', () => {
     expect(missing.status).toBe(404);
     expect(code(missing)).toBe('SALE_NOT_FOUND');
 
-    // Closing the shift counts the sale's cash into the safe; then no more sales.
+    // S02 (D64): split payments. A shop-wide bank, listed by name for the cashier.
+    const madeBank = await call('post', '/api/cash-accounts', owner, {
+      name: `S02 bank ${STAMP}`,
+      kind: 'bank',
+      branch_id: null,
+    });
+    expect(madeBank.status, JSON.stringify(madeBank.body)).toBe(201);
+    const bank = (madeBank.body as { id: string }).id;
+    const accounts = SalePaymentAccountList.parse(
+      (await call('get', '/api/sales/payment-accounts')).body,
+    );
+    expect(accounts.items).toEqual([{ id: bank, name: `S02 bank ${STAMP}` }]);
+    const oneChair = [{ product_id: chair, quantity: 1 }];
+    // Half cash, half transfer (201): each half posts to its own place.
+    const split = await call(
+      'post',
+      '/api/sales',
+      cashier,
+      {
+        lines: oneChair,
+        expected_total: '250.00',
+        payments: [
+          { method: 'cash', amount: '125.00', tendered: '150.00' },
+          { method: 'bank_transfer', amount: '125.00', cash_account_id: bank, reference: 'TRX-1' },
+        ],
+      },
+      key('split'),
+    );
+    expect(split.status, JSON.stringify(split.body)).toBe(201);
+    const splitSale = Sale.parse(split.body);
+    expect(splitSale).toMatchObject({ paid_total: '250.00', change_total: '25.00' });
+    expect(splitSale.payments.map((p) => [p.method, p.amount, p.reference, p.change])).toEqual([
+      ['cash', '125.00', null, '25.00'],
+      ['bank_transfer', '125.00', 'TRX-1', null],
+    ]);
+    expect(
+      CashAccount.parse((await call('get', `/api/cash-accounts/${bank}`, owner)).body).balance,
+    ).toBe('125.00');
+    // The shift shows both halves; its expected cash counts the cash half only.
+    const taken = Shift.parse((await call('get', `/api/shifts/${shift.id}`)).body);
+    expect(taken.sales_total).toBe('5750.00');
+    expect(taken.payment_totals).toEqual({
+      cash: '5625.00',
+      bank_transfer: '125.00',
+      store_credit: '0.00',
+    });
+    expect(taken.expected_cash).toBe('5625.00');
+    // A mismatch is 400 with both amounts and sells nothing; a missing reference never gets there.
+    const mismatch = await call(
+      'post',
+      '/api/sales',
+      cashier,
+      {
+        lines: oneChair,
+        expected_total: '250.00',
+        payments: [{ method: 'cash', amount: '100.00' }],
+      },
+      key('mismatch'),
+    );
+    expect(mismatch.status).toBe(400);
+    expect(code(mismatch)).toBe('PAYMENT_TOTAL_MISMATCH');
+    expect(details(mismatch)).toEqual({ total: '250.00', paid: '100.00' });
+    const noReference = await call(
+      'post',
+      '/api/sales',
+      cashier,
+      {
+        lines: oneChair,
+        expected_total: '250.00',
+        payments: [{ method: 'bank_transfer', amount: '250.00', cash_account_id: bank }],
+      },
+      key('noref'),
+    );
+    expect(noReference.status).toBe(400);
+    expect(code(noReference)).toBe('VALIDATION_FAILED');
+    expect(await chairs()).toBe(2);
+
+    // Closing the shift counts only the cash half into the safe; then no more sales.
     const closed = await call('post', `/api/shifts/${shift.id}/close`, cashier, {
-      counts: { '200': 27, '100': 1 },
+      counts: { '200': 28, '20': 1, '5': 1 },
       vault_id: mainSafe,
     });
     expect(closed.status, JSON.stringify(closed.body)).toBe(200);
     expect(Shift.parse(closed.body)).toMatchObject({ status: 'closed', difference: '0.00' });
     expect(
       CashAccount.parse((await call('get', `/api/cash-accounts/${mainSafe}`, owner)).body).balance,
-    ).toBe('5500.00');
+    ).toBe('5625.00');
     const late = await call(
       'post',
       '/api/sales',
@@ -322,7 +401,7 @@ describe.skipIf(!RUN)('S01 sale core against local stack', () => {
     expect(late.status).toBe(409);
     expect(code(late)).toBe('SHIFT_REQUIRED');
 
-    // The whole shop still reconciles: totals of sales = payments = drawer movements.
+    // The whole shop still reconciles: totals of sales = payments = cash and bank movements.
     const sales = await service.from('sales').select('total').eq('organization_id', org);
     const allocations = await service
       .from('payment_allocations')
@@ -336,7 +415,7 @@ describe.skipIf(!RUN)('S01 sale core against local stack', () => {
     const sum = (rows: { total?: unknown; amount?: unknown }[] | null) =>
       (rows ?? []).reduce((t, r) => t + Math.round(Number(r.total ?? r.amount) * 100), 0);
     expect([sales.data!.length, sum(sales.data), sum(allocations.data), sum(moves.data)]).toEqual([
-      1, 550_000, 550_000, 550_000,
+      2, 575_000, 575_000, 575_000,
     ]);
   }, 90_000);
 });

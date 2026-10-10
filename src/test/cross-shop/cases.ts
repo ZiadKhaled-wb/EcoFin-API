@@ -3342,11 +3342,76 @@ crossShopCase({
     const customer = await send({ ...body, customer_id: '00000000-0000-4000-8000-00000000c0de' });
     h.expect(customer.res.status).toBe(404);
     h.expect(h.code(customer.res)).toBe('CUSTOMER_NOT_FOUND');
-    for (const call of [foreign, injected, branch, product, customer]) {
+    // S02 (D64): shop A sells its own stocked product, paying into shop B's bank or with shop B's
+    // customer's store credit.
+    const owner = await h.login(OWNER_A);
+    const own = await h.call('POST', '/api/products', {
+      token: owner.accessToken,
+      body: { name_ar: 'Cross-shop pay', sku: `XS-PAY-${Date.now()}`, cash_price: '10.00' },
+    });
+    h.expect(own.res.status, JSON.stringify(own.res.body)).toBe(201);
+    const ownId = (own.res.body as { id: string }).id;
+    const stocked = await h.call('POST', '/api/stock/adjustments', {
+      token: owner.accessToken,
+      idempotencyKey: key('pay-stock'),
+      body: {
+        branch_id: SHOP_A_BR1,
+        reason: 'found',
+        lines: [{ product_id: ownId, quantity: 1 }],
+      },
+    });
+    h.expect(stocked.res.status, JSON.stringify(stocked.res.body)).toBe(201);
+    const ownLines = [{ product_id: ownId, quantity: 1 }];
+    const quote = await h.call('POST', '/api/sales/quote', {
+      token: mine.token,
+      body: { lines: ownLines },
+    });
+    h.expect(quote.res.status, JSON.stringify(quote.res.body)).toBe(200);
+    const total = (quote.res.body as { total: string }).total;
+    const theirBank = await cashAccountOf(h, OWNER_B);
+    const bank = await send({
+      lines: ownLines,
+      expected_total: total,
+      payments: [
+        { method: 'bank_transfer', amount: total, cash_account_id: theirBank, reference: 'XS-1' },
+      ],
+    });
+    h.expect(bank.res.status).toBe(400);
+    h.expect(h.code(bank.res)).toBe('VAULT_INVALID');
+    const theirCustomer = await shopBCustomer(h, 'pay');
+    const credit = await send({
+      lines: ownLines,
+      expected_total: total,
+      customer_id: theirCustomer.id,
+      payments: [{ method: 'store_credit', amount: total }],
+    });
+    h.expect(credit.res.status).toBe(404);
+    h.expect(h.code(credit.res)).toBe('CUSTOMER_NOT_FOUND');
+    for (const call of [foreign, injected, branch, product, customer, bank, credit]) {
       h.expect(await h.auditRowsFrom(SHOP_A, call.ip)).toBe(0);
       h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
     }
     // Nothing was sold: the shift still expects nothing and closes on an empty count.
+    await closeShiftOf(h, mine);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/sales/payment-accounts',
+  name: "the payment accounts refuse a foreign header and never list shop B's bank",
+  async run(h) {
+    const theirBank = await cashAccountOf(h, OWNER_B);
+    const mine = await openShiftOf(h, CASHIER_A_EMAIL, SHOP_A_BR1);
+    const foreign = await h.call('GET', '/api/sales/payment-accounts', {
+      token: mine.token,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const own = await h.call('GET', '/api/sales/payment-accounts', { token: mine.token });
+    h.expect(own.res.status, JSON.stringify(own.res.body)).toBe(200);
+    const items = (own.res.body as { items: { id: string }[] }).items;
+    h.expect(items.some((a) => a.id === theirBank)).toBe(false);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
     await closeShiftOf(h, mine);
   },
 });

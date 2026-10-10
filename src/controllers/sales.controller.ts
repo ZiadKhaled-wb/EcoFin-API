@@ -14,6 +14,10 @@ export async function create(req: Request, res: Response) {
   const key = IdempotencyKeyHeader.parse(req.headers)['idempotency-key'];
   res.status(201).json(await service.postSale(getCtx(req), SaleCreateBody.parse(req.body), key));
 }
+export async function paymentAccounts(req: Request, res: Response) {
+  res.json(await service.listPaymentAccounts(getCtx(req)));
+}
+
 export async function get(req: Request, res: Response) {
   res.json(await service.getSale(getCtx(req), SaleIdParams.parse(req.params).id));
 }

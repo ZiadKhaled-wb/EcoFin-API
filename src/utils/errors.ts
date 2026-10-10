@@ -13,6 +13,8 @@ import {
   SerialTakenDetail,
   ShiftDifferenceDetail,
   PriceChangedDetail,
+  PaymentTotalMismatchDetail,
+  StoreCreditDetail,
   OutOfStockDetail,
   ExportTooLargeDetail,
   PaymentExceedsOutstandingDetail,
@@ -94,6 +96,8 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   PO_OVER_RECEIPT: PoOverReceiptDetail,
   SHIFT_DIFFERENCE_REASON_REQUIRED: ShiftDifferenceDetail,
   PRICE_CHANGED: PriceChangedDetail,
+  PAYMENT_TOTAL_MISMATCH: PaymentTotalMismatchDetail,
+  INSUFFICIENT_STORE_CREDIT: StoreCreditDetail,
   OUT_OF_STOCK: OutOfStockDetail,
   CUSTOMER_NATIONAL_ID_TAKEN: CustomerNationalIdTakenDetail,
 };
