@@ -292,6 +292,9 @@ See [K01 plan](plans/K01.md). Covers the Done when (a transfer changes both bala
 ## U03 — supplier payments (EC-55)
 See [U03 plan](plans/U03.md). Covers the Done when (a double-click pays once; invoice and supplier balances update) and the D58 rules (fully allocated, oldest first, never above the outstanding, safe not below 0, owner-only reversal).
 
+## K03 — expenses (EC-61)
+See [K03 plan](plans/K03.md). Covers the Done when (an expense reduces the vault balance; a shift expense reduces the shift's expected cash) and the D61 rules (a vault or the open shift, categories, receipt, no edit or delete, owner-only reversal once, the report by category).
+
 ## K02 — shifts / cash drawer (EC-60)
 See [K02 plan](plans/K02.md). Covers the Done when (expected cash = float + drawer ledger sum, not the whole vault; a closed shift can't take sales) and the D60 rules (one open shift per cashier and device, floats and drops as cash transfers, count by denomination, a difference needs a reason, takeover with cash.transfer).
 

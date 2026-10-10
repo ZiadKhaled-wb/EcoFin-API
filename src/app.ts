@@ -25,6 +25,8 @@ import purchasingRoutes from './routes/purchasing.js';
 import supplierPaymentsRoutes from './routes/supplierPayments.js';
 import purchaseOrdersRoutes from './routes/purchaseOrders.js';
 import shiftsRoutes from './routes/shifts.js';
+import expenseCategoriesRoutes from './routes/expenseCategories.js';
+import expensesRoutes from './routes/expenses.js';
 import cashAccountsRoutes from './routes/cashAccounts.js';
 import cashTransfersRoutes from './routes/cashTransfers.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -80,6 +82,8 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/supplier-payments', supplierPaymentsRoutes);
   mountRouter(app, '/api/purchase-orders', purchaseOrdersRoutes);
   mountRouter(app, '/api/shifts', shiftsRoutes);
+  mountRouter(app, '/api/expense-categories', expenseCategoriesRoutes);
+  mountRouter(app, '/api/expenses', expensesRoutes);
   mountRouter(app, '/api/cash-accounts', cashAccountsRoutes);
   mountRouter(app, '/api/cash-transfers', cashTransfersRoutes);
   mountRouter(app, '/api/me', meRoutes);

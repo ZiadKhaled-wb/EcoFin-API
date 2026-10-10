@@ -497,6 +497,19 @@ INSERT INTO t.denial VALUES
  ('list_cash_account_movements','cash_08_movements','cash.view',$$SELECT public.list_cash_account_movements((SELECT id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial bank'))$$),
  ('list_cash_transfers','cash_09_transfers','cash.view',$$SELECT public.list_cash_transfers()$$),
  ('get_cash_transfer','cash_10_transfer_get','cash.view',$$SELECT public.get_cash_transfer((SELECT id FROM public.cash_transfers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-cash-transfer'))$$);
+-- K03: after the K01 cases funded the denial bank: a category is made, an expense of 2.00 is paid
+-- from the bank and the owner reverses it (case names order the calls; the readers' role has none
+-- of expense.create, cash.view and report.financial).
+INSERT INTO t.denial VALUES
+ ('create_expense_category','expense_1_category','expense.create',$$SELECT public.create_expense_category('TEST-1 denial category')$$),
+ ('rename_expense_category','expense_2_rename','expense.create',$$SELECT public.rename_expense_category((SELECT id FROM public.expense_categories WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial category'),'TEST-1 denial category')$$),
+ ('set_expense_category_archived','expense_3_archive','expense.create',$$SELECT public.set_expense_category_archived((SELECT id FROM public.expense_categories WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial category'),false)$$),
+ ('list_expense_categories','expense_4_categories','expense.create',$$SELECT public.list_expense_categories()$$),
+ ('post_expense','expense_5_post','expense.create',$$SELECT public.post_expense((SELECT id FROM public.expense_categories WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial category'),'2.00','denial-expense-1','d2000000-0000-0000-0000-000000000011',(SELECT id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial bank'))$$),
+ ('get_expense','expense_6_get','expense.create',$$SELECT public.get_expense((SELECT id FROM public.expenses WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-expense-1'))$$),
+ ('list_expenses','expense_7_list','expense.create',$$SELECT public.list_expenses()$$),
+ ('expense_report','expense_8_report','expense.create',$$SELECT public.expense_report(current_date - 1, current_date + 1)$$),
+ ('reverse_expense','expense_9_reverse','expense.create',$$SELECT public.reverse_expense((SELECT id FROM public.expenses WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-expense-1'),'Denial reversal','denial-expense-rev')$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

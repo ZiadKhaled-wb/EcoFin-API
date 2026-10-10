@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.29.0
+
+- K03 expenses: ExpenseCategory, ExpenseCategoryList, ExpenseCategoryBody, ExpenseCategoryIdParams, ExpenseCategoryListQuery, ExpenseCreateBody (a vault with its branch, or the open shift), ExpenseReverseBody, ExpenseIdParams, Expense, ExpenseList, ExpenseListQuery (include_reversals, default true), ExpenseReportQuery, ExpenseReport. Error codes EXPENSE_NOT_FOUND, EXPENSE_CATEGORY_NOT_FOUND (404), EXPENSE_CATEGORY_NAME_TAKEN, EXPENSE_CATEGORY_ARCHIVED, EXPENSE_ALREADY_REVERSED (409).
+
 ## 0.28.0
 
 - K02 shifts: ShiftStatus, SHIFT_DENOMINATIONS, ShiftDenomination, ShiftCounts, ShiftOpenBody (a float needs a safe), ShiftCashBody (in / out with a note), ShiftCloseBody (counts, safe, difference reason), ShiftIdParams, ShiftMovement, Shift, ShiftSummary, ShiftList, CurrentShift, ShiftListQuery, ShiftVault, ShiftVaultList, ShiftVaultQuery, ShiftDifferenceDetail, shiftCountTotal(). Error codes SHIFT_NOT_FOUND (404), SHIFT_ALREADY_OPEN, SHIFT_CLOSED, SHIFT_REQUIRED (409), SHIFT_DIFFERENCE_REASON_REQUIRED (400, details), DEVICE_INVALID (400).

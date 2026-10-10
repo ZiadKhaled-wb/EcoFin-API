@@ -232,6 +232,38 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     });
     expect(closed.res.status, JSON.stringify(closed.res.body)).toBe(200);
   }
+  /** K03: a fresh expense category. */
+  async function newExpenseCategory(token: string) {
+    const made = await send('post', '/api/expense-categories', {
+      token,
+      body: { name: `F07 category ${STAMP}-${ipCounter}-${Math.random()}` },
+    });
+    expect(made.res.status, JSON.stringify(made.res.body)).toBe(201);
+    return (made.res.body as { id: string }).id;
+  }
+  /** K03: an expense of 5.00 paid from a fresh safe that holds 50.00. */
+  async function newExpense(token: string) {
+    const category = await newExpenseCategory(token);
+    const safe = await send('post', '/api/cash-accounts', {
+      token,
+      body: { name: `F07 expense safe ${STAMP}-${ipCounter}`, kind: 'safe', branch_id: BR1 },
+    });
+    expect(safe.res.status, JSON.stringify(safe.res.body)).toBe(201);
+    const vault = (safe.res.body as { id: string }).id;
+    const funded = await send('post', `/api/cash-accounts/${vault}/opening`, {
+      token,
+      key: `f07-expense-fund-${STAMP}-${ipCounter}`,
+      body: { amount: '50.00', note: 'F07 audit driver' },
+    });
+    expect(funded.res.status, JSON.stringify(funded.res.body)).toBe(200);
+    const sent = await send('post', '/api/expenses', {
+      token,
+      key: `f07-expense-${STAMP}-${ipCounter}`,
+      body: { category_id: category, amount: '5.00', branch_id: BR1, cash_account_id: vault },
+    });
+    expect(sent.res.status, JSON.stringify(sent.res.body)).toBe(201);
+    return { sent, id: (sent.res.body as { id: string }).id };
+  }
   async function newProduct(token: string) {
     const { res } = await send('post', '/api/products', { token, body: productBody() });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
@@ -471,6 +503,69 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         }),
         org: SHOP_ONE,
         status: 201,
+      };
+    },
+    'POST /api/expense-categories': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', '/api/expense-categories', {
+          token: owner.accessToken,
+          body: { name: `F07 category ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'PATCH /api/expense-categories/:id': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newExpenseCategory(owner.accessToken);
+      return {
+        sent: await send('patch', `/api/expense-categories/${id}`, {
+          token: owner.accessToken,
+          body: { name: `F07 renamed ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/expense-categories/:id/archive': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newExpenseCategory(owner.accessToken);
+      return {
+        sent: await send('post', `/api/expense-categories/${id}/archive`, {
+          token: owner.accessToken,
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/expense-categories/:id/restore': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newExpenseCategory(owner.accessToken);
+      const archived = await send('post', `/api/expense-categories/${id}/archive`, {
+        token: owner.accessToken,
+      });
+      expect(archived.res.status, JSON.stringify(archived.res.body)).toBe(200);
+      return {
+        sent: await send('post', `/api/expense-categories/${id}/restore`, {
+          token: owner.accessToken,
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/expenses': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const { sent } = await newExpense(owner.accessToken);
+      return { sent, org: SHOP_ONE, status: 201 };
+    },
+    'POST /api/expenses/:id/reverse': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const { id } = await newExpense(owner.accessToken);
+      return {
+        sent: await send('post', `/api/expenses/${id}/reverse`, {
+          token: owner.accessToken,
+          key: `f07-expense-rev-${STAMP}-${ipCounter}`,
+          body: { reason: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
       };
     },
     'POST /api/shifts': async () => {
