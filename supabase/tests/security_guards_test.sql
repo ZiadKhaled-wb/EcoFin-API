@@ -73,6 +73,8 @@ INSERT INTO t.no_permission_ok VALUES
   ('list_suppliers', 'U01: read-only supplier list; checks app.has_permission on any purchasing read key (D53) so an expired shop can still read'),
   ('get_supplier', 'U01: read-only supplier, archived included; checks app.has_permission on any purchasing read key (D53)'),
   ('supplier_statement', 'U01: read-only supplier statement; checks app.has_permission on any purchasing read key (D53) so an expired shop can still read'),
+  ('list_customers', 'R01: read-only customer list, national IDs masked without customer.view_pii; checks app.has_permission on any customer read key (D63) and the customers module, so an expired shop can still read'),
+  ('get_customer', 'R01: read-only customer, national ID masked without customer.view_pii; checks app.has_permission on any customer read key (D63) and the customers module'),
   ('list_purchase_invoices', 'U02: read-only purchase invoices of the caller''s branches; any purchasing read key (D53), works in an expired shop'),
   ('get_purchase_invoice', 'U02: read-only purchase invoice of the caller''s branches; any purchasing read key (D53)'),
   ('list_purchase_approvals', 'U06: read-only purchase approvals of the caller''s branches; checks app.has_permission(purchase.invoice_approve) so an expired shop can still read'),

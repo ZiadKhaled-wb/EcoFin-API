@@ -137,6 +137,14 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     return (res.body as { id: string }).id;
   }
+  async function newCustomer(token: string) {
+    const { res } = await send('post', '/api/customers', {
+      token,
+      body: { full_name: `F07 customer ${STAMP}-${ipCounter}`, phones: ['01000000007'] },
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return (res.body as { id: string }).id;
+  }
   /** K01: a new shop-wide bank (balance 0, not a branch default). */
   async function newCashAccount(token: string) {
     const { res } = await send('post', '/api/cash-accounts', {
@@ -705,6 +713,39 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
           token: owner.accessToken,
           key: `f07-sp-rev-${STAMP}-${ipCounter}`,
           body: { reason: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/customers': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', '/api/customers', {
+          token: owner.accessToken,
+          body: { full_name: `F07 customer ${STAMP}-${ipCounter}`, phones: ['01000000007'] },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'PATCH /api/customers/:id': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newCustomer(owner.accessToken);
+      return {
+        sent: await send('patch', `/api/customers/${id}`, {
+          token: owner.accessToken,
+          body: { notes: `F07 ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/customers/:id/status': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newCustomer(owner.accessToken);
+      return {
+        sent: await send('post', `/api/customers/${id}/status`, {
+          token: owner.accessToken,
+          body: { status: 'blocked', reason: 'F07 audit driver' },
         }),
         org: SHOP_ONE,
       };

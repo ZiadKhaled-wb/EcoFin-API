@@ -204,6 +204,8 @@ export const errorCodeHttpStatus = {
   PRODUCT_ARCHIVED: 409,
   PRICE_CHANGED: 409,
   PRICE_OVERRIDE_DENIED: 403,
+  // R01 customers
+  CUSTOMER_NATIONAL_ID_TAKEN: 409,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;
