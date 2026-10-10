@@ -143,6 +143,7 @@ describe.skipIf(!RUN)('R01 customers against local stack', () => {
       national_id_masked: '**********0015',
       birth_date: '1990-01-01',
       gender: 'male',
+      governorate_code: '01',
       monthly_income: '8500.50',
       status: 'active',
       id_photos_count: 0,
@@ -172,10 +173,11 @@ describe.skipIf(!RUN)('R01 customers against local stack', () => {
     });
     expect(unchanged.status).toBe(200);
     expect(await auditRows('customer.updated', customer.id)).toHaveLength(1);
-    const contradicts = await call('patch', `/api/customers/${customer.id}`, owner, {
+    // Birth date and gender are never inputs: the server reads them from the national ID.
+    const typedBirth = await call('patch', `/api/customers/${customer.id}`, owner, {
       birth_date: '1990-01-02',
     });
-    expect(contradicts.status).toBe(400);
+    expect(typedBirth.status).toBe(400);
 
     const noReason = await call('post', `/api/customers/${customer.id}/status`, owner, {
       status: 'blocked',
@@ -275,7 +277,7 @@ describe.skipIf(!RUN)('R01 customers against local stack', () => {
     expect(block.status).toBe(403);
   });
 
-  it('ID photos: counted for everyone, listed only with customer.view_pii', async () => {
+  it('ID photos: a cashier adds them, counted for everyone, listed only with customer.view_pii', async () => {
     const id = CustomerList.parse((await call('get', '/api/customers?search=' + NATIONAL_ID)).body)
       .items[0]!.id;
     const upload = await request(app)
@@ -312,7 +314,12 @@ describe.skipIf(!RUN)('R01 customers against local stack', () => {
       .field('entityType', 'customer')
       .field('entityId', id)
       .attach('file', PNG, { filename: 'id-back.png', contentType: 'image/png' });
-    expect(cashierUpload.status).toBe(403);
+    // A cashier (customer.create) adds ID photos; listing them still needs customer.view_pii.
+    expect(cashierUpload.status, JSON.stringify(cashierUpload.body)).toBe(201);
+    expect(
+      Customer.parse((await call('get', `/api/customers/${id}`, cashier)).body).id_photos_count,
+    ).toBe(2);
+    expect((await files(cashier)).body).toMatchObject({ items: [] });
   });
 
   it('a collector reads masked and cannot write; a warehouse user cannot read', async () => {

@@ -21,6 +21,7 @@ const row = (extra: Record<string, unknown> = {}) => ({
   national_id_masked: '**********0015',
   birth_date: '1990-01-01',
   gender: 'male',
+  governorate_code: '01',
   address: null,
   city: null,
   job: null,

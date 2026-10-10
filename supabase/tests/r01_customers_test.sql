@@ -79,7 +79,7 @@ INSERT INTO t.ids SELECT 'ahmed',(public.create_customer('{"full_name":"  Ahmed 
 SELECT t.expect('create: trims, joins spaces, normalises the phones and the ID; birth date and gender come from the ID',
   c->>'full_name'='Ahmed Ali Hassan' AND c->'phones'='["01001234567","0223456789"]'::jsonb
   AND c->>'national_id'='29001010100015' AND c->>'national_id_masked'='**********0015'
-  AND c->>'birth_date'='1990-01-01' AND c->>'gender'='male' AND c->>'address'='12 Tahrir St' AND c->>'city'='Cairo'
+  AND c->>'birth_date'='1990-01-01' AND c->>'gender'='male' AND c->>'governorate_code'='01' AND c->>'address'='12 Tahrir St' AND c->>'city'='Cairo'
   AND c->>'job'='Engineer' AND c->>'employer'='Nile Co' AND c->>'monthly_income'='8500.50' AND c->>'notes'='vip'
   AND c->>'status'='active' AND c->'is_business'='false'::jsonb AND (c->>'id_photos_count')::int=0, c::text)
 FROM (SELECT public.get_customer(t.id('ahmed')) c) x;
@@ -88,9 +88,9 @@ SELECT t.expect('create: defaults (no ID, optional fields null, active)',
   c->'national_id'='null'::jsonb AND c->'national_id_masked'='null'::jsonb AND c->'birth_date'='null'::jsonb AND c->'gender'='null'::jsonb
   AND c->'monthly_income'='null'::jsonb AND c->'tax_registration_no'='null'::jsonb AND c->>'status'='active', c::text)
 FROM (SELECT public.get_customer(t.id('mona')) c) x;
-SELECT t.expect('create: without an ID the birth date and gender may be typed',
-  c->>'birth_date'='1988-03-04' AND c->>'gender'='female' AND c->'phones'='["+966501234567"]'::jsonb, c::text)
-FROM (SELECT public.create_customer('{"full_name":"Tourist One","phones":["+966 50 123 4567"],"birth_date":"1988-03-04","gender":"female"}') c) x;
+SELECT t.expect('create: without an ID there is no birth date, gender or governorate (they are never typed)',
+  c->'birth_date'='null'::jsonb AND c->'gender'='null'::jsonb AND c->'governorate_code'='null'::jsonb AND c->'phones'='["+966501234567"]'::jsonb, c::text)
+FROM (SELECT public.create_customer('{"full_name":"Tourist One","phones":["+966 50 123 4567"]}') c) x;
 INSERT INTO t.ids SELECT 'arabic',(public.create_customer('{"full_name":"أحمد فاطمة","phones":["٠١٢٢٣٣٣٤٤٤٥"],"national_id":"٢٨٥٠٦١٥٢١٠٠٠٢٣"}')->>'id')::uuid;
 SELECT t.expect('create: Arabic-Indic digits are stored as 0-9',
   c->'phones'='["01223334445"]'::jsonb AND c->>'national_id'='28506152100023' AND c->>'birth_date'='1985-06-15' AND c->>'gender'='female', c::text)
@@ -98,8 +98,8 @@ FROM (SELECT public.get_customer(t.id('arabic')) c) x;
 SELECT t.expect('create: a business customer with a tax number',
   c->'is_business'='true'::jsonb AND c->>'tax_registration_no'='123-456-789', c::text)
 FROM (SELECT public.create_customer('{"full_name":"Delta Trading LLC","phones":["0235556667"],"is_business":true,"tax_registration_no":" 123-456-789 "}') c) x;
-INSERT INTO t.ids SELECT 'leap',(public.create_customer('{"full_name":"Leap Day","phones":["01000000009"],"national_id":"30002290200344","birth_date":"2000-02-29","gender":"female"}')->>'id')::uuid;
-SELECT t.expect('create: a birth date and gender that agree with the ID are accepted',t.id('leap') IS NOT NULL);
+INSERT INTO t.ids SELECT 'leap',(public.create_customer('{"full_name":"Leap Day","phones":["01000000009"],"national_id":"30002290200344"}')->>'id')::uuid;
+SELECT t.expect('create: the birth date and gender of a leap-day ID are read from it',(public.get_customer(t.id('leap'))->>'birth_date')='2000-02-29' AND (public.get_customer(t.id('leap'))->>'gender')='female');
 SELECT t.error('create: an unknown key (credit_limit)',$q$SELECT public.create_customer('{"full_name":"X1","phones":["01000000001"],"credit_limit":"5000"}')$q$,'VALIDATION_FAILED');
 SELECT t.error('create: status in the body',$q$SELECT public.create_customer('{"full_name":"X2","phones":["01000000001"],"status":"blocked"}')$q$,'VALIDATION_FAILED');
 SELECT t.error('create: organization_id in the body',format('SELECT public.create_customer(%L)',jsonb_build_object('full_name','X3','phones',jsonb_build_array('01000000001'),'organization_id',t.org('b'))),'VALIDATION_FAILED');
@@ -119,10 +119,10 @@ SELECT t.error('create: an ID born on 30 February',$q$SELECT public.create_custo
 SELECT t.error('create: an ID with an unknown governorate',$q$SELECT public.create_customer('{"full_name":"N3","phones":["01000000001"],"national_id":"29001019900015"}')$q$,'VALIDATION_FAILED');
 SELECT t.error('create: an ID of 13 digits',$q$SELECT public.create_customer('{"full_name":"N4","phones":["01000000001"],"national_id":"2900101010001"}')$q$,'VALIDATION_FAILED');
 SELECT t.error('create: an ID born in the future',$q$SELECT public.create_customer('{"full_name":"N5","phones":["01000000001"],"national_id":"39901010100015"}')$q$,'VALIDATION_FAILED');
-SELECT t.error('create: a birth date that contradicts the ID',$q$SELECT public.create_customer('{"full_name":"N6","phones":["01000000001"],"national_id":"27508201200057","birth_date":"1975-08-21"}')$q$,'VALIDATION_FAILED');
-SELECT t.error('create: a gender that contradicts the ID',$q$SELECT public.create_customer('{"full_name":"N7","phones":["01000000001"],"national_id":"27508201200057","gender":"female"}')$q$,'VALIDATION_FAILED');
-SELECT t.error('create: a typed birth date in the future',format('SELECT public.create_customer(%L)',jsonb_build_object('full_name','B1','phones',jsonb_build_array('01000000001'),'birth_date',(current_date+30)::text)),'VALIDATION_FAILED');
-SELECT t.error('create: a typed birth date that is not a real day',$q$SELECT public.create_customer('{"full_name":"B2","phones":["01000000001"],"birth_date":"1990-02-30"}')$q$,'VALIDATION_FAILED');
+SELECT t.error('create: a birth date is not an input, even one that agrees with the ID',$q$SELECT public.create_customer('{"full_name":"N6","phones":["01000000001"],"national_id":"27508201200057","birth_date":"1975-08-21"}')$q$,'VALIDATION_FAILED');
+SELECT t.error('create: a gender is not an input',$q$SELECT public.create_customer('{"full_name":"N7","phones":["01000000001"],"national_id":"27508201200057","gender":"female"}')$q$,'VALIDATION_FAILED');
+SELECT t.error('create: a birth date in the future',format('SELECT public.create_customer(%L)',jsonb_build_object('full_name','B1','phones',jsonb_build_array('01000000001'),'birth_date',(current_date+30)::text)),'VALIDATION_FAILED');
+SELECT t.error('create: a birth date that is not a real day',$q$SELECT public.create_customer('{"full_name":"B2","phones":["01000000001"],"birth_date":"1990-02-30"}')$q$,'VALIDATION_FAILED');
 SELECT t.error('create: a birth date in another format',$q$SELECT public.create_customer('{"full_name":"B3","phones":["01000000001"],"birth_date":"01/02/1990"}')$q$,'VALIDATION_FAILED');
 SELECT t.error('create: an unknown gender',$q$SELECT public.create_customer('{"full_name":"B4","phones":["01000000001"],"gender":"other"}')$q$,'VALIDATION_FAILED');
 SELECT t.error('create: a negative income',$q$SELECT public.create_customer('{"full_name":"M1","phones":["01000000001"],"monthly_income":"-5"}')$q$,'VALIDATION_FAILED');
@@ -171,18 +171,18 @@ SELECT t.expect('update: replacing an ID is a warning; the audit row holds the m
   AND NOT EXISTS(SELECT 1 FROM public.audit_log WHERE organization_id=t.org('a') AND (COALESCE(before::text,'')||COALESCE(after::text,'')) ~ '2900101010|2991231880'));
 SELECT public.update_customer(t.id('ahmed'),'{"national_id":"29001010100015"}');
 SELECT t.expect('update: filling an empty ID sets the birth date and gender',
-  c->>'national_id'='27508201200057' AND c->>'birth_date'='1975-08-20' AND c->>'gender'='male', c::text)
+  c->>'national_id'='27508201200057' AND c->>'birth_date'='1975-08-20' AND c->>'gender'='male' AND c->>'governorate_code'='12', c::text)
 FROM (SELECT public.update_customer(t.id('mona'),'{"national_id":"27508201200057"}') c) x;
 SELECT t.expect('update: filling an empty ID is audited as info with national_id_changed',
   EXISTS(SELECT 1 FROM public.audit_log WHERE action='customer.updated' AND entity_id=t.id('mona') AND severity='info'
     AND before->'national_id_masked'='null'::jsonb AND after->>'national_id_masked'='**********0057' AND after->'national_id_changed'='true'::jsonb));
 SELECT t.error('update: to another customer''s national ID',format('SELECT public.update_customer(%L,%L)',t.id('mona'),'{"national_id":"29001010100015"}'),'CUSTOMER_NATIONAL_ID_TAKEN');
 SELECT t.error('update: a birth date on a customer with an ID',format('SELECT public.update_customer(%L,%L)',t.id('mona'),'{"birth_date":"1975-08-21"}'),'VALIDATION_FAILED');
-SELECT t.expect('update: removing the ID keeps the birth date and gender, which can then be typed',
-  c1->'national_id'='null'::jsonb AND c1->'national_id_masked'='null'::jsonb AND c1->>'birth_date'='2000-02-29' AND c1->>'gender'='female'
-  AND c2->>'birth_date'='2000-03-01', c1::text)
-FROM (SELECT public.update_customer(t.id('leap'),'{"national_id":null}') c1) x,
-     LATERAL (SELECT public.update_customer(t.id('leap'),'{"birth_date":"2000-03-01"}') c2) y;
+SELECT t.expect('update: removing the ID removes what was read from it; birth date and gender can not be typed',
+  c1->'national_id'='null'::jsonb AND c1->'national_id_masked'='null'::jsonb AND c1->'birth_date'='null'::jsonb AND c1->'gender'='null'::jsonb
+  AND c1->'governorate_code'='null'::jsonb, c1::text)
+FROM (SELECT public.update_customer(t.id('leap'),'{"national_id":null}') c1) x;
+SELECT t.error('update: a birth date can not be typed without an ID',format('SELECT public.update_customer(%L,%L)',t.id('leap'),'{"birth_date":"2000-03-01"}'),'VALIDATION_FAILED');
 SELECT t.expect('update: a business flag needs the tax number in the same or an earlier change',
   public.update_customer(t.id('mona'),'{"is_business":true,"tax_registration_no":"987654321"}')->'is_business'='true'::jsonb);
 SELECT t.error('update: clearing the tax number of a business',format('SELECT public.update_customer(%L,%L)',t.id('mona'),'{"tax_registration_no":null}'),'VALIDATION_FAILED');
@@ -259,7 +259,7 @@ RESET ROLE;
 SELECT t.as_user('a0630000-0000-0000-8000-000000000003',t.org('a'));
 SET LOCAL ROLE authenticated;
 SELECT t.expect('cashier: creates a customer with an ID and gets it back masked',
-  c->'national_id'='null'::jsonb AND c->>'national_id_masked'='**********0079' AND c->>'birth_date'='1992-11-05' AND c->>'gender'='male', c::text)
+  c->'national_id'='null'::jsonb AND c->>'national_id_masked'='**********0079' AND c->>'birth_date'='1992-11-05' AND c->>'gender'='male' AND c->>'governorate_code'='13', c::text)
 FROM (SELECT public.create_customer('{"full_name":"Cashier Customer","phones":["01500000001"],"national_id":"29211051300079"}') c) x;
 SELECT t.expect('cashier: reads a customer with the ID masked',
   c->'national_id'='null'::jsonb AND c->>'national_id_masked'='**********0015' AND c->>'full_name'='Ahmed Ali Hassan', c::text)
