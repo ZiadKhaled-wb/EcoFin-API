@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.30.0
+
+- S01 sale core: SaleLineInput, SaleQuoteBody, SaleCreateBody (lines, customer_id, expected_total), SaleIdParams, SaleQuote, SaleQuoteLine, Sale, SaleLine, SalePayment, SalePaymentMethod, PriceChangedDetail, OutOfStockDetail. Error codes SALE_NOT_FOUND, CUSTOMER_NOT_FOUND (404), PRODUCT_ARCHIVED, PRICE_CHANGED (409), PRICE_OVERRIDE_DENIED (403).
+
 ## 0.29.1
 
 - No schema change. Republishes 0.29.0 (K02 shifts and K03 expenses included): the `contracts-v0.29.0` tag was put on a commit that still held 0.27.0, so that version was never published.

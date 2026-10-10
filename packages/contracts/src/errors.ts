@@ -198,6 +198,12 @@ export const errorCodeHttpStatus = {
   EXPENSE_CATEGORY_NAME_TAKEN: 409,
   EXPENSE_CATEGORY_ARCHIVED: 409,
   EXPENSE_ALREADY_REVERSED: 409,
+  // S01 sale core
+  SALE_NOT_FOUND: 404,
+  CUSTOMER_NOT_FOUND: 404,
+  PRODUCT_ARCHIVED: 409,
+  PRICE_CHANGED: 409,
+  PRICE_OVERRIDE_DENIED: 403,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

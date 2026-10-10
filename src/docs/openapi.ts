@@ -1686,7 +1686,41 @@ export const openApiSpec = {
                 responses: { 200: { description: 'Expense' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
-        '/api/shifts': {            get: {
+        '/api/sales/quote': {
+            post: {
+                tags: ['Sales'],
+                summary: 'Price a cart without selling it (sale.create)',
+                description: 'S01 (D62). The cart is priced for the open shift of the caller (SHIFT_REQUIRED without one): list prices from the catalogue, or another unit_price when the caller holds price.override (PRICE_OVERRIDE_DENIED otherwise), taxed by the VAT engine with the VAT mode of the shop. Each line answers the stock available in the branch right now; more than is available is reported, not refused. Serialized products name their unit (UNIT_REQUIRED, UNIT_NOT_AVAILABLE). Nothing is written or reserved; works in an expired shop. Schema: SaleQuoteBody → SaleQuote.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'SaleQuote' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/sales': {
+            post: {
+                tags: ['Sales'],
+                summary: 'Complete a cash sale (sale.create)',
+                description: 'S01 (D62). One database transaction in the open shift of the caller (SHIFT_REQUIRED; its branch is the branch of the sale and its drawer takes the cash). The server prices the cart again and compares with expected_total, the total the cashier confirmed: a different total answers PRICE_CHANGED (409, details expected_total and total) and nothing is sold. Stock is checked on locked rows: OUT_OF_STOCK (409, details product_id, requested, available). A serialized line sells its exact unit, which becomes sold (UNIT_NOT_AVAILABLE when it is not in stock in the branch). Then the sale gets its number (SL), its lines with the tax snapshot, one stock ledger row per line, one cash payment (PY) into the drawer of the shift and one audit row (sale.created; a warning when a price was overridden). The same Idempotency-Key returns the same sale and sells nothing again. Other codes: PRODUCT_NOT_FOUND, PRODUCT_ARCHIVED, CUSTOMER_NOT_FOUND, PRICE_OVERRIDE_DENIED, SHIFT_CLOSED, DAY_CLOSED. Schema: SaleCreateBody → Sale.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'Sale' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/sales/{id}': {
+            get: {
+                tags: ['Sales'],
+                summary: 'Read a sale with its lines and payments',
+                description: 'S01 (D62). The own sales of the caller with sale.create; with report.view or cash.view any sale of a branch the caller works in. Others: SALE_NOT_FOUND. Costs are never part of the answer. Schema: Sale.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Sale' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/shifts': {
+            get: {
                 tags: ['Cash'],
                 summary: 'List shifts (shift.operate: own shifts; cash.view: the branches of the caller)',
                 description: 'K02 (D60). Newest first. Filters: branch_id, employee_id, status (open | closed), from/to (the shop day the shift was opened on). Each shift carries its expected cash (open: the drawer ledger sum now; closed: the snapshot at closing), counted cash and difference. Works in an expired shop. Schema: ShiftListQuery → ShiftList.',

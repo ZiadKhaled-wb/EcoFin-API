@@ -8206,6 +8206,7 @@ export type Database = {
       get_purchase_order: { Args: { p_id: string }; Returns: Json };
       get_purchase_return: { Args: { p_id: string }; Returns: Json };
       get_returnable_invoice: { Args: { p_invoice_id: string }; Returns: Json };
+      get_sale: { Args: { p_id: string }; Returns: Json };
       get_shift: { Args: { p_id: string }; Returns: Json };
       get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       get_shop_settings: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -8521,6 +8522,15 @@ export type Database = {
         };
         Returns: Json;
       };
+      post_sale: {
+        Args: {
+          p_customer_id?: string;
+          p_expected_total: string;
+          p_idempotency_key: string;
+          p_lines: Json;
+        };
+        Returns: Json;
+      };
       post_stock_adjustment: {
         Args: {
           p_branch_id: string;
@@ -8548,6 +8558,7 @@ export type Database = {
         Returns: Json;
       };
       publish_installment_policy: { Args: { p_policy: Json }; Returns: string };
+      quote_sale: { Args: { p_customer_id?: string; p_lines: Json }; Returns: Json };
       receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
       register_file: {
         Args: {

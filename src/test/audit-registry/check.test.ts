@@ -21,11 +21,11 @@ describe('audit registry (F07 / D19)', () => {
     extra.post('/', (_req, res) => {
       res.json({});
     });
-    mountRouter(app, '/api/sales', extra);
+    mountRouter(app, '/api/not-registered-yet', extra);
     const lines: string[] = [];
     expect(runAuditRegistryCheck(app, (l) => lines.push(l))).toBe(1);
     expect(lines).toContain(
-      'MISSING audit entry: POST /api/sales (add it to src/test/audit-registry/registry.ts)',
+      'MISSING audit entry: POST /api/not-registered-yet (add it to src/test/audit-registry/registry.ts)',
     );
   });
 

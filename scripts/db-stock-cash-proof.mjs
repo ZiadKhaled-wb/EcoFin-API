@@ -10,8 +10,15 @@
 //   B. 20 write-offs of the same IMEI unit: exactly one posts; the unit left stock once.
 //   C. the last chair again, 10 adjustments racing 10 branch transfers: exactly one of the 20 wins.
 //   D. 20 expenses of 1 000.00 from the safe that holds 1 000.00: exactly one is paid.
-//   E. app.ledger_mismatches() finds nothing, for the shop and for the whole database.
-// (Sales are S01, Sprint 4; the sale race on the ledger itself is db:ledger, F10.)
+// Then real sales (S01, public.post_sale) by four cashiers, each in their own open shift:
+//   F. 20 sales of the last chair: exactly one sells, 19 get OUT_OF_STOCK.
+//   G. 20 sales of one IMEI unit: exactly one sells.
+//   H. 20 requests with ONE idempotency key: one sale, one stock and one cash movement, one number.
+//   I. 20 two-product carts, half listing chair then lamp and half lamp then chair, for 10 of
+//      each: exactly 10 sell and nothing deadlocks (rows are always locked in the same order).
+//   E. app.ledger_mismatches() finds nothing, for the shop and for the whole database, and the
+//      sales' totals equal their payments and the drawers' sale movements.
+// (The sale race on the bare ledger is db:ledger, F10.)
 import { pgbench, processed, psql, removeProofShop, report, writeFile } from './db-proof-lib.mjs';
 
 const CLIENTS = Number(process.env.TEST3_CLIENTS ?? 20);
@@ -21,12 +28,15 @@ const ADMIN = 'f0000000-0000-0000-0000-000000000001'; // the seeded platform adm
 const OWNER = 'f3030000-0000-0000-8000-000000000001';
 const OWNER_EMAIL = 'test3-proof-owner@example.com';
 const TOKEN = 'f'.repeat(64);
+const CASHIERS = 4;
+const cashier = (n) => `f3030000-0000-0000-8000-00000000001${n}`;
 
 /** Removes what an earlier (interrupted) run left behind. */
 function cleanUp() {
   const org = psql(`SELECT id FROM public.organizations WHERE tenant_slug = '${SLUG}';`);
   if (org) removeProofShop(org, SCHEMA);
-  psql(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; DELETE FROM auth.users WHERE id = '${OWNER}';`);
+  psql(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE;
+        DELETE FROM auth.users WHERE id = '${OWNER}' OR id::text LIKE 'f3030000-0000-0000-8000-00000000001_';`);
 }
 
 /** Counts of the outcomes of one round: [done, refused with `code`, anything else, first other error]. */
@@ -77,6 +87,7 @@ try {
       kind    text NOT NULL,
       result  text NOT NULL,          -- done | refused
       error   text,
+      ref     uuid,                   -- the sale a "done" sale request answered
       backend integer NOT NULL DEFAULT pg_backend_pid()
     );
 
@@ -233,6 +244,183 @@ try {
     ['D. the safe is at exactly 0.00, never below', Number(balance) === 0, balance],
   ]);
 
+  // ---------------------------------------------------------------- real sales: four cashiers, four shifts
+  psql(`
+    INSERT INTO auth.users (id, email)
+    SELECT ('f3030000-0000-0000-8000-00000000001' || n)::uuid, 'test3-proof-cashier-' || n || '@example.com'
+    FROM generate_series(1, ${CASHIERS}) n;
+    INSERT INTO public.employees (organization_id, auth_user_id, full_name, role, default_branch_id)
+    SELECT ${SCHEMA}.id('org'), ('f3030000-0000-0000-8000-00000000001' || n)::uuid, 'Proof cashier ' || n,
+           'CASHIER', ${SCHEMA}.id('main') FROM generate_series(1, ${CASHIERS}) n;
+    INSERT INTO public.employee_branches (organization_id, employee_id, branch_id)
+    SELECT e.organization_id, e.id, ${SCHEMA}.id('main') FROM public.employees e
+    WHERE e.organization_id = ${SCHEMA}.id('org') AND e.role = 'CASHIER';
+    CREATE FUNCTION ${SCHEMA}.sign_in_as(p_cashier integer) RETURNS void LANGUAGE sql AS $$
+      SELECT set_config('request.jwt.claim.sub', 'f3030000-0000-0000-8000-00000000001' || p_cashier, true),
+             set_config('app.org_id', '', true),
+             set_config('request.headers', json_build_object('x-org-id', ${SCHEMA}.id('org'))::text, true) $$;
+    ${Array.from(
+      { length: CASHIERS },
+      (_, i) => `BEGIN; SELECT ${SCHEMA}.sign_in_as(${i + 1});
+    SELECT public.open_shift(${SCHEMA}.id('main'), '0', 'test3-proof-shift-${i + 1}'); COMMIT;`,
+    ).join('\n    ')}
+    BEGIN; SELECT ${SCHEMA}.sign_in();
+    INSERT INTO ${SCHEMA}.ids VALUES ('lamp', public.create_product('{"name_ar":"Proof lamp","sku":"T3P-LP","cash_price":"100"}'));
+    SELECT public.post_stock_adjustment(${SCHEMA}.id('main'), 'found', NULL,
+      jsonb_build_array(jsonb_build_object('product_id', ${SCHEMA}.id('chair'), 'quantity', 1)), 'test3-proof-chair-3');
+    SELECT public.register_units(${SCHEMA}.id('phone'), ${SCHEMA}.id('main'), '3000.00', '["T3P-IMEI-2"]', NULL, 'test3-proof-unit-2');
+    INSERT INTO ${SCHEMA}.ids SELECT 'unit2', id FROM public.units WHERE organization_id = ${SCHEMA}.id('org') AND serial = 'T3P-IMEI-2';
+    COMMIT; TRUNCATE ${SCHEMA}.outcomes;
+
+    -- One sale request as the API makes it: the cashier quotes the cart and sells it at that total.
+    CREATE FUNCTION ${SCHEMA}.sale(p_kind text, p_cashier integer) RETURNS void LANGUAGE plpgsql AS $$
+    DECLARE
+      v_key text := CASE WHEN p_kind = 'sale_same_key' THEN 'test3-proof-one-key' ELSE 'test3-proof-' || gen_random_uuid() END;
+      v_chair jsonb := jsonb_build_object('product_id', ${SCHEMA}.id('chair'), 'quantity', 1);
+      v_lamp jsonb := jsonb_build_object('product_id', ${SCHEMA}.id('lamp'), 'quantity', 1);
+      v_lines jsonb := CASE p_kind
+        WHEN 'sale_unit' THEN jsonb_build_array(jsonb_build_object('product_id', ${SCHEMA}.id('phone'), 'quantity', 1, 'unit_id', ${SCHEMA}.id('unit2')))
+        WHEN 'sale_ab' THEN jsonb_build_array(v_chair, v_lamp)
+        WHEN 'sale_ba' THEN jsonb_build_array(v_lamp, v_chair)
+        ELSE jsonb_build_array(v_chair) END;
+      v_sale jsonb;
+    BEGIN
+      PERFORM ${SCHEMA}.sign_in_as(p_cashier);
+      BEGIN
+        v_sale := public.post_sale(v_lines, public.quote_sale(v_lines)->>'total', v_key);
+        INSERT INTO ${SCHEMA}.outcomes (kind, result, ref) VALUES (p_kind, 'done', (v_sale->>'id')::uuid);
+      EXCEPTION WHEN others THEN
+        INSERT INTO ${SCHEMA}.outcomes (kind, result, error) VALUES (p_kind, 'refused', SQLERRM);
+      END;
+    END $$;`);
+  const saleScript = (kind) =>
+    `\\set c random(1, ${CASHIERS})\nSELECT ${SCHEMA}.sale('${kind}', :c);\n`;
+  const salesMade = () =>
+    psql(`SELECT concat_ws('|', count(*), COALESCE(max(right(number, 6)::integer), 0), count(DISTINCT shift_id))
+          FROM public.sales WHERE organization_id = ${SCHEMA}.id('org');`).split('|');
+
+  // ---------------------------------------------------------------- F. the last chair, sold
+  await round('F.', '/tmp/test3_sale_chair.sql', saleScript('sale_chair'));
+  [done, refused, other, firstOther, backends] = outcomes('sale_chair', 'OUT_OF_STOCK');
+  let [saleRows, lastNo] = salesMade();
+  const partF = report([
+    ['F. exactly one cashier sold the last chair', done === '1', done],
+    [`F. the other ${CLIENTS - 1} got OUT_OF_STOCK`, Number(refused) === CLIENTS - 1, refused],
+    ['F. no other errors (no deadlocks)', other === '0', `${other} ${firstOther}`],
+    [
+      'F. one sale; the refused ones took no number',
+      saleRows === '1' && lastNo === '1',
+      `${saleRows} sales, last number ${lastNo}`,
+    ],
+    ['F. the chair is at exactly 0, never below', level('chair') === '0', level('chair')],
+    [
+      'F. the requests came from many concurrent sessions',
+      Number(backends) >= Math.min(CLIENTS, 10),
+      `${backends} sessions`,
+    ],
+  ]);
+
+  // ---------------------------------------------------------------- G. one IMEI unit, sold
+  await round('G.', '/tmp/test3_sale_unit.sql', saleScript('sale_unit'));
+  [done, refused, other, firstOther] = outcomes('sale_unit', 'UNIT_NOT_AVAILABLE,OUT_OF_STOCK');
+  const [unit2Status, unit2Out] = psql(`
+    SELECT concat_ws('|', (SELECT status FROM public.units WHERE id = ${SCHEMA}.id('unit2')),
+      (SELECT count(*) FROM public.stock_movements WHERE unit_id = ${SCHEMA}.id('unit2') AND type = 'sale_out'));`).split(
+    '|',
+  );
+  const partG = report([
+    ['G. exactly one sale of the unit', done === '1', done],
+    [
+      `G. the other ${CLIENTS - 1} were refused (the unit is sold)`,
+      Number(refused) === CLIENTS - 1,
+      refused,
+    ],
+    ['G. no other errors', other === '0', `${other} ${firstOther}`],
+    [
+      'G. the unit is sold, by exactly one sale_out row',
+      unit2Status === 'sold' && unit2Out === '1',
+      `${unit2Status}, ${unit2Out} row`,
+    ],
+  ]);
+
+  // ---------------------------------------------------------------- H. one key, many requests
+  psql(`BEGIN; SELECT ${SCHEMA}.sign_in();
+        SELECT public.post_stock_adjustment(${SCHEMA}.id('main'), 'found', NULL,
+          jsonb_build_array(jsonb_build_object('product_id', ${SCHEMA}.id('chair'), 'quantity', 5)), 'test3-proof-chair-4');
+        COMMIT;`);
+  await round('H.', '/tmp/test3_sale_key.sql', saleScript('sale_same_key'));
+  [done, refused, other, firstOther] = outcomes('sale_same_key', '-');
+  const [answers, keySales, keyStock, keyCash, keyPayments] = psql(`
+    SELECT concat_ws('|',
+      (SELECT count(DISTINCT ref) FROM ${SCHEMA}.outcomes WHERE kind = 'sale_same_key'),
+      (SELECT count(*) FROM public.sales WHERE organization_id = ${SCHEMA}.id('org') AND idempotency_key = 'test3-proof-one-key'),
+      (SELECT count(*) FROM public.stock_movements m JOIN public.sales s ON s.id = m.source_id WHERE s.idempotency_key = 'test3-proof-one-key'),
+      (SELECT count(*) FROM public.cash_movements m JOIN public.sales s ON s.id = m.source_id WHERE s.idempotency_key = 'test3-proof-one-key'),
+      (SELECT count(*) FROM public.payment_allocations a JOIN public.sales s ON s.id = a.sale_id WHERE s.idempotency_key = 'test3-proof-one-key'));`).split(
+    '|',
+  );
+  [saleRows, lastNo] = salesMade();
+  const partH = report([
+    [
+      `H. all ${CLIENTS} requests got an answer, none refused`,
+      Number(done) === CLIENTS && refused === '0' && other === '0',
+      `${done} done, ${other} ${firstOther}`,
+    ],
+    ['H. all of them got the same sale', answers === '1', `${answers} distinct`],
+    [
+      'H. one sale, one stock movement, one cash movement, one payment',
+      keySales === '1' && keyStock === '1' && keyCash === '1' && keyPayments === '1',
+      `${keySales} / ${keyStock} / ${keyCash} / ${keyPayments}`,
+    ],
+    [
+      'H. the repeats took no number: the sale is number 3',
+      saleRows === '3' && lastNo === '3',
+      `${saleRows} sales, last number ${lastNo}`,
+    ],
+    ['H. stock went down by 1 only (5 -> 4)', level('chair') === '4', level('chair')],
+  ]);
+
+  // ---------------------------------------------------------------- I. two-product carts in both orders
+  psql(`BEGIN; SELECT ${SCHEMA}.sign_in();
+        SELECT public.post_stock_adjustment(${SCHEMA}.id('main'), 'found', NULL, jsonb_build_array(
+          jsonb_build_object('product_id', ${SCHEMA}.id('chair'), 'quantity', 6),
+          jsonb_build_object('product_id', ${SCHEMA}.id('lamp'), 'quantity', 10)), 'test3-proof-carts');
+        COMMIT;`);
+  await round(
+    'I.',
+    '/tmp/test3_sale_carts.sql',
+    `\\set c random(1, ${CASHIERS})\n\\set r random(1, 2)\nSELECT ${SCHEMA}.sale(CASE :r WHEN 1 THEN 'sale_ab' ELSE 'sale_ba' END, :c);\n`,
+  );
+  [done, refused, other, firstOther] = outcomes('sale_ab,sale_ba', 'OUT_OF_STOCK');
+  const [orders, shiftsUsed] = psql(`
+    SELECT concat_ws('|', (SELECT count(DISTINCT kind) FROM ${SCHEMA}.outcomes WHERE kind IN ('sale_ab', 'sale_ba')),
+      (SELECT count(DISTINCT shift_id) FROM public.sales WHERE organization_id = ${SCHEMA}.id('org')));`).split(
+    '|',
+  );
+  const partI = report([
+    ['I. carts came in both product orders', orders === '2', `${orders} orders`],
+    ['I. exactly 10 carts sold (10 chairs and 10 lamps were there)', done === '10', done],
+    [`I. the other ${CLIENTS - 10} got OUT_OF_STOCK`, Number(refused) === CLIENTS - 10, refused],
+    ['I. no deadlock and no other error', other === '0', `${other} ${firstOther}`],
+    [
+      'I. chairs and lamps are at exactly 0',
+      level('chair') === '0' && level('lamp') === '0',
+      `${level('chair')} / ${level('lamp')}`,
+    ],
+    ['I. the sales came from more than one shift', Number(shiftsUsed) > 1, `${shiftsUsed} shifts`],
+  ]);
+  const money = psql(`
+    SELECT concat_ws(' / ',
+      (SELECT sum(total) FROM public.sales WHERE organization_id = ${SCHEMA}.id('org')),
+      (SELECT sum(a.amount) FROM public.payment_allocations a WHERE a.organization_id = ${SCHEMA}.id('org') AND a.sale_id IS NOT NULL),
+      (SELECT sum(m.amount) FROM public.cash_movements m WHERE m.organization_id = ${SCHEMA}.id('org') AND m.type = 'sale'));`);
+  const partMoney = report([
+    [
+      "E. the sales' totals = their payments = the drawers' sale movements",
+      new Set(money.split(' / ')).size === 1,
+      money,
+    ],
+  ]);
   // ---------------------------------------------------------------- E. reconciliation
   const [shopMismatches, allMismatches] = psql(`
     SELECT concat_ws('|', (SELECT count(*) FROM app.ledger_mismatches(${SCHEMA}.id('org'))),
@@ -246,7 +434,18 @@ try {
     ['E. the whole database reconciles', allMismatches === '0', `${allMismatches} mismatches`],
   ]);
 
-  failed = !(partA && partB && partC && partD && partE);
+  failed = !(
+    partA &&
+    partB &&
+    partC &&
+    partD &&
+    partF &&
+    partG &&
+    partH &&
+    partI &&
+    partMoney &&
+    partE
+  );
 } catch (error) {
   console.error(`db:stock-cash: ${error.message}`);
   failed = true;
