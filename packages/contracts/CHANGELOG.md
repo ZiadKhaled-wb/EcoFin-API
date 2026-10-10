@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.29.1
+
+- No schema change. Republishes 0.29.0 (K02 shifts and K03 expenses included): the `contracts-v0.29.0` tag was put on a commit that still held 0.27.0, so that version was never published.
+
 ## 0.29.0
 
 - K03 expenses: ExpenseCategory, ExpenseCategoryList, ExpenseCategoryBody, ExpenseCategoryIdParams, ExpenseCategoryListQuery, ExpenseCreateBody (a vault with its branch, or the open shift), ExpenseReverseBody, ExpenseIdParams, Expense, ExpenseList, ExpenseListQuery (include_reversals, default true), ExpenseReportQuery, ExpenseReport. Error codes EXPENSE_NOT_FOUND, EXPENSE_CATEGORY_NOT_FOUND (404), EXPENSE_CATEGORY_NAME_TAKEN, EXPENSE_CATEGORY_ARCHIVED, EXPENSE_ALREADY_REVERSED (409).

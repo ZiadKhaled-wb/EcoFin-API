@@ -1,4 +1,4 @@
-export const CONTRACTS_VERSION = '0.29.0';
+export const CONTRACTS_VERSION = '0.29.1';
 
 export * from './common.js';
 export * from './money.js';
