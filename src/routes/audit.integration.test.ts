@@ -568,6 +568,32 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
+    'POST /api/sales': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      await openShift(owner.accessToken);
+      const product = await newProduct(owner.accessToken);
+      const stocked = await send('post', '/api/stock/adjustments', {
+        token: owner.accessToken,
+        key: `f07-sale-stock-${STAMP}-${ipCounter}`,
+        body: { branch_id: BR1, reason: 'found', lines: [{ product_id: product, quantity: 1 }] },
+      });
+      expect(stocked.res.status, JSON.stringify(stocked.res.body)).toBe(201);
+      const lines = [{ product_id: product, quantity: 1 }];
+      const quote = await send('post', '/api/sales/quote', {
+        token: owner.accessToken,
+        body: { lines },
+      });
+      expect(quote.res.status, JSON.stringify(quote.res.body)).toBe(200);
+      return {
+        sent: await send('post', '/api/sales', {
+          token: owner.accessToken,
+          key: `f07-sale-${STAMP}-${ipCounter}`,
+          body: { lines, expected_total: (quote.res.body as { total: string }).total },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
     'POST /api/shifts': async () => {
       const owner = await login('owner.one@ecotech.test');
       await closeOpenShift(owner.accessToken);

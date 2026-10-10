@@ -510,6 +510,13 @@ INSERT INTO t.denial VALUES
  ('list_expenses','expense_7_list','expense.create',$$SELECT public.list_expenses()$$),
  ('expense_report','expense_8_report','expense.create',$$SELECT public.expense_report(current_date - 1, current_date + 1)$$),
  ('reverse_expense','expense_9_reverse','expense.create',$$SELECT public.reverse_expense((SELECT id FROM public.expenses WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-expense-1'),'Denial reversal','denial-expense-rev')$$);
+-- S01: after the unit cases registered DENIAL-SN-1 (price 1): the owner opens a second shift,
+-- quotes the unit, sells it at the quoted total and reads the sale (case names order the calls).
+INSERT INTO t.denial VALUES
+ ('open_shift','unit_5_sale_shift','shift.operate',$$SELECT public.open_shift('d2000000-0000-0000-0000-000000000011','0','denial-shift-sale')$$),
+ ('quote_sale','unit_6_sale_quote','sale.create',$$SELECT public.quote_sale(jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-PH'),'quantity',1,'unit_id',(SELECT id FROM public.units WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND serial='DENIAL-SN-1'))))$$),
+ ('post_sale','unit_7_sale_post','sale.create',$$SELECT public.post_sale(x.l,public.quote_sale(x.l)->>'total','denial-sale-1') FROM (SELECT jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-PH'),'quantity',1,'unit_id',(SELECT id FROM public.units WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND serial='DENIAL-SN-1'))) l) x$$),
+ ('get_sale','unit_8_sale_get','sale.create',$$SELECT public.get_sale((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'))$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

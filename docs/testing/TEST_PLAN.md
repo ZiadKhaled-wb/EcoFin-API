@@ -311,3 +311,7 @@ See [INT-3 plan](plans/INT-3.md): one flow in a fresh shop, purchase order → i
 ## TEST-3 — stock and cash reconciliation tests (EC-132)
 
 See [TEST-3 plan](plans/TEST-3.md): each Sprint 3 test requirement mapped to the CI test that proves it (levels and balances equal their ledgers and never go below zero, two requests for the last unit or the last pound, IMEI units in one place and sold once, approval by amount).
+
+## S01 — sale core (EC-68)
+
+See [S01 plan](plans/S01.md). Covers the Done when (the four ledger / reconciliation checks, a double submit creates one sale, the last unit can't be sold twice) and the D62 rules (the open shift, server prices and overrides, PRICE_CHANGED, the tax snapshot in both VAT modes, IMEI units, every refusal leaving nothing behind, who may sell and read).

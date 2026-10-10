@@ -3106,3 +3106,123 @@ crossShopCase({
     ).toBeNull();
   },
 });
+
+// S01 sales (D62). Shop A sells as its cashier (in a shift opened for the case); shop B's sale
+// is its owner's. Refused calls move no stock and no cash, so shop A's shift closes on nothing.
+const saleKey = () => `xs-s01-${Date.now()}-${Math.random()}`;
+/** A sale of one new product by shop B's owner, in their open shift (left open for the caller). */
+async function shopBSale(h: CrossShopHarness) {
+  const product = await shopBProduct(h, 'sale');
+  const stocked = await h.call('POST', '/api/stock/adjustments', {
+    token: product.token,
+    idempotencyKey: key('sale-stock'),
+    body: {
+      branch_id: SHOP_B_BR1,
+      reason: 'found',
+      lines: [{ product_id: product.id, quantity: 1 }],
+    },
+  });
+  h.expect(stocked.res.status, JSON.stringify(stocked.res.body)).toBe(201);
+  const shift = await openShiftOf(h, OWNER_B, SHOP_B_BR1);
+  const lines = [{ product_id: product.id, quantity: 1 }];
+  const quote = await h.call('POST', '/api/sales/quote', { token: shift.token, body: { lines } });
+  h.expect(quote.res.status, JSON.stringify(quote.res.body)).toBe(200);
+  const sold = await h.call('POST', '/api/sales', {
+    token: shift.token,
+    idempotencyKey: saleKey(),
+    body: { lines, expected_total: (quote.res.body as { total: string }).total },
+  });
+  h.expect(sold.res.status, JSON.stringify(sold.res.body)).toBe(201);
+  return { id: (sold.res.body as { id: string }).id, shift };
+}
+/** Shop B's shift holds the sale's cash: closed with nothing counted and a reason. */
+async function closeShiftShort(h: CrossShopHarness, shift: { id: string; token: string }) {
+  const closed = await h.call('POST', `/api/shifts/${shift.id}/close`, {
+    token: shift.token,
+    body: { counts: {}, difference_reason: 'Cross-shop case' },
+  });
+  h.expect(closed.res.status, JSON.stringify(closed.res.body)).toBe(200);
+}
+crossShopCase({
+  method: 'POST',
+  path: '/api/sales/quote',
+  name: "a quote refuses a foreign header, an org id and shop B's product",
+  async run(h) {
+    const theirs = await shopBProduct(h, 'quote');
+    const mine = await openShiftOf(h, CASHIER_A_EMAIL, SHOP_A_BR1);
+    const lines = [{ product_id: theirs.id, quantity: 1 }];
+    const foreign = await h.call('POST', '/api/sales/quote', {
+      token: mine.token,
+      orgId: SHOP_B,
+      body: { lines },
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/sales/quote', {
+      token: mine.token,
+      body: { lines, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const product = await h.call('POST', '/api/sales/quote', {
+      token: mine.token,
+      body: { lines },
+    });
+    h.expect(product.res.status).toBe(404);
+    h.expect(h.code(product.res)).toBe('PRODUCT_NOT_FOUND');
+    await closeShiftOf(h, mine);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/sales',
+  name: "a sale refuses a foreign header, an org id, shop B's product and an unknown customer; nothing is written",
+  async run(h) {
+    const theirs = await shopBProduct(h, 'sell');
+    const mine = await openShiftOf(h, CASHIER_A_EMAIL, SHOP_A_BR1);
+    const body = { lines: [{ product_id: theirs.id, quantity: 1 }], expected_total: '10.00' };
+    const send = (sent: object, orgId?: string) =>
+      h.call('POST', '/api/sales', {
+        token: mine.token,
+        idempotencyKey: saleKey(),
+        body: sent,
+        ...(orgId ? { orgId } : {}),
+      });
+    const foreign = await send(body, SHOP_B);
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await send({ ...body, organization_id: SHOP_B });
+    h.expect(injected.res.status).toBe(400);
+    const branch = await send({ ...body, branch_id: SHOP_B_BR1 });
+    h.expect(branch.res.status).toBe(400);
+    const product = await send(body);
+    h.expect(product.res.status).toBe(404);
+    h.expect(h.code(product.res)).toBe('PRODUCT_NOT_FOUND');
+    const customer = await send({ ...body, customer_id: '00000000-0000-4000-8000-00000000c0de' });
+    h.expect(customer.res.status).toBe(404);
+    h.expect(h.code(customer.res)).toBe('CUSTOMER_NOT_FOUND');
+    for (const call of [foreign, injected, branch, product, customer]) {
+      h.expect(await h.auditRowsFrom(SHOP_A, call.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+    // Nothing was sold: the shift still expects nothing and closes on an empty count.
+    await closeShiftOf(h, mine);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/sales/:id',
+  name: "shop B's sale is not found; a foreign header is refused",
+  async run(h) {
+    const theirs = await shopBSale(h);
+    const a = await h.login(OWNER_A);
+    const res = await h.call('GET', `/api/sales/${theirs.id}`, { token: a.accessToken });
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('SALE_NOT_FOUND');
+    const header = await h.call('GET', `/api/sales/${theirs.id}`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+    const own = await h.call('GET', `/api/sales/${theirs.id}`, { token: theirs.shift.token });
+    h.expect(own.res.status).toBe(200);
+    await closeShiftShort(h, theirs.shift);
+  },
+});

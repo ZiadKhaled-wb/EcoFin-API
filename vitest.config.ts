@@ -10,6 +10,9 @@ export default defineConfig({
     // Integration files share one seeded database; provisioning races global job assertions.
     // Keep unit files parallel and retain the concurrency exercised inside integration tests.
     fileParallelism: process.env['RUN_INTEGRATION'] !== '1',
+    // An integration test is a whole story through the API (a shop, a shift, several documents);
+    // on a busy machine the 5 s default cuts the long ones short. Unit tests keep the default.
+    testTimeout: process.env['RUN_INTEGRATION'] === '1' ? 30_000 : 5_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
