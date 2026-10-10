@@ -3676,6 +3676,7 @@ export type Database = {
           reference: string | null;
           reverses_payment_id: string | null;
           shift_id: string | null;
+          tendered: number | null;
         };
         Insert: {
           amount: number;
@@ -3697,6 +3698,7 @@ export type Database = {
           reference?: string | null;
           reverses_payment_id?: string | null;
           shift_id?: string | null;
+          tendered?: number | null;
         };
         Update: {
           amount?: number;
@@ -3718,6 +3720,7 @@ export type Database = {
           reference?: string | null;
           reverses_payment_id?: string | null;
           shift_id?: string | null;
+          tendered?: number | null;
         };
         Relationships: [
           {
@@ -8391,6 +8394,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      list_sale_payment_accounts: { Args: Record<PropertyKey, never>; Returns: Json };
       list_shift_vaults: { Args: { p_branch_id: string }; Returns: Json };
       list_shifts: {
         Args: {
@@ -8534,6 +8538,7 @@ export type Database = {
           p_expected_total: string;
           p_idempotency_key: string;
           p_lines: Json;
+          p_payments?: Json;
         };
         Returns: Json;
       };
@@ -8564,7 +8569,10 @@ export type Database = {
         Returns: Json;
       };
       publish_installment_policy: { Args: { p_policy: Json }; Returns: string };
-      quote_sale: { Args: { p_customer_id?: string; p_lines: Json }; Returns: Json };
+      quote_sale: {
+        Args: { p_customer_id?: string; p_lines: Json; p_payments?: Json };
+        Returns: Json;
+      };
       receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
       register_file: {
         Args: {

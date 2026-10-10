@@ -39,6 +39,8 @@ const header = {
   difference: null,
   count_breakdown: null,
   difference_reason: null,
+  sales_total: '0.00',
+  payment_totals: { cash: '0.00', bank_transfer: '0.00', store_credit: '0.00' },
 };
 const shift = { ...header, movements: [] };
 

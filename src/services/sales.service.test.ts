@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createSupabaseMock } from '../test/supabase-mock';
 import type { DbClient } from '../utils/supabase';
 import type { RequestContext } from '../middleware/requestContext';
-import { getSale, postSale, quoteSale } from './sales.service';
+import { getSale, listPaymentAccounts, postSale, quoteSale } from './sales.service';
 
 const ID = 'a0620000-0000-4000-8000-000000000001';
 const BRANCH = 'a0620000-0000-4000-8000-000000000002';
@@ -31,6 +31,10 @@ const quote = {
   subtotal: '500.00',
   tax_total: '61.40',
   total: '500.00',
+  paid: '500.00',
+  remaining: '0.00',
+  change: '0.00',
+  store_credit_balance: null,
 };
 const sale = {
   id: ID,
@@ -50,6 +54,8 @@ const sale = {
   created_by_name: 'Mona',
   lines: [{ ...line, id: ID, line_no: 1, warranty_until: null }],
   payments: [],
+  paid_total: '500.00',
+  change_total: '0.00',
 };
 const lines = [{ product_id: CHAIR, quantity: 2 }];
 
@@ -101,6 +107,67 @@ describe('S01 sale service', () => {
       p_idempotency_key: KEY,
       p_customer_id: CUSTOMER,
     });
+  });
+
+  it('S02: the payment lines go to the quote and to the sale, and only when given', async () => {
+    const { db, ctx } = setup();
+    const payments = [
+      { method: 'cash' as const, amount: '250.00', tendered: '300.00' },
+      {
+        method: 'bank_transfer' as const,
+        amount: '250.00',
+        cash_account_id: BRANCH,
+        reference: 'TRX-1',
+      },
+    ];
+    db.queue({ data: { ...quote, paid: '500.00', change: '50.00' }, error: null });
+    expect((await quoteSale(ctx, { lines, payments })).change).toBe('50.00');
+    expect(db.rpc).toHaveBeenLastCalledWith('quote_sale', { p_lines: lines, p_payments: payments });
+    db.queue({ data: sale, error: null });
+    await postSale(ctx, { lines, expected_total: '500.00', payments }, KEY);
+    expect(db.rpc).toHaveBeenLastCalledWith('post_sale', {
+      p_lines: lines,
+      p_expected_total: '500.00',
+      p_idempotency_key: KEY,
+      p_payments: payments,
+    });
+  });
+
+  it('S02: PAYMENT_TOTAL_MISMATCH and INSUFFICIENT_STORE_CREDIT carry their details', async () => {
+    const { db, ctx } = setup();
+    db.queue({
+      data: null,
+      error: {
+        code: 'P0001',
+        message: 'PAYMENT_TOTAL_MISMATCH: the payments add up to 499.00, the sale to 500.00',
+        details: '{"total":"500.00","paid":"499.00"}',
+      },
+    });
+    await expect(postSale(ctx, { lines, expected_total: '500.00' }, KEY)).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'PAYMENT_TOTAL_MISMATCH',
+      details: { total: '500.00', paid: '499.00' },
+    });
+    db.queue({
+      data: null,
+      error: {
+        code: 'P0001',
+        message: 'INSUFFICIENT_STORE_CREDIT: the balance is 300.00',
+        details: '{"balance":"300.00"}',
+      },
+    });
+    await expect(postSale(ctx, { lines, expected_total: '500.00' }, KEY)).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'INSUFFICIENT_STORE_CREDIT',
+      details: { balance: '300.00' },
+    });
+  });
+
+  it('S02: lists the banks a transfer can go into', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: { items: [{ id: BRANCH, name: 'NBE' }] }, error: null });
+    expect((await listPaymentAccounts(ctx)).items[0]?.name).toBe('NBE');
+    expect(db.rpc).toHaveBeenLastCalledWith('list_sale_payment_accounts');
   });
 
   it('PRICE_CHANGED and OUT_OF_STOCK carry their details; other refusals keep their code', async () => {

@@ -1,12 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
   OutOfStockDetail,
+  PaymentTotalMismatchDetail,
   PriceChangedDetail,
   Sale,
   SaleCreateBody,
   SaleLineInput,
+  SalePaymentAccountList,
+  SalePaymentInput,
   SaleQuote,
   SaleQuoteBody,
+  StoreCreditDetail,
 } from './sales.js';
 import { errorCodeHttpStatus } from './errors.js';
 
@@ -98,6 +102,10 @@ describe('S01 sale contracts', () => {
         subtotal: '500.00',
         tax_total: '61.40',
         total: '500.00',
+        paid: '500.00',
+        remaining: '0.00',
+        change: '0.00',
+        store_credit_balance: null,
       }).success,
     ).toBe(true);
     const sale = {
@@ -126,8 +134,12 @@ describe('S01 sale contracts', () => {
           cash_account_id: CHAIR,
           cash_account_name: 'Drawer',
           reference: null,
+          tendered: null,
+          change: null,
         },
       ],
+      paid_total: '500.00',
+      change_total: '0.00',
     };
     expect(Sale.safeParse(sale).success).toBe(true);
     expect(
@@ -144,5 +156,84 @@ describe('S01 sale contracts', () => {
     expect(errorCodeHttpStatus.PRODUCT_ARCHIVED).toBe(409);
     expect(errorCodeHttpStatus.PRICE_CHANGED).toBe(409);
     expect(errorCodeHttpStatus.PRICE_OVERRIDE_DENIED).toBe(403);
+  });
+});
+
+describe('S02 payment contracts', () => {
+  const lines = [{ product_id: CHAIR, quantity: 2 }];
+  const cash = { method: 'cash', amount: '500.00' } as const;
+  const bank = {
+    method: 'bank_transfer',
+    amount: '500.00',
+    cash_account_id: UNIT_1,
+    reference: ' TRX-1 ',
+  } as const;
+  const credit = { method: 'store_credit', amount: '100.00' } as const;
+
+  it('a payment line per method, strict; the reference is trimmed; card is not a method', () => {
+    expect(SalePaymentInput.safeParse(cash).success).toBe(true);
+    expect(SalePaymentInput.parse(bank)).toMatchObject({ reference: 'TRX-1' });
+    expect(SalePaymentInput.safeParse(credit).success).toBe(true);
+    expect(SalePaymentInput.safeParse({ method: 'card', amount: '1.00' }).success).toBe(false);
+    for (const amount of ['0.00', '-5.00', '1.999', '']) {
+      expect(SalePaymentInput.safeParse({ ...cash, amount }).success).toBe(false);
+    }
+    expect(SalePaymentInput.safeParse({ ...bank, reference: '   ' }).success).toBe(false);
+    expect(SalePaymentInput.safeParse({ ...bank, reference: 'x'.repeat(101) }).success).toBe(false);
+    expect(SalePaymentInput.safeParse({ method: 'bank_transfer', amount: '5.00' }).success).toBe(
+      false,
+    );
+    expect(SalePaymentInput.safeParse({ ...cash, reference: 'X' }).success).toBe(false);
+    expect(SalePaymentInput.safeParse({ ...credit, cash_account_id: UNIT_1 }).success).toBe(false);
+  });
+
+  it('the lines of a sale: 1-5, at most one cash, one store credit and three transfers', () => {
+    const body = (payments: unknown[], customer_id?: string) => ({
+      lines,
+      expected_total: '500.00',
+      payments,
+      ...(customer_id ? { customer_id } : {}),
+    });
+    expect(SaleCreateBody.safeParse(body([cash, bank])).success).toBe(true);
+    expect(SaleCreateBody.safeParse(body([cash, credit], PHONE)).success).toBe(true);
+    expect(SaleCreateBody.safeParse(body([])).success).toBe(false);
+    expect(SaleCreateBody.safeParse(body([cash, cash])).success).toBe(false);
+    expect(SaleCreateBody.safeParse(body([credit, credit], PHONE)).success).toBe(false);
+    expect(SaleCreateBody.safeParse(body([bank, bank, bank])).success).toBe(true);
+    expect(SaleCreateBody.safeParse(body([bank, bank, bank, bank])).success).toBe(false);
+    expect(
+      SaleCreateBody.safeParse(body([cash, bank, bank, bank, credit, cash], PHONE)).success,
+    ).toBe(false);
+  });
+
+  it('cash: handed over at least the amount; store credit needs a customer; the quote takes the same lines', () => {
+    const body = (payments: unknown[]) => ({ lines, expected_total: '500.00', payments });
+    expect(SaleCreateBody.safeParse(body([{ ...cash, tendered: '600.00' }])).success).toBe(true);
+    expect(SaleCreateBody.safeParse(body([{ ...cash, tendered: '500.00' }])).success).toBe(true);
+    expect(SaleCreateBody.safeParse(body([{ ...cash, tendered: '499.99' }])).success).toBe(false);
+    expect(SaleCreateBody.safeParse(body([credit])).success).toBe(false);
+    expect(SaleQuoteBody.safeParse({ lines, payments: [credit] }).success).toBe(false);
+    expect(SaleQuoteBody.safeParse({ lines, payments: [credit], customer_id: PHONE }).success).toBe(
+      true,
+    );
+    expect(SaleQuoteBody.safeParse({ lines, payments: [cash, bank] }).success).toBe(true);
+    // The total check is the server's (PAYMENT_TOTAL_MISMATCH with details), not the schema's.
+    expect(SaleCreateBody.safeParse(body([{ ...cash, amount: '1.00' }])).success).toBe(true);
+  });
+
+  it('the account list, the details and the new error code', () => {
+    expect(SalePaymentAccountList.safeParse({ items: [{ id: UNIT_1, name: 'NBE' }] }).success).toBe(
+      true,
+    );
+    expect(
+      SalePaymentAccountList.safeParse({ items: [{ id: UNIT_1, name: 'NBE', balance: '1.00' }] })
+        .success,
+    ).toBe(true);
+    expect(PaymentTotalMismatchDetail.safeParse({ total: '1000.00', paid: '999.99' }).success).toBe(
+      true,
+    );
+    expect(StoreCreditDetail.safeParse({ balance: '300.00' }).success).toBe(true);
+    expect(errorCodeHttpStatus.PAYMENT_TOTAL_MISMATCH).toBe(400);
+    expect(errorCodeHttpStatus.INSUFFICIENT_STORE_CREDIT).toBe(409);
   });
 });

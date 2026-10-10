@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.33.0
+
+- S02 split payments: SalePaymentInput (cash with optional tendered, bank transfer with account and reference, store credit), SALE_MAX_BANK_TRANSFERS, SalePaymentAccount, SalePaymentAccountList, PaymentTotalMismatchDetail, StoreCreditDetail. SaleQuoteBody and SaleCreateBody gain `payments` (1-5 lines); SaleQuote gains paid, remaining, change, store_credit_balance; SalePayment gains tendered and change; Sale gains paid_total and change_total; Shift and ShiftSummary gain sales_total and payment_totals. Error code PAYMENT_TOTAL_MISMATCH (400, details).
+
 ## 0.32.0
 
 - R01 follow-up: `Customer` gains `governorate_code` (read from the national ID, shown to everyone). `CustomerCreateBody` and `CustomerUpdateBody` no longer take `birth_date` or `gender`: the server reads both from the national ID.

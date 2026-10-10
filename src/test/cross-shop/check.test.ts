@@ -176,6 +176,7 @@ describe('cross-shop route check (D19)', () => {
         'GET /api/expenses/:id',
         'POST /api/expenses',
         'POST /api/expenses/:id/reverse',
+        'GET /api/sales/payment-accounts',
         'POST /api/sales/quote',
         'POST /api/sales',
         'GET /api/sales/:id',
@@ -186,7 +187,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/customers/:id/status',
       ]),
     );
-    expect(keys).toHaveLength(164);
+    expect(keys).toHaveLength(165);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

@@ -356,14 +356,14 @@ SELECT t.expect('Done when 4: the sales'' totals = their payments = the drawers'
   t.money()='13185.00/13185.00/13185.00',t.money());
 SELECT t.expect('the safe received the closed shift''s cash',t.cash('safe')=12985.00 AND t.cash('drawer')=0,concat_ws(' ',t.cash('safe'),t.cash('drawer')));
 SELECT t.expect('grants: the three functions for authenticated, not anon; helpers not granted',
-  has_function_privilege('authenticated','public.post_sale(jsonb,text,text,uuid)','EXECUTE')
-  AND has_function_privilege('authenticated','public.quote_sale(jsonb,uuid)','EXECUTE')
+  has_function_privilege('authenticated','public.post_sale(jsonb,text,text,uuid,jsonb)','EXECUTE')
+  AND has_function_privilege('authenticated','public.quote_sale(jsonb,uuid,jsonb)','EXECUTE')
   AND has_function_privilege('authenticated','public.get_sale(uuid)','EXECUTE')
-  AND NOT has_function_privilege('anon','public.post_sale(jsonb,text,text,uuid)','EXECUTE')
-  AND NOT has_function_privilege('authenticated','app.post_sale_core(uuid,uuid,public.shifts,jsonb,uuid,numeric,text)','EXECUTE')
+  AND NOT has_function_privilege('anon','public.post_sale(jsonb,text,text,uuid,jsonb)','EXECUTE')
+  AND NOT has_function_privilege('authenticated','app.post_sale_core(uuid,uuid,public.shifts,jsonb,uuid,numeric,text,jsonb)','EXECUTE')
   AND NOT has_function_privilege('authenticated','app.sale_cart(uuid,uuid,jsonb,boolean)','EXECUTE')
   AND NOT has_function_privilege('authenticated','app.sale_json(uuid,uuid)','EXECUTE')
-  AND NOT has_function_privilege('authenticated','app.post_sale_payments(public.sales,public.shifts,uuid)','EXECUTE'));
+  AND NOT has_function_privilege('authenticated','app.post_sale_payments(public.sales,public.shifts,uuid,jsonb,numeric)','EXECUTE'));
 
 SELECT name,ok,detail FROM t.results WHERE NOT COALESCE(ok,false);
 SELECT count(*) FILTER(WHERE ok) passed,count(*) FILTER(WHERE NOT COALESCE(ok,false)) failed FROM t.results;

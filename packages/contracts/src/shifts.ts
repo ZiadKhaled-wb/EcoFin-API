@@ -107,6 +107,10 @@ const shiftHeader = {
   difference: Money.nullable(),
   count_breakdown: z.record(z.string(), z.number()).nullable(),
   difference_reason: z.string().nullable(),
+  /** S02: the totals of the sales made in this shift. */
+  sales_total: Money,
+  /** S02: what the shift took by method (incoming payments of its sales). */
+  payment_totals: z.object({ cash: Money, bank_transfer: Money, store_credit: Money }),
 };
 export const Shift = z.object({ ...shiftHeader, movements: z.array(ShiftMovement) });
 export type Shift = z.infer<typeof Shift>;

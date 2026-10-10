@@ -18,6 +18,8 @@
 //      each: exactly 10 sell and nothing deadlocks (rows are always locked in the same order).
 //   E. app.ledger_mismatches() finds nothing, for the shop and for the whole database, and the
 //      sales' totals equal their payments and the drawers' sale movements.
+//   J. S02: 20 sales each paying a lamp with the same customer's store credit (exactly one lamp's
+//      worth): one is paid, the balance ends at 0.00, never below.
 // (The sale race on the bare ledger is db:ledger, F10.)
 import { pgbench, processed, psql, removeProofShop, report, writeFile } from './db-proof-lib.mjs';
 
@@ -283,11 +285,18 @@ try {
         WHEN 'sale_ab' THEN jsonb_build_array(v_chair, v_lamp)
         WHEN 'sale_ba' THEN jsonb_build_array(v_lamp, v_chair)
         ELSE jsonb_build_array(v_chair) END;
-      v_sale jsonb;
+      v_sale jsonb; v_customer uuid; v_payments jsonb;
     BEGIN
       PERFORM ${SCHEMA}.sign_in_as(p_cashier);
+      -- S02: the whole sale paid with the customer's store credit.
+      IF p_kind = 'sale_credit' THEN
+        v_lines := jsonb_build_array(v_lamp);
+        v_customer := ${SCHEMA}.id('buyer');
+        v_payments := jsonb_build_array(jsonb_build_object('method', 'store_credit',
+          'amount', public.quote_sale(v_lines)->>'total'));
+      END IF;
       BEGIN
-        v_sale := public.post_sale(v_lines, public.quote_sale(v_lines)->>'total', v_key);
+        v_sale := public.post_sale(v_lines, public.quote_sale(v_lines)->>'total', v_key, v_customer, v_payments);
         INSERT INTO ${SCHEMA}.outcomes (kind, result, ref) VALUES (p_kind, 'done', (v_sale->>'id')::uuid);
       EXCEPTION WHEN others THEN
         INSERT INTO ${SCHEMA}.outcomes (kind, result, error) VALUES (p_kind, 'refused', SQLERRM);
@@ -421,6 +430,51 @@ try {
       money,
     ],
   ]);
+  // ---------------------------------------------------------------- J. store credit, spent once (S02)
+  // A customer holds exactly one lamp's worth of store credit; every request sells a lamp and
+  // pays it entirely with that credit. The balance row is locked while it is read: one wins.
+  psql(`BEGIN; SELECT ${SCHEMA}.sign_in();
+        SELECT public.post_stock_adjustment(${SCHEMA}.id('main'), 'found', NULL,
+          jsonb_build_array(jsonb_build_object('product_id', ${SCHEMA}.id('lamp'), 'quantity', 25)), 'test3-proof-lamps-2');
+        INSERT INTO public.customers (organization_id, full_name)
+          VALUES (${SCHEMA}.id('org'), 'Proof store credit buyer');
+        INSERT INTO ${SCHEMA}.ids SELECT 'buyer', id FROM public.customers
+          WHERE organization_id = ${SCHEMA}.id('org') AND full_name = 'Proof store credit buyer';
+        COMMIT;
+        BEGIN; SELECT ${SCHEMA}.sign_in_as(1);
+        INSERT INTO public.store_credit_movements (organization_id, customer_id, amount, source_type, source_id, branch_id, business_date)
+          SELECT ${SCHEMA}.id('org'), ${SCHEMA}.id('buyer'),
+                 (public.quote_sale(jsonb_build_array(jsonb_build_object('product_id', ${SCHEMA}.id('lamp'), 'quantity', 1)))->>'total')::numeric,
+                 'sales_return', gen_random_uuid(), ${SCHEMA}.id('main'), app.org_today(${SCHEMA}.id('org'));
+        COMMIT; TRUNCATE ${SCHEMA}.outcomes;`);
+  const credit = psql(
+    `SELECT balance FROM public.store_credit_balances WHERE customer_id = ${SCHEMA}.id('buyer');`,
+  );
+  await round('J.', '/tmp/test3_sale_credit.sql', saleScript('sale_credit'));
+  [done, refused, other, firstOther] = outcomes('sale_credit', 'INSUFFICIENT_STORE_CREDIT');
+  const [creditBalance, creditMoves, creditPayments] = psql(`
+    SELECT concat_ws('|',
+      (SELECT balance FROM public.store_credit_balances WHERE customer_id = ${SCHEMA}.id('buyer')),
+      (SELECT count(*) FROM public.store_credit_movements WHERE customer_id = ${SCHEMA}.id('buyer') AND amount < 0),
+      (SELECT count(*) FROM public.payments WHERE customer_id = ${SCHEMA}.id('buyer') AND method = 'store_credit'));`).split(
+    '|',
+  );
+  const partJ = report([
+    ['J. exactly one sale was paid with the store credit', done === '1', done],
+    [
+      `J. the other ${CLIENTS - 1} got INSUFFICIENT_STORE_CREDIT`,
+      Number(refused) === CLIENTS - 1,
+      refused,
+    ],
+    ['J. no other errors (no deadlocks)', other === '0', `${other} ${firstOther}`],
+    [
+      'J. one credit movement and one payment; the credit was spent exactly',
+      creditMoves === '1' && creditPayments === '1' && Number(credit) > 0,
+      `${creditMoves} / ${creditPayments}, had ${credit}`,
+    ],
+    ['J. the balance is exactly 0.00, never below', Number(creditBalance) === 0, creditBalance],
+  ]);
+
   // ---------------------------------------------------------------- E. reconciliation
   const [shopMismatches, allMismatches] = psql(`
     SELECT concat_ws('|', (SELECT count(*) FROM app.ledger_mismatches(${SCHEMA}.id('org'))),
@@ -444,6 +498,7 @@ try {
     partH &&
     partI &&
     partMoney &&
+    partJ &&
     partE
   );
 } catch (error) {

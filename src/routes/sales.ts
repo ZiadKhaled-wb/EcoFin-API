@@ -25,6 +25,14 @@ router.post(
   validate({ body: SaleCreateBody }),
   asyncHandler(controller.create),
 );
+// S02: the banks a transfer can go into (names only). Before `/:id`.
+router.get(
+  '/payment-accounts',
+  authenticate,
+  loadRequestContext,
+  requirePermission('sale.create'),
+  asyncHandler(controller.paymentAccounts),
+);
 // Own sales with sale.create; with report.view or cash.view the sales of the caller's branches.
 // Checked in SQL.
 router.get(
