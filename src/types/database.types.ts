@@ -8076,6 +8076,7 @@ export type Database = {
       auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_password_change: { Args: Record<PropertyKey, never>; Returns: undefined };
       branch_deactivation_check: { Args: { p_branch_id: string }; Returns: Json };
+      cancel_discount_approval: { Args: { p_approval_id: string }; Returns: Json };
       cancel_purchase_order: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_stock_count: { Args: { p_count_id: string }; Returns: Json };
       cancel_stock_transfer: { Args: { p_id: string }; Returns: Json };
@@ -8185,6 +8186,10 @@ export type Database = {
         };
         Returns: string;
       };
+      decide_discount_approval: {
+        Args: { p_approval_id: string; p_approve: boolean; p_note?: string };
+        Returns: Json;
+      };
       expense_report: {
         Args: { p_branch_id?: string; p_from: string; p_to: string };
         Returns: Json;
@@ -8205,6 +8210,7 @@ export type Database = {
       get_cash_transfer: { Args: { p_id: string }; Returns: Json };
       get_current_shift: { Args: Record<PropertyKey, never>; Returns: Json };
       get_customer: { Args: { p_id: string }; Returns: Json };
+      get_discount_approval: { Args: { p_approval_id: string }; Returns: Json };
       get_expense: { Args: { p_id: string }; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
@@ -8302,6 +8308,7 @@ export type Database = {
         Args: { p_limit?: number; p_offset?: number; p_search?: string; p_status?: string };
         Returns: Json;
       };
+      list_discount_approvals: { Args: { p_status?: string }; Returns: Json };
       list_employees: {
         Args: {
           p_limit: number;
@@ -8535,10 +8542,13 @@ export type Database = {
       post_sale: {
         Args: {
           p_customer_id?: string;
+          p_discount_approval_id?: string;
+          p_discount_reason?: string;
           p_expected_total: string;
           p_idempotency_key: string;
           p_lines: Json;
           p_payments?: Json;
+          p_sale_discount?: Json;
         };
         Returns: Json;
       };
@@ -8570,7 +8580,7 @@ export type Database = {
       };
       publish_installment_policy: { Args: { p_policy: Json }; Returns: string };
       quote_sale: {
-        Args: { p_customer_id?: string; p_lines: Json; p_payments?: Json };
+        Args: { p_customer_id?: string; p_lines: Json; p_payments?: Json; p_sale_discount?: Json };
         Returns: Json;
       };
       receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
@@ -8602,6 +8612,10 @@ export type Database = {
       reject_purchase_invoice: { Args: { p_id: string; p_reason: string }; Returns: Json };
       rename_cash_account: { Args: { p_id: string; p_name: string }; Returns: Json };
       rename_expense_category: { Args: { p_id: string; p_name: string }; Returns: Json };
+      request_discount_approval: {
+        Args: { p_branch_id: string; p_lines: Json; p_reason: string; p_sale_discount: Json };
+        Returns: Json;
+      };
       require_module: { Args: { p_module: string }; Returns: undefined };
       resend_employee_invite: {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };

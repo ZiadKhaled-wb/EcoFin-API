@@ -518,6 +518,22 @@ INSERT INTO t.denial VALUES
  ('post_sale','unit_7_sale_post','sale.create',$$SELECT public.post_sale(x.l,public.quote_sale(x.l)->>'total','denial-sale-1') FROM (SELECT jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-PH'),'quantity',1,'unit_id',(SELECT id FROM public.units WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND serial='DENIAL-SN-1'))) l) x$$),
  ('get_sale','unit_8_sale_get','sale.create',$$SELECT public.get_sale((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'))$$),
  ('list_sale_payment_accounts','unit_9_sale_accounts','sale.create',$$SELECT public.list_sale_payment_accounts()$$);
+-- S03: two over-cap discount requests of the denial shop: one by a cashier (the owner decides it), one
+-- by the owner (the owner cancels it). A request by the owner herself would be APPROVAL_NOT_NEEDED, so
+-- that call is wrapped to accept this one answer: only the permission check is under test here.
+INSERT INTO public.approvals (id, organization_id, branch_id, kind, entity_type, amount, payload, requested_by, reason) VALUES
+ ('d4000000-0000-0000-0000-000000000031','d1000000-0000-0000-0000-000000000001','d2000000-0000-0000-0000-000000000011','discount_above_cap','sale',8,
+  '{"fingerprint":"denial","cap_pct":"5.00","lines":[]}',
+  (SELECT e.id FROM public.employees e WHERE e.organization_id='d1000000-0000-0000-0000-000000000001' AND e.role='CASHIER' ORDER BY e.id LIMIT 1),'TEST-1 denial'),
+ ('d4000000-0000-0000-0000-000000000032','d1000000-0000-0000-0000-000000000001','d2000000-0000-0000-0000-000000000011','discount_above_cap','sale',8,
+  '{"fingerprint":"denial","cap_pct":"5.00","lines":[]}',
+  (SELECT e.id FROM public.employees e WHERE e.organization_id='d1000000-0000-0000-0000-000000000001' AND e.auth_user_id='d0000000-0000-0000-0000-000000000011'),'TEST-1 denial');
+INSERT INTO t.denial VALUES
+ ('decide_discount_approval','discount_1_decide','discount.above_cap',$$SELECT public.decide_discount_approval('d4000000-0000-0000-0000-000000000031',true,'Denial test')$$),
+ ('cancel_discount_approval','discount_2_cancel','sale.create',$$SELECT public.cancel_discount_approval('d4000000-0000-0000-0000-000000000032')$$),
+ ('get_discount_approval','discount_3_get','sale.create',$$SELECT public.get_discount_approval('d4000000-0000-0000-0000-000000000032')$$),
+ ('list_discount_approvals','discount_4_list','discount.above_cap',$$SELECT public.list_discount_approvals('approved')$$),
+ ('request_discount_approval','unit_6a_discount_request','sale.create',$c$DO $b$ BEGIN PERFORM public.request_discount_approval('d2000000-0000-0000-0000-000000000011',jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-PH'),'quantity',1,'unit_id',(SELECT id FROM public.units WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND serial='DENIAL-SN-1'),'discount',jsonb_build_object('type','percent','value','50'))),NULL,'Denial test'); EXCEPTION WHEN others THEN IF SQLERRM NOT LIKE 'APPROVAL_NOT_NEEDED%' THEN RAISE; END IF; END $b$$c$);
 -- R01: case names order the calls (the owner's create makes the customer the others use). The reads
 -- need any customer read key (D63 rule 6); the role picked for customer.create (WAREHOUSE) has none.
 INSERT INTO t.denial VALUES
