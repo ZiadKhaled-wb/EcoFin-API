@@ -1752,7 +1752,7 @@ export const openApiSpec = {
             post: {
                 tags: ['Sales'],
                 summary: 'Complete a sale, paid in one or more ways (sale.create)',
-                description: 'S01 (D62). One database transaction in the open shift of the caller (SHIFT_REQUIRED; its branch is the branch of the sale and its drawer takes the cash). The server prices the cart again and compares with expected_total, the total the cashier confirmed: a different total answers PRICE_CHANGED (409, details expected_total and total) and nothing is sold. Stock is checked on locked rows: OUT_OF_STOCK (409, details product_id, requested, available). A serialized line sells its exact unit, which becomes sold (UNIT_NOT_AVAILABLE when it is not in stock in the branch). Then the sale gets its number (SL), its lines with the tax snapshot, one stock ledger row per line, one cash payment (PY) into the drawer of the shift and one audit row (sale.created; a warning when a price was overridden). The same Idempotency-Key returns the same sale and sells nothing again. S02 (D64): `payments` (1-5 lines; at most one cash, one store_credit, three bank_transfer) replace the single cash payment. The lines must add up to the total exactly (PAYMENT_TOTAL_MISMATCH, 400, details total and paid); each line is one payment with its allocation and posts to its ledger: cash into the drawer of the shift (an optional tendered gives the change; only the amount is posted), a bank transfer into an active bank of the branch or a shop-wide one with its reference (VAULT_INVALID, CASH_ACCOUNT_INACTIVE; no shift on the bank movement), store credit from the balance of the customer (INSUFFICIENT_STORE_CREDIT, 409, details balance; needs a customer). Without payments the whole total is paid in cash. The audit row sale.created lists the payment lines. Other codes: PRODUCT_NOT_FOUND, PRODUCT_ARCHIVED, CUSTOMER_NOT_FOUND, PRICE_OVERRIDE_DENIED, SHIFT_CLOSED, DAY_CLOSED. Schema: SaleCreateBody → Sale.',
+                description: 'S01 (D62). One database transaction in the open shift of the caller (SHIFT_REQUIRED; its branch is the branch of the sale and its drawer takes the cash). The server prices the cart again and compares with expected_total, the total the cashier confirmed: a different total answers PRICE_CHANGED (409, details expected_total and total) and nothing is sold. Stock is checked on locked rows: OUT_OF_STOCK (409, details product_id, requested, available). A serialized line sells its exact unit, which becomes sold (UNIT_NOT_AVAILABLE when it is not in stock in the branch). Then the sale gets its number (SL), its lines with the tax snapshot, one stock ledger row per line, one cash payment (PY) into the drawer of the shift and one audit row (sale.created; a warning when a price was overridden). The same Idempotency-Key returns the same sale and sells nothing again. S02 (D64): `payments` (1-5 lines; at most one cash, one store_credit, three bank_transfer) replace the single cash payment. The lines must add up to the total exactly (PAYMENT_TOTAL_MISMATCH, 400, details total and paid); each line is one payment with its allocation and posts to its ledger: cash into the drawer of the shift (an optional tendered gives the change; only the amount is posted), a bank transfer into an active bank of the branch or a shop-wide one with its reference (VAULT_INVALID, CASH_ACCOUNT_INACTIVE; no shift on the bank movement), store credit from the balance of the customer (INSUFFICIENT_STORE_CREDIT, 409, details balance; needs a customer). Without payments the whole total is paid in cash. The audit row sale.created lists the payment lines. Other codes: PRODUCT_NOT_FOUND, PRODUCT_ARCHIVED, CUSTOMER_NOT_FOUND, PRICE_OVERRIDE_DENIED, SHIFT_CLOSED, DAY_CLOSED. S03 (D65): lines may carry a discount and the sale a sale_discount (amount or percent), with discount_reason (3-200; DISCOUNT_REASON_REQUIRED). Line discounts first, then the sale discount is spread over the lines by their net (largest remainder, ties to the lower line); T01 taxes each line on its discounted amount; expected_total and the payments are for the discounted total. Every line\'s effective percent must be within the caller\'s cap (org settings discount_caps by role; OWNER none; a role not listed 0) or the caller needs discount.above_cap or discount_approval_id of an approved request: else DISCOUNT_ABOVE_CAP (403, details line_no, cap_pct, effective_pct); an approval that does not fit answers APPROVAL_INVALID (409); a discount above its base or below 0 DISCOUNT_INVALID. Schema: SaleCreateBody → Sale.',
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     { $ref: '#/components/parameters/OrgId' },
@@ -1769,6 +1769,60 @@ export const openApiSpec = {
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }],
                 responses: { 200: { description: 'SalePaymentAccountList' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/sales/discount-approvals': {
+            post: {
+                tags: ['Sales'],
+                summary: 'Ask a manager to approve an over-cap discount (sale.create)',
+                description: 'S03 (D65). The cashier sends the cart (branch_id, lines with their discounts, sale_discount, reason 3-200). The server prices it, finds the highest effective percent over the lines (a line\'s whole discount, its share of the sale discount included, over its gross) and stores the cart\'s fingerprint (SHA-256, computed by the server only; the client never sends one). APPROVAL_NOT_NEEDED (400) when no line is above the caller\'s cap or the caller has discount.above_cap. Audited as approval.requested. Schema: DiscountApprovalRequestBody → DiscountApprovalRequested.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 201: { description: 'DiscountApprovalRequested' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/sales/discount-approvals/{id}': {
+            get: {
+                tags: ['Sales'],
+                summary: 'Read an over-cap discount approval (the requester, or discount.above_cap)',
+                description: 'S03 (D65). The requester\'s own approval, or any of a branch the caller can access with discount.above_cap; others: APPROVAL_NOT_FOUND. The cashier polls it until it is approved, then sends the sale with discount_approval_id. Schema: DiscountApproval.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'DiscountApproval' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/sales/discount-approvals/{id}/cancel': {
+            post: {
+                tags: ['Sales'],
+                summary: 'Take back a pending over-cap request (the requester)',
+                description: 'S03 (D65). Only the requester, only while pending (APPROVAL_NOT_PENDING otherwise; another caller: APPROVAL_NOT_FOUND). Audited as approval.cancelled. Schema: DiscountApprovalResult.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'DiscountApprovalResult' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/approvals': {
+            get: {
+                tags: ['Sales'],
+                summary: 'Over-cap discount requests of the caller\'s branches (discount.above_cap)',
+                description: 'S03 (D65). kind (only discount_above_cap) and status (pending by default; approved, rejected, cancelled), newest first, at most 100, only branches the caller can access. Purchase approvals are on /api/purchase-approvals. Schema: DiscountApprovalListQuery → DiscountApprovalList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'kind', in: 'query', schema: { type: 'string', enum: ['discount_above_cap'] } },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['pending', 'approved', 'rejected', 'cancelled'] } },
+                ],
+                responses: { 200: { description: 'DiscountApprovalList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/approvals/{id}/decide': {
+            post: {
+                tags: ['Sales'],
+                summary: 'Approve or reject an over-cap discount request (discount.above_cap)',
+                description: 'S03 (D65). From the manager\'s own session: needs access to the request\'s branch (BRANCH_DENIED), and not the requester (APPROVAL_SELF, 403). Only a pending request (APPROVAL_NOT_PENDING, 409); another shop\'s: APPROVAL_NOT_FOUND. An approval is good for 15 minutes after it is decided, for the requester, the branch and the same cart, and for ONE sale (APPROVAL_INVALID otherwise). Audited as approval.decided. Schema: DiscountApprovalDecideBody → DiscountApprovalResult.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'DiscountApprovalResult' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
         '/api/sales/{id}': {

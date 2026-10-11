@@ -208,6 +208,14 @@ export const errorCodeHttpStatus = {
   PAYMENT_TOTAL_MISMATCH: 400,
   // R01 customers
   CUSTOMER_NATIONAL_ID_TAKEN: 409,
+  // S03 discounts (DISCOUNT_ABOVE_CAP is P03's)
+  DISCOUNT_INVALID: 400,
+  DISCOUNT_REASON_REQUIRED: 400,
+  APPROVAL_INVALID: 409,
+  APPROVAL_NOT_NEEDED: 400,
+  APPROVAL_NOT_PENDING: 409,
+  APPROVAL_SELF: 403,
+  APPROVAL_NOT_FOUND: 404,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

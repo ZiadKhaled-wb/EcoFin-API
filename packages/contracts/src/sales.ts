@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { PositiveMoney } from './cash.js';
-import { BusinessDate, IsoTimestamp, Money, Uuid } from './common.js';
+import { BusinessDate, IsoTimestamp, MONEY_PATTERN, Money, Uuid } from './common.js';
 import { compareMoney } from './money.js';
 
 /**
@@ -10,6 +10,32 @@ import { compareMoney } from './money.js';
  */
 const NonNegativeMoney = Money.refine((v) => !v.startsWith('-'), 'Must not be negative');
 
+/**
+ * S03 discounts (D65). An amount (a non-negative decimal string) or a percent (0-100, at most 2
+ * decimals) of what it applies to: a line's gross, or the net subtotal for the whole sale. The
+ * server turns a percent into an amount (half-up to 2 decimals) and refuses anything above what it
+ * applies to with DISCOUNT_INVALID.
+ */
+const DiscountValue = z
+  .string()
+  .regex(/^\d{1,16}(\.\d{1,2})?$/, 'A decimal string with at most 2 decimals');
+export const Discount = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('amount'), value: DiscountValue }).strict(),
+  z
+    .object({
+      type: z.literal('percent'),
+      value: DiscountValue.refine(
+        (v) => !MONEY_PATTERN.test(v) || compareMoney(v, '100') <= 0,
+        'At most 100',
+      ),
+    })
+    .strict(),
+]);
+export type Discount = z.infer<typeof Discount>;
+
+/** Any discount needs a reason of 3-200 characters (the server answers DISCOUNT_REASON_REQUIRED). */
+export const DiscountReason = z.string().trim().min(3).max(200);
+
 export const SaleLineInput = z
   .object({
     product_id: Uuid,
@@ -18,6 +44,8 @@ export const SaleLineInput = z
     unit_id: Uuid.optional(),
     /** Only read when it differs from the list price, and then it needs `price.override`. */
     unit_price: NonNegativeMoney.optional(),
+    /** S03: this line's discount, on the line's gross. */
+    discount: Discount.optional(),
   })
   .strict()
   .refine((l) => l.unit_id === undefined || l.quantity === 1, {
@@ -126,7 +154,13 @@ function checkCustomerForCredit(
  * answers what is paid, what remains and the change.
  */
 export const SaleQuoteBody = z
-  .object({ lines: SaleLines, customer_id: Uuid.optional(), payments: SalePayments.optional() })
+  .object({
+    lines: SaleLines,
+    customer_id: Uuid.optional(),
+    payments: SalePayments.optional(),
+    /** S03: the whole-sale discount, on the net subtotal after the line discounts. */
+    sale_discount: Discount.optional(),
+  })
   .strict()
   .superRefine(checkCustomerForCredit);
 export type SaleQuoteBody = z.infer<typeof SaleQuoteBody>;
@@ -142,6 +176,14 @@ export const SaleCreateBody = z
     expected_total: NonNegativeMoney,
     /** Without it the sale is paid in cash in full. The server answers PAYMENT_TOTAL_MISMATCH. */
     payments: SalePayments.optional(),
+    /**
+     * S03: the whole-sale discount. `expected_total` is the total after all discounts. Above the
+     * caller's cap (per line, after the sale discount is spread) it needs discount.above_cap or
+     * `discount_approval_id` (DISCOUNT_ABOVE_CAP, APPROVAL_INVALID).
+     */
+    sale_discount: Discount.optional(),
+    discount_reason: DiscountReason.optional(),
+    discount_approval_id: Uuid.optional(),
   })
   .strict()
   .superRefine(checkCustomerForCredit);
@@ -165,8 +207,10 @@ const lineBase = {
   /** Percent, e.g. "14.00". */
   tax_rate: z.string(),
   tax_amount: Money,
-  /** What the customer pays for the line, VAT included. */
+  /** What the customer pays for the line, VAT included, after its discount. */
   line_total: Money,
+  /** S03: the line's whole discount (its own plus its share of the sale discount). */
+  discount_amount: Money,
 };
 
 export const SaleQuoteLine = z.object({
@@ -177,6 +221,8 @@ export const SaleQuoteLine = z.object({
   overridden: z.boolean(),
   /** Sellable stock of the product in the shift's branch right now (not reserved for the cart). */
   available: z.number().int(),
+  /** S03: discount_amount / (unit_price x quantity), in percent, e.g. "5.00". */
+  effective_pct: z.string(),
 });
 export type SaleQuoteLine = z.infer<typeof SaleQuoteLine>;
 
@@ -184,6 +230,9 @@ export const SaleQuote = z.object({
   prices_include_vat: z.boolean(),
   lines: z.array(SaleQuoteLine),
   subtotal: Money,
+  /** S03: all the discounts, and the highest effective percent over the lines. */
+  discount_total: Money,
+  max_effective_pct: z.string(),
   tax_total: Money,
   total: Money,
   /** What the payment lines add up to (the total when none were sent). */
@@ -233,6 +282,8 @@ export const Sale = z.object({
   prices_include_vat: z.boolean(),
   subtotal: Money,
   discount_total: Money,
+  /** Why the sale was discounted; null without a discount. */
+  discount_reason: z.string().nullable(),
   tax_total: Money,
   total: Money,
   business_date: BusinessDate,
@@ -270,3 +321,96 @@ export const SalePaymentAccount = z.object({ id: Uuid, name: z.string() });
 export type SalePaymentAccount = z.infer<typeof SalePaymentAccount>;
 export const SalePaymentAccountList = z.object({ items: z.array(SalePaymentAccount) });
 export type SalePaymentAccountList = z.infer<typeof SalePaymentAccountList>;
+
+/** Details of `DISCOUNT_ABOVE_CAP`: the first line above the caller's cap, the cap and what it is at. */
+export const DiscountAboveCapDetail = z.object({
+  line_no: z.number().int().positive(),
+  cap_pct: z.string(),
+  effective_pct: z.string(),
+});
+export type DiscountAboveCapDetail = z.infer<typeof DiscountAboveCapDetail>;
+
+/**
+ * S03 approval on the spot (D65): a cashier asks for an approval of exactly this cart
+ * (`POST /api/sales/discount-approvals`), a manager decides it from their own session, and the
+ * cashier sends the sale with `discount_approval_id`. The server stores the cart's fingerprint (the
+ * client never sends one); the approval is good for one sale, for the requester, the branch and
+ * the cart, until 15 minutes after the decision.
+ */
+export const DiscountApprovalRequestBody = z
+  .object({
+    branch_id: Uuid,
+    lines: SaleLines,
+    sale_discount: Discount.optional(),
+    reason: DiscountReason,
+  })
+  .strict();
+export type DiscountApprovalRequestBody = z.infer<typeof DiscountApprovalRequestBody>;
+
+export const DiscountApprovalRequested = z.object({
+  approval_id: Uuid,
+  /** The highest effective percent over the lines, and the requester's cap. */
+  max_effective_pct: z.string(),
+  cap_pct: z.string(),
+});
+export type DiscountApprovalRequested = z.infer<typeof DiscountApprovalRequested>;
+
+export const DiscountApprovalStatus = z.enum(['pending', 'approved', 'rejected', 'cancelled']);
+export type DiscountApprovalStatus = z.infer<typeof DiscountApprovalStatus>;
+
+export const DiscountApprovalIdParams = z.object({ id: Uuid }).strict();
+export type DiscountApprovalIdParams = z.infer<typeof DiscountApprovalIdParams>;
+
+export const DiscountApprovalLine = z.object({
+  product_id: Uuid,
+  sku: z.string(),
+  name_ar: z.string(),
+  name_en: z.string().nullable(),
+  quantity: z.number().int().positive(),
+  unit_price: Money,
+  discount_amount: Money,
+  effective_pct: z.string(),
+});
+export type DiscountApprovalLine = z.infer<typeof DiscountApprovalLine>;
+
+export const DiscountApproval = z.object({
+  id: Uuid,
+  status: DiscountApprovalStatus,
+  branch_id: Uuid,
+  branch_name: z.string().nullable(),
+  requested_by_name: z.string().nullable(),
+  requested_at: IsoTimestamp,
+  max_effective_pct: z.string(),
+  cap_pct: z.string(),
+  discount_total: Money,
+  reason: z.string().nullable(),
+  lines: z.array(DiscountApprovalLine),
+  decided_by_name: z.string().nullable(),
+  decided_at: IsoTimestamp.nullable(),
+  decision_note: z.string().nullable(),
+  /** True once a sale has used it. */
+  used: z.boolean(),
+});
+export type DiscountApproval = z.infer<typeof DiscountApproval>;
+
+export const DiscountApprovalList = z.object({ items: z.array(DiscountApproval) });
+export type DiscountApprovalList = z.infer<typeof DiscountApprovalList>;
+
+/** `GET /api/approvals?kind=discount_above_cap&status=pending` (discount.above_cap). */
+export const DiscountApprovalListQuery = z
+  .object({
+    kind: z.literal('discount_above_cap').default('discount_above_cap'),
+    status: DiscountApprovalStatus.default('pending'),
+  })
+  .strict();
+export type DiscountApprovalListQuery = z.infer<typeof DiscountApprovalListQuery>;
+
+/** `POST /api/approvals/:id/decide` (discount.above_cap, not the requester). */
+export const DiscountApprovalDecideBody = z
+  .object({ approve: z.boolean(), note: z.string().trim().max(500).optional() })
+  .strict();
+export type DiscountApprovalDecideBody = z.infer<typeof DiscountApprovalDecideBody>;
+
+/** The answer of a decision or a cancel. */
+export const DiscountApprovalResult = z.object({ status: DiscountApprovalStatus });
+export type DiscountApprovalResult = z.infer<typeof DiscountApprovalResult>;

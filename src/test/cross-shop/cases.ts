@@ -3435,3 +3435,161 @@ crossShopCase({
     await closeShiftShort(h, theirs.shift);
   },
 });
+
+// S03 discounts (D65). Shop B's over-cap request is its cashier's (shop B sets no cap: 0 %), made
+// on one of its own products; shop A's people can't read, cancel or decide it, and the pending
+// list of shop A never shows it.
+const CASHIER_B_EMAIL = 'cashier.two@ecotech.test';
+async function shopBApproval(h: CrossShopHarness) {
+  const product = await shopBProduct(h, 'disc');
+  const who = await h.login(CASHIER_B_EMAIL);
+  const made = await h.call('POST', '/api/sales/discount-approvals', {
+    token: who.accessToken,
+    body: {
+      branch_id: SHOP_B_BR1,
+      lines: [{ product_id: product.id, quantity: 1, discount: { type: 'percent', value: '10' } }],
+      reason: 'Cross-shop case',
+    },
+  });
+  h.expect(made.res.status, JSON.stringify(made.res.body)).toBe(201);
+  return { id: (made.res.body as { approval_id: string }).approval_id, token: who.accessToken };
+}
+crossShopCase({
+  method: 'POST',
+  path: '/api/sales/discount-approvals',
+  name: "a request refuses a foreign header, an org id, shop B's branch and shop B's product",
+  async run(h) {
+    const theirs = await shopBProduct(h, 'discreq');
+    const a = await h.login(CASHIER_A_EMAIL);
+    const body = {
+      branch_id: SHOP_A_BR1,
+      lines: [{ product_id: theirs.id, quantity: 1, discount: { type: 'percent', value: '10' } }],
+      reason: 'Cross-shop case',
+    };
+    const send = (sent: object, orgId?: string) =>
+      h.call('POST', '/api/sales/discount-approvals', {
+        token: a.accessToken,
+        body: sent,
+        ...(orgId ? { orgId } : {}),
+      });
+    const foreign = await send(body, SHOP_B);
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await send({ ...body, organization_id: SHOP_B });
+    h.expect(injected.res.status).toBe(400);
+    const branch = await send({ ...body, branch_id: SHOP_B_BR1 });
+    h.expect(branch.res.status).toBe(403);
+    h.expect(h.code(branch.res)).toBe('BRANCH_DENIED');
+    const product = await send(body);
+    h.expect(product.res.status).toBe(404);
+    h.expect(h.code(product.res)).toBe('PRODUCT_NOT_FOUND');
+    for (const call of [foreign, injected, branch, product]) {
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/sales/discount-approvals/:id',
+  name: "shop B's approval is not found for shop A; a foreign header is refused",
+  async run(h) {
+    const theirs = await shopBApproval(h);
+    const a = await h.login(OWNER_A);
+    const res = await h.call('GET', `/api/sales/discount-approvals/${theirs.id}`, {
+      token: a.accessToken,
+    });
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('APPROVAL_NOT_FOUND');
+    const header = await h.call('GET', `/api/sales/discount-approvals/${theirs.id}`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+    const own = await h.call('GET', `/api/sales/discount-approvals/${theirs.id}`, {
+      token: theirs.token,
+    });
+    h.expect(own.res.status, JSON.stringify(own.res.body)).toBe(200);
+    h.expect((own.res.body as { status: string }).status).toBe('pending');
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/sales/discount-approvals/:id/cancel',
+  name: "shop A can't cancel shop B's approval; its own requester can",
+  async run(h) {
+    const theirs = await shopBApproval(h);
+    const a = await h.login(CASHIER_A_EMAIL);
+    const res = await h.call('POST', `/api/sales/discount-approvals/${theirs.id}/cancel`, {
+      token: a.accessToken,
+    });
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('APPROVAL_NOT_FOUND');
+    const header = await h.call('POST', `/api/sales/discount-approvals/${theirs.id}/cancel`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+    h.expect(await h.auditRowsFrom(SHOP_B, res.ip)).toBe(0);
+    const own = await h.call('POST', `/api/sales/discount-approvals/${theirs.id}/cancel`, {
+      token: theirs.token,
+    });
+    h.expect(own.res.status, JSON.stringify(own.res.body)).toBe(200);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/approvals',
+  name: "the approvals list refuses a foreign header and never lists shop B's requests",
+  async run(h) {
+    const theirs = await shopBApproval(h);
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/approvals', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/approvals', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const own = await h.call('GET', '/api/approvals', { token: a.accessToken });
+    h.expect(own.res.status, JSON.stringify(own.res.body)).toBe(200);
+    const items = (own.res.body as { items: { id: string }[] }).items;
+    h.expect(items.some((i) => i.id === theirs.id)).toBe(false);
+    const b = await h.login(OWNER_B);
+    const theirList = await h.call('GET', '/api/approvals', { token: b.accessToken });
+    h.expect(
+      (theirList.res.body as { items: { id: string }[] }).items.some((i) => i.id === theirs.id),
+    ).toBe(true);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/approvals/:id/decide',
+  name: "shop A's owner can't decide shop B's approval; it stays pending",
+  async run(h) {
+    const theirs = await shopBApproval(h);
+    const a = await h.login(OWNER_A);
+    const res = await h.call('POST', `/api/approvals/${theirs.id}/decide`, {
+      token: a.accessToken,
+      body: { approve: true },
+    });
+    h.expect(res.res.status).toBe(404);
+    h.expect(h.code(res.res)).toBe('APPROVAL_NOT_FOUND');
+    const header = await h.call('POST', `/api/approvals/${theirs.id}/decide`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: { approve: true },
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('POST', `/api/approvals/${theirs.id}/decide`, {
+      token: a.accessToken,
+      body: { approve: true, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    for (const call of [res, header, injected]) {
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+    const own = await h.call('GET', `/api/sales/discount-approvals/${theirs.id}`, {
+      token: theirs.token,
+    });
+    h.expect((own.res.body as { status: string }).status).toBe('pending');
+  },
+});
