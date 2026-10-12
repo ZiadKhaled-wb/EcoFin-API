@@ -7,6 +7,13 @@ import { z } from 'zod';
  * Kept: TENANT_NOT_FOUND, TENANT_SCOPE_REQUIRED, MUST_CHANGE_PASSWORD (employees.must_change_password).
  */
 export const errorCodeHttpStatus = {
+  VOID_FISCALIZED: 409,
+  VOID_HAS_CONTRACT: 409,
+  VOID_HAS_CLAIMS: 409,
+  ALREADY_VOIDED: 409,
+  VOID_HAS_RETURNS: 409,
+  VOID_SHIFT_CLOSED: 409,
+  VOID_NOT_SAME_DAY: 409,
   // generic
   BAD_REQUEST: 400,
   VALIDATION_FAILED: 400,

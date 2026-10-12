@@ -465,3 +465,5 @@ O02: Case A username login resolves the linked auth email (username-only invites
 - **Over-cap discounts are found by the server at the sale** (`DISCOUNT_ABOVE_CAP`); the screen then offers "ask a manager" (D65) and reads the request every 3 seconds. The quote does not check the cap and the client never computes one. Any change to the lines, the discounts, the reason or the customer makes a new key and drops the approval (a waiting request is cancelled first); a waiting request is not restored after a refresh (owner confirmed 12 Oct).
 - **Not ported from the old POS:** the sale type switch (cash / shipping / installments) and the browser's price and credit maths. Installments are N02.
 - Shortcuts: F2 search, F4 customer, F7 sale discount, F8 hold, F9 held carts, F10 confirm and pay, Esc closes, Enter scans / pays / starts the next sale. While a dialog is open only Esc and that dialog's keys work.
+
+S07: void = a full reversal in sales_returns (kind void); same day, open shift, no returns, claims or contract; refused after the ETA receipt is issued (use a return).

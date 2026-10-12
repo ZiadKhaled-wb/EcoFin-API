@@ -593,6 +593,24 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
+    'POST /api/sales/:id/void': async () => {
+      const created = await drivers['POST /api/sales']!();
+      expect(created.sent.res.status).toBe(201);
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send(
+          'post',
+          '/api/sales/' + (created.sent.res.body as { id: string }).id + '/void',
+          {
+            token: owner.accessToken,
+            key: 'f07-s07-' + STAMP + '-' + ipCounter,
+            body: { reason: 'Audit reversal' },
+          },
+        ),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
     'POST /api/sales': async () => {
       const owner = await login('owner.one@ecotech.test');
       await openShift(owner.accessToken);

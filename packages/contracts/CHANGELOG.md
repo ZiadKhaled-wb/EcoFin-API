@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.35.0
+
+- S07 branch-scoped sales history, computed status, void eligibility and reversal contracts.
+
 ## 0.34.0
 
 - S03 discounts: Discount (amount or percent), DiscountReason. SaleLineInput gains `discount`; SaleQuoteBody gains `sale_discount`; SaleCreateBody gains `sale_discount`, `discount_reason`, `discount_approval_id`. SaleLine and SaleQuoteLine gain `discount_amount`; SaleQuoteLine gains `effective_pct`; SaleQuote gains `discount_total` and `max_effective_pct`; Sale gains `discount_reason`. Approval on the spot: DiscountApprovalRequestBody, DiscountApprovalRequested, DiscountApproval (Line, Status, List, ListQuery, IdParams, DecideBody, Result), DiscountAboveCapDetail. Error codes DISCOUNT_INVALID, DISCOUNT_REASON_REQUIRED, APPROVAL_NOT_NEEDED (400), APPROVAL_INVALID, APPROVAL_NOT_PENDING (409), APPROVAL_SELF (403), APPROVAL_NOT_FOUND (404); DISCOUNT_ABOVE_CAP (403) now carries details.

@@ -9,6 +9,7 @@ export type AuditExpectation = { action: string } | { none: string };
 
 /** Keyed `METHOD /path` as mounted (same keys as the cross-shop and permission checks). */
 export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
+  'POST /api/sales/:id/void': { action: 'sale.voided' },
   'POST /api/employees': { action: 'employee.created' },
   'PATCH /api/employees/:employeeId': { action: 'employee.updated' },
   'POST /api/employees/:employeeId/invite': { action: 'invite.resent' },

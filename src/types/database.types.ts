@@ -8218,6 +8218,7 @@ export type Database = {
       get_purchase_return: { Args: { p_id: string }; Returns: Json };
       get_returnable_invoice: { Args: { p_invoice_id: string }; Returns: Json };
       get_sale: { Args: { p_id: string }; Returns: Json };
+      get_sale_details: { Args: { p_sale_id: string }; Returns: Json };
       get_shift: { Args: { p_id: string }; Returns: Json };
       get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       get_shop_settings: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -8636,6 +8637,32 @@ export type Database = {
       };
       save_stock_count_lines: { Args: { p_count_id: string; p_lines: Json }; Returns: Json };
       scan_stock_count: { Args: { p_code: string; p_count_id: string }; Returns: Json };
+      search_sales: {
+        Args: {
+          p_branch_id?: string;
+          p_cashier_id?: string;
+          p_customer_id?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_query?: string;
+          p_status?: string;
+          p_to?: string;
+        };
+        Returns: {
+          branch: Json;
+          business_date: string;
+          cashier: Json;
+          customer: Json;
+          id: string;
+          issued_at: string;
+          items_count: number;
+          number: string;
+          status: string;
+          total: string;
+          total_count: number;
+        }[];
+      };
       search_units: {
         Args: {
           p_branch_id?: string;
@@ -8753,6 +8780,10 @@ export type Database = {
       };
       update_supplier: { Args: { p_changes: Json; p_id: string }; Returns: Json };
       update_tax_class: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
+      void_sale: {
+        Args: { p_idempotency_key: string; p_reason: string; p_sale_id: string };
+        Returns: Json;
+      };
     };
     Enums: {
       adjustment_reason: 'damage' | 'loss' | 'found' | 'correction' | 'count' | 'other';

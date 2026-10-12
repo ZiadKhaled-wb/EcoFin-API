@@ -3593,3 +3593,43 @@ crossShopCase({
     h.expect((own.res.body as { status: string }).status).toBe('pending');
   },
 });
+
+// S07 history is branch-scoped; void never reaches another tenant's sale.
+crossShopCase({
+  method: 'GET',
+  path: '/api/sales',
+  name: 'history excludes shop B and rejects an injected organization',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const b = await shopBSale(h);
+    const rows = await h.call('GET', '/api/sales', { token: a.accessToken });
+    h.expect(rows.res.status).toBe(200);
+    h.expect((rows.res.body as { items: { id: string }[] }).items.some((r) => r.id === b.id)).toBe(
+      false,
+    );
+    const injected = await h.call('GET', '/api/sales', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    await closeShiftShort(h, b.shift);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/sales/:id/void',
+  name: 'foreign sale is 404 without audit or a reversal',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const b = await shopBSale(h);
+    const attempt = await h.call('POST', '/api/sales/' + b.id + '/void', {
+      token: a.accessToken,
+      idempotencyKey: saleKey(),
+      body: { reason: 'S07 cross-shop' },
+    });
+    h.expect(attempt.res.status).toBe(404);
+    h.expect(h.code(attempt.res)).toBe('SALE_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, attempt.ip)).toBe(0);
+    await closeShiftShort(h, b.shift);
+  },
+});

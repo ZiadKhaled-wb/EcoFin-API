@@ -326,3 +326,7 @@ See [S02 plan](plans/S02.md). Covers the Done when (a sale paid half cash, half 
 ## S03 — discounts (EC-70)
 
 See [S03 plan](plans/S03.md). Covers the Done when (a cashier can't exceed their cap through the API; the tax on a discounted sale is correct) and the D65 rules (line discount then sale discount spread by largest remainder, a per-line effective cap, the on-the-spot approval as a single-use 15-minute request bound to a server-side cart fingerprint).
+
+## S07 ? sales history and void (EC-74)
+
+See [S07 plan](plans/S07.md): accessible-branch history, immutable full stock/cash/tax reversal, rules, fiscal cancellation, idempotency and concurrent voids.
