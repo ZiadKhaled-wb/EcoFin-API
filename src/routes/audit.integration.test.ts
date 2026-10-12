@@ -318,6 +318,23 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
 
   // One driver per registry entry that has an action: performs the call, returns what was sent,
   // the shop the row must land in and the success status (200 unless the route creates: 201).
+  /** S03: shop one's cashier asks for an over-cap discount (the shop sets no cap: 0 %). */
+  async function newDiscountRequest() {
+    const owner = await login('owner.one@ecotech.test');
+    const cashier = await login('cashier.one@ecotech.test');
+    const product = await newProduct(owner.accessToken);
+    const sent = await send('post', '/api/sales/discount-approvals', {
+      token: cashier.accessToken,
+      body: {
+        branch_id: BR1,
+        lines: [{ product_id: product, quantity: 1, discount: { type: 'percent', value: '10' } }],
+        reason: 'F07 audit driver',
+      },
+    });
+    const id = (sent.res.body as { approval_id?: string }).approval_id ?? '';
+    return { sent, id, owner: owner.accessToken, cashier: cashier.accessToken };
+  }
+
   const drivers: Record<string, () => Promise<{ sent: Sent; org: string; status?: number }>> = {
     'POST /api/employees': () => staffAudit('create'),
     'PATCH /api/employees/:employeeId': () => staffAudit('update'),
@@ -600,6 +617,29 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         }),
         org: SHOP_ONE,
         status: 201,
+      };
+    },
+    'POST /api/sales/discount-approvals': async () => {
+      const { sent } = await newDiscountRequest();
+      return { sent, org: SHOP_ONE, status: 201 };
+    },
+    'POST /api/sales/discount-approvals/:id/cancel': async () => {
+      const { id, cashier } = await newDiscountRequest();
+      return {
+        sent: await send('post', `/api/sales/discount-approvals/${id}/cancel`, {
+          token: cashier,
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/approvals/:id/decide': async () => {
+      const { id, owner } = await newDiscountRequest();
+      return {
+        sent: await send('post', `/api/approvals/${id}/decide`, {
+          token: owner,
+          body: { approve: true, note: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
       };
     },
     'POST /api/shifts': async () => {

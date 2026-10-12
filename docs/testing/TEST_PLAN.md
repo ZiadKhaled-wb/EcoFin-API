@@ -322,3 +322,7 @@ See [R01 plan](plans/R01.md). Covers the Done when (a user without `customer.vie
 ## S02 — split payments (EC-69)
 
 See [S02 plan](plans/S02.md). Covers the Done when (a sale paid half cash, half bank transfer posts each amount to the right place and the shift shows both) and the D64 rules (exact total, cash with change, bank reference, store credit, nothing left behind on a refusal, names-only account list, replays).
+
+## S03 — discounts (EC-70)
+
+See [S03 plan](plans/S03.md). Covers the Done when (a cashier can't exceed their cap through the API; the tax on a discounted sale is correct) and the D65 rules (line discount then sale discount spread by largest remainder, a per-line effective cap, the on-the-spot approval as a single-use 15-minute request bound to a server-side cart fingerprint).

@@ -1,7 +1,14 @@
 import {
+  DiscountApproval,
+  DiscountApprovalList,
+  DiscountApprovalRequested,
+  DiscountApprovalResult,
   Sale,
   SalePaymentAccountList,
   SaleQuote,
+  type DiscountApprovalDecideBody,
+  type DiscountApprovalListQuery,
+  type DiscountApprovalRequestBody,
   type SaleCreateBody,
   type SaleQuoteBody,
 } from '@ziadkhaled-wb/contracts';
@@ -24,6 +31,7 @@ export async function quoteSale(ctx: RequestContext, body: SaleQuoteBody): Promi
     p_lines: body.lines,
     ...(body.customer_id ? { p_customer_id: body.customer_id } : {}),
     ...(body.payments ? { p_payments: body.payments } : {}),
+    ...(body.sale_discount ? { p_sale_discount: body.sale_discount } : {}),
   });
   if (error) fail(error);
   return SaleQuote.parse(data);
@@ -34,6 +42,9 @@ export async function quoteSale(ctx: RequestContext, body: SaleQuoteBody): Promi
  * the given payment lines (cash in full without them). The same idempotency key again returns the
  * first sale and sells nothing. A total other than `expected_total` answers PRICE_CHANGED with
  * both totals; lines that don't add up to the total answer PAYMENT_TOTAL_MISMATCH.
+ * S03 (D65): lines and the sale may carry a discount (the total is after it, the payments must add
+ * up to it). Above the caller's cap the sale answers DISCOUNT_ABOVE_CAP unless the caller has
+ * discount.above_cap or sends the id of an approved request (APPROVAL_INVALID when it doesn't fit).
  */
 export async function postSale(
   ctx: RequestContext,
@@ -46,6 +57,9 @@ export async function postSale(
     p_idempotency_key: idempotencyKey,
     ...(body.customer_id ? { p_customer_id: body.customer_id } : {}),
     ...(body.payments ? { p_payments: body.payments } : {}),
+    ...(body.sale_discount ? { p_sale_discount: body.sale_discount } : {}),
+    ...(body.discount_reason ? { p_discount_reason: body.discount_reason } : {}),
+    ...(body.discount_approval_id ? { p_discount_approval_id: body.discount_approval_id } : {}),
   });
   if (error) fail(error);
   return Sale.parse(data);
@@ -63,4 +77,67 @@ export async function listPaymentAccounts(ctx: RequestContext): Promise<SalePaym
   const { data, error } = await ctx.db.rpc('list_sale_payment_accounts');
   if (error) fail(error);
   return SalePaymentAccountList.parse(data);
+}
+
+/**
+ * S03 (D65): asks a manager to approve exactly this cart (the server prices it and keeps its
+ * fingerprint). APPROVAL_NOT_NEEDED when no line is above the caller's cap.
+ */
+export async function requestDiscountApproval(
+  ctx: RequestContext,
+  body: DiscountApprovalRequestBody,
+): Promise<DiscountApprovalRequested> {
+  const { data, error } = await ctx.db.rpc('request_discount_approval', {
+    p_branch_id: body.branch_id,
+    p_lines: body.lines,
+    p_sale_discount: body.sale_discount ?? null,
+    p_reason: body.reason,
+  });
+  if (error) fail(error);
+  return DiscountApprovalRequested.parse(data);
+}
+
+/** The requester's own approval, or any of their branches with discount.above_cap. */
+export async function getDiscountApproval(
+  ctx: RequestContext,
+  id: string,
+): Promise<DiscountApproval> {
+  const { data, error } = await ctx.db.rpc('get_discount_approval', { p_approval_id: id });
+  if (error) fail(error);
+  return DiscountApproval.parse(data);
+}
+
+/** The requester takes a pending request back. */
+export async function cancelDiscountApproval(
+  ctx: RequestContext,
+  id: string,
+): Promise<DiscountApprovalResult> {
+  const { data, error } = await ctx.db.rpc('cancel_discount_approval', { p_approval_id: id });
+  if (error) fail(error);
+  return DiscountApprovalResult.parse(data);
+}
+
+/** discount.above_cap: the requests of the caller's branches, waiting ones by default. */
+export async function listDiscountApprovals(
+  ctx: RequestContext,
+  query: DiscountApprovalListQuery,
+): Promise<DiscountApprovalList> {
+  const { data, error } = await ctx.db.rpc('list_discount_approvals', { p_status: query.status });
+  if (error) fail(error);
+  return DiscountApprovalList.parse(data);
+}
+
+/** discount.above_cap, not the requester, with access to the request's branch. */
+export async function decideDiscountApproval(
+  ctx: RequestContext,
+  id: string,
+  body: DiscountApprovalDecideBody,
+): Promise<DiscountApprovalResult> {
+  const { data, error } = await ctx.db.rpc('decide_discount_approval', {
+    p_approval_id: id,
+    p_approve: body.approve,
+    ...(body.note ? { p_note: body.note } : {}),
+  });
+  if (error) fail(error);
+  return DiscountApprovalResult.parse(data);
 }

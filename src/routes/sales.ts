@@ -1,5 +1,11 @@
 import { Router } from 'express';
-import { SaleCreateBody, SaleIdParams, SaleQuoteBody } from '@ziadkhaled-wb/contracts';
+import {
+  DiscountApprovalIdParams,
+  DiscountApprovalRequestBody,
+  SaleCreateBody,
+  SaleIdParams,
+  SaleQuoteBody,
+} from '@ziadkhaled-wb/contracts';
 import { authenticate } from '../middleware/auth';
 import { loadRequestContext } from '../middleware/requestContext';
 import { authenticatedOnly, requirePermission } from '../middleware/permissions';
@@ -32,6 +38,33 @@ router.get(
   loadRequestContext,
   requirePermission('sale.create'),
   asyncHandler(controller.paymentAccounts),
+);
+// S03 (D65): the cashier asks for an over-cap discount approval, reads it and may take it back.
+// The manager lists and decides these in routes/approvals.ts. Before `/:id`.
+router.post(
+  '/discount-approvals',
+  authenticate,
+  loadRequestContext,
+  requirePermission('sale.create'),
+  validate({ body: DiscountApprovalRequestBody }),
+  asyncHandler(controller.requestApproval),
+);
+// The requester, or discount.above_cap: checked in SQL.
+router.get(
+  '/discount-approvals/:id',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ params: DiscountApprovalIdParams }),
+  asyncHandler(controller.getApproval),
+);
+router.post(
+  '/discount-approvals/:id/cancel',
+  authenticate,
+  loadRequestContext,
+  requirePermission('sale.create'),
+  validate({ params: DiscountApprovalIdParams }),
+  asyncHandler(controller.cancelApproval),
 );
 // Own sales with sale.create; with report.view or cash.view the sales of the caller's branches.
 // Checked in SQL.

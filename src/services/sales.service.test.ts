@@ -2,7 +2,17 @@ import { describe, it, expect } from 'vitest';
 import { createSupabaseMock } from '../test/supabase-mock';
 import type { DbClient } from '../utils/supabase';
 import type { RequestContext } from '../middleware/requestContext';
-import { getSale, listPaymentAccounts, postSale, quoteSale } from './sales.service';
+import {
+  cancelDiscountApproval,
+  decideDiscountApproval,
+  getDiscountApproval,
+  getSale,
+  listDiscountApprovals,
+  listPaymentAccounts,
+  postSale,
+  quoteSale,
+  requestDiscountApproval,
+} from './sales.service';
 
 const ID = 'a0620000-0000-4000-8000-000000000001';
 const BRANCH = 'a0620000-0000-4000-8000-000000000002';
@@ -24,11 +34,16 @@ const line = {
   tax_rate: '14.00',
   tax_amount: '61.40',
   line_total: '500.00',
+  discount_amount: '0.00',
 };
 const quote = {
   prices_include_vat: true,
-  lines: [{ ...line, list_price: '250.00', overridden: false, available: 10 }],
+  lines: [
+    { ...line, list_price: '250.00', overridden: false, available: 10, effective_pct: '0.00' },
+  ],
   subtotal: '500.00',
+  discount_total: '0.00',
+  max_effective_pct: '0.00',
   tax_total: '61.40',
   total: '500.00',
   paid: '500.00',
@@ -47,6 +62,7 @@ const sale = {
   prices_include_vat: true,
   subtotal: '500.00',
   discount_total: '0.00',
+  discount_reason: null,
   tax_total: '61.40',
   total: '500.00',
   business_date: '2026-10-12',
@@ -235,5 +251,156 @@ describe('S01 sale service', () => {
     });
     db.queue({ data: null, error: null });
     await expect(postSale(ctx, { lines, expected_total: '500.00' }, KEY)).rejects.toThrow();
+  });
+});
+
+describe('S03 discount service', () => {
+  const discounted = [
+    { product_id: CHAIR, quantity: 2, discount: { type: 'percent' as const, value: '6' } },
+  ];
+  const approvalId = 'a0620000-0000-4000-8000-0000000000a1';
+  const approval = {
+    id: approvalId,
+    status: 'pending',
+    branch_id: BRANCH,
+    branch_name: 'Main',
+    requested_by_name: 'Mona',
+    requested_at: ts,
+    max_effective_pct: '6.00',
+    cap_pct: '5.00',
+    discount_total: '30.00',
+    reason: 'Regular customer',
+    lines: [
+      {
+        product_id: CHAIR,
+        sku: 'CH',
+        name_ar: 'كرسي',
+        name_en: null,
+        quantity: 2,
+        unit_price: '250.00',
+        discount_amount: '30.00',
+        effective_pct: '6.00',
+      },
+    ],
+    decided_by_name: null,
+    decided_at: null,
+    decision_note: null,
+    used: false,
+  };
+
+  it('the quote and the sale pass the discounts, the reason and the approval, only when given', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: quote, error: null });
+    await quoteSale(ctx, { lines: discounted, sale_discount: { type: 'amount', value: '10.00' } });
+    expect(db.rpc).toHaveBeenLastCalledWith('quote_sale', {
+      p_lines: discounted,
+      p_sale_discount: { type: 'amount', value: '10.00' },
+    });
+    db.queue({ data: sale, error: null });
+    await postSale(
+      ctx,
+      {
+        lines: discounted,
+        expected_total: '470.00',
+        sale_discount: { type: 'amount', value: '10.00' },
+        discount_reason: 'Regular customer',
+        discount_approval_id: approvalId,
+      },
+      KEY,
+    );
+    expect(db.rpc).toHaveBeenLastCalledWith('post_sale', {
+      p_lines: discounted,
+      p_expected_total: '470.00',
+      p_idempotency_key: KEY,
+      p_sale_discount: { type: 'amount', value: '10.00' },
+      p_discount_reason: 'Regular customer',
+      p_discount_approval_id: approvalId,
+    });
+  });
+
+  it('DISCOUNT_ABOVE_CAP is 403 with the line, the cap and the percent', async () => {
+    const { db, ctx } = setup();
+    db.queue({
+      data: null,
+      error: {
+        code: 'P0001',
+        message: 'DISCOUNT_ABOVE_CAP: line 1 is at 6.00, the cap is 5.00',
+        details: '{"line_no":1,"cap_pct":"5.00","effective_pct":"6.00"}',
+      },
+    });
+    await expect(
+      postSale(ctx, { lines: discounted, expected_total: '470.00' }, KEY),
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'DISCOUNT_ABOVE_CAP',
+      details: { line_no: 1, cap_pct: '5.00', effective_pct: '6.00' },
+    });
+  });
+
+  it.each([
+    ['APPROVAL_INVALID', 409],
+    ['APPROVAL_NOT_PENDING', 409],
+    ['APPROVAL_SELF', 403],
+    ['APPROVAL_NOT_NEEDED', 400],
+    ['APPROVAL_NOT_FOUND', 404],
+    ['DISCOUNT_INVALID', 400],
+    ['DISCOUNT_REASON_REQUIRED', 400],
+  ])('%s maps to HTTP %i', async (code, status) => {
+    const { db, ctx } = setup();
+    db.queue({ data: null, error: { code: 'P0001', message: `${code}: detail` } });
+    await expect(
+      postSale(ctx, { lines: discounted, expected_total: '470.00' }, KEY),
+    ).rejects.toMatchObject({ statusCode: status, code });
+  });
+
+  it('requests, reads, cancels, lists and decides', async () => {
+    const { db, ctx } = setup();
+    db.queue({
+      data: { approval_id: approvalId, max_effective_pct: '6.00', cap_pct: '5.00' },
+      error: null,
+    });
+    const requested = await requestDiscountApproval(ctx, {
+      branch_id: BRANCH,
+      lines: discounted,
+      reason: 'Regular customer',
+    });
+    expect(requested.approval_id).toBe(approvalId);
+    expect(db.rpc).toHaveBeenLastCalledWith('request_discount_approval', {
+      p_branch_id: BRANCH,
+      p_lines: discounted,
+      p_sale_discount: null,
+      p_reason: 'Regular customer',
+    });
+    db.queue({ data: approval, error: null });
+    expect((await getDiscountApproval(ctx, approvalId)).status).toBe('pending');
+    expect(db.rpc).toHaveBeenLastCalledWith('get_discount_approval', {
+      p_approval_id: approvalId,
+    });
+    db.queue({ data: { status: 'cancelled' }, error: null });
+    expect((await cancelDiscountApproval(ctx, approvalId)).status).toBe('cancelled');
+    expect(db.rpc).toHaveBeenLastCalledWith('cancel_discount_approval', {
+      p_approval_id: approvalId,
+    });
+    db.queue({ data: { items: [approval] }, error: null });
+    const listed = await listDiscountApprovals(ctx, {
+      kind: 'discount_above_cap',
+      status: 'pending',
+    });
+    expect(listed.items).toHaveLength(1);
+    expect(db.rpc).toHaveBeenLastCalledWith('list_discount_approvals', { p_status: 'pending' });
+    db.queue({ data: { status: 'approved' }, error: null });
+    const decided = await decideDiscountApproval(ctx, approvalId, { approve: true, note: 'Fine' });
+    expect(decided.status).toBe('approved');
+    expect(db.rpc).toHaveBeenLastCalledWith('decide_discount_approval', {
+      p_approval_id: approvalId,
+      p_approve: true,
+      p_note: 'Fine',
+    });
+    db.queue({ data: { status: 'rejected' }, error: null });
+    await decideDiscountApproval(ctx, approvalId, { approve: false });
+    expect(db.rpc).toHaveBeenLastCalledWith('decide_discount_approval', {
+      p_approval_id: approvalId,
+      p_approve: false,
+    });
   });
 });

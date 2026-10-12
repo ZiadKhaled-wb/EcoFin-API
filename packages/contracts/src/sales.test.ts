@@ -94,12 +94,23 @@ describe('S01 sale contracts', () => {
       tax_rate: '14.00',
       tax_amount: '61.40',
       line_total: '500.00',
+      discount_amount: '0.00',
     };
     expect(
       SaleQuote.safeParse({
         prices_include_vat: true,
-        lines: [{ ...line, list_price: '250.00', overridden: false, available: 10 }],
+        lines: [
+          {
+            ...line,
+            list_price: '250.00',
+            overridden: false,
+            available: 10,
+            effective_pct: '0.00',
+          },
+        ],
         subtotal: '500.00',
+        discount_total: '0.00',
+        max_effective_pct: '0.00',
         tax_total: '61.40',
         total: '500.00',
         paid: '500.00',
@@ -119,6 +130,7 @@ describe('S01 sale contracts', () => {
       prices_include_vat: true,
       subtotal: '500.00',
       discount_total: '0.00',
+      discount_reason: null,
       tax_total: '61.40',
       total: '500.00',
       business_date: '2026-10-12',
