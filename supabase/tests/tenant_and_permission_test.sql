@@ -545,7 +545,8 @@ INSERT INTO t.denial VALUES
 INSERT INTO t.denial VALUES
  ('search_sales','zz_s07_1_history','sale.create|report.view',$$SELECT public.search_sales()$$),
  ('get_sale_details','zz_s07_2_details','sale.create|report.view',$$SELECT public.get_sale_details((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'))$$),
- ('void_sale','zz_s07_3_void','sale.void',$$SELECT public.void_sale((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'),'S07 denial test','denial-s07-void')$$);
+ ('void_sale','zz_s07_3_void','sale.void',$$SELECT public.void_sale((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'),'S07 denial test','denial-s07-void')$$),
+ ('record_sale_receipt_print','zz_s07_4_receipt_print','sale.create|report.view',$$SELECT public.record_sale_receipt_print((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'))$$);
 INSERT INTO t.denial VALUES
  ('post_sale','zz_s12_0_sale','sale.create',$$SELECT public.post_sale(x.l,public.quote_sale(x.l)->>'total','denial-s12-sale') FROM (SELECT jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-PH'),'quantity',1,'unit_id',(SELECT id FROM public.units WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND serial='DENIAL-SN-1'))) l) x$$),
  ('warranty_lookup','zz_s12_1_lookup','warranty.manage',$$SELECT public.warranty_lookup(NULL,NULL,(SELECT number FROM public.sales WHERE id=(SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale')))$$),

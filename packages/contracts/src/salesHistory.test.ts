@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SalesHistoryQuery, SaleVoidBody, SaleStatus } from './salesHistory.js';
+import { SaleReceiptPrint, SalesHistoryQuery, SaleVoidBody, SaleStatus } from './salesHistory.js';
 
 describe('S07 sales history contracts', () => {
   it('validates filters and pagination without client organization context', () => {
@@ -37,4 +37,12 @@ describe('S07 sales history contracts', () => {
       expect(SaleStatus.parse(status)).toBe(status);
     },
   );
+  it('S04: a receipt print has a number from 1 and says whether it is a copy', () => {
+    expect(SaleReceiptPrint.parse({ print_no: 1, copy: false })).toEqual({
+      print_no: 1,
+      copy: false,
+    });
+    expect(SaleReceiptPrint.safeParse({ print_no: 0, copy: false }).success).toBe(false);
+    expect(SaleReceiptPrint.safeParse({ print_no: 2 }).success).toBe(false);
+  });
 });

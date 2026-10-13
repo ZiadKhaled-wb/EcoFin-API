@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.38.0
+
+- S04 receipt prints: SaleReceiptPrint (`print_no`, `copy`) for `POST /api/sales/:id/receipt-prints`; SaleHistoryDetails gains `receipt_prints` (optional; 0 means the next print is the original).
+
 ## 0.37.0
 
 - Combine S07 sales history, S12 warranty, and T02 ETA e-receipts contracts after merging main.

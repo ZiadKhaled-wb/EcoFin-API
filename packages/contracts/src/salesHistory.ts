@@ -59,9 +59,17 @@ export const SaleHistoryDetails = Sale.extend({
   voidable: z.boolean(),
   void_block_reason: ErrorCode.nullable(),
   returns: z.array(SaleReturnSummary),
+  /** S04: how many times the receipt was printed; 0 means the next print is the original. */
+  receipt_prints: z.number().int().nonnegative().optional(),
 });
 export type SaleHistoryDetails = z.infer<typeof SaleHistoryDetails>;
 export const SaleVoidBody = z.object({ reason: z.string().trim().min(3).max(200) }).strict();
 export type SaleVoidBody = z.infer<typeof SaleVoidBody>;
+/** S04 `POST /api/sales/:id/receipt-prints`: this print's number for the sale; a copy from the second on. */
+export const SaleReceiptPrint = z.object({
+  print_no: z.number().int().positive(),
+  copy: z.boolean(),
+});
+export type SaleReceiptPrint = z.infer<typeof SaleReceiptPrint>;
 export const SaleVoidResponse = z.object({ return_id: Uuid, number: z.string() });
 export type SaleVoidResponse = z.infer<typeof SaleVoidResponse>;
