@@ -2,6 +2,44 @@
 \set ON_ERROR_STOP 1
 SET client_min_messages=warning;
 CREATE SCHEMA t;
+-- O03: a shift needs the paired POS device of the request. t.open_shift pairs a free device of the
+-- branch (or the one named) and puts it in the request headers the way the API does once it has
+-- resolved a device token: x-device-id with the hash of that token (x-device-token-hash). Then it
+-- calls public.open_shift unchanged.
+CREATE FUNCTION t.pos(p_branch uuid, p_device uuid DEFAULT NULL) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_org uuid := app.current_org_id(); v_id uuid := p_device; v_hash text;
+BEGIN
+  IF v_org IS NULL OR NOT EXISTS (SELECT 1 FROM public.branches b WHERE b.id = p_branch AND b.organization_id = v_org) THEN
+    RETURN NULL;
+  END IF;
+  IF v_id IS NULL THEN
+    SELECT d.id INTO v_id FROM public.devices d
+    WHERE d.organization_id = v_org AND d.branch_id = p_branch AND d.is_active AND d.archived_at IS NULL AND d.name LIKE 'Test POS %'
+      AND NOT EXISTS (SELECT 1 FROM public.shifts s WHERE s.device_id = d.id AND s.status = 'open')
+    ORDER BY d.name LIMIT 1;
+  END IF;
+  IF v_id IS NULL THEN
+    INSERT INTO public.devices (organization_id, branch_id, name) VALUES (v_org, p_branch, 'Test POS ' || gen_random_uuid())
+    RETURNING id INTO v_id;
+  END IF;
+  -- Paired, as the pairing screens leave it: the device holds the hash of a token.
+  UPDATE public.devices d
+     SET token_hash = COALESCE(d.token_hash, encode(sha256(convert_to(d.id::text, 'UTF8')), 'hex')),
+         paired_at = COALESCE(d.paired_at, now())
+   WHERE d.id = v_id AND d.organization_id = v_org
+  RETURNING d.token_hash INTO v_hash;
+  PERFORM set_config('request.headers',
+    (COALESCE(NULLIF(current_setting('request.headers', true), ''), '{}')::jsonb
+       || jsonb_build_object('x-device-id', v_id, 'x-device-token-hash', v_hash))::text, false);
+  RETURN v_id;
+END $$;
+CREATE FUNCTION t.open_shift(p_branch uuid, p_float text, p_key text, p_vault uuid DEFAULT NULL, p_device uuid DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM t.pos(p_branch, p_device);
+  RETURN public.open_shift(p_branch, p_float, p_key, p_vault, p_device);
+END $$;
+GRANT EXECUTE ON FUNCTION t.pos(uuid, uuid), t.open_shift(uuid, text, text, uuid, uuid) TO authenticated;
 CREATE TABLE t.results(name text,ok boolean,detail text);
 CREATE TABLE t.shops(tag text,result jsonb);
 CREATE TABLE t.ids(tag text,id uuid);
@@ -138,7 +176,7 @@ RESET ROLE;
 UPDATE public.customers SET phones=ARRAY['01012345678'] WHERE id=t.id('mona');
 SELECT t.as_user('a7070000-0000-0000-8000-000000000003',t.org('a'));
 SET ROLE authenticated;
-INSERT INTO t.ids SELECT 'shift',(public.open_shift(t.id('main'),'0','s07-shift')->>'id')::uuid;
+INSERT INTO t.ids SELECT 'shift',(t.open_shift(t.id('main'),'0','s07-shift')->>'id')::uuid;
 INSERT INTO t.ids SELECT 'drawer',drawer_account_id FROM public.shifts WHERE id=t.id('shift');
 INSERT INTO t.docs SELECT 'sale',public.post_sale(t.lines(t.chairs(2),t.phone('S7-IMEI-1')),'5500.00','s07-main-sale',t.id('mona'),jsonb_build_array(jsonb_build_object('method','cash','amount','2750.00'),jsonb_build_object('method','bank_transfer','amount','2750.00','cash_account_id',t.id('bank'),'reference','S07 transfer')));
 RESET ROLE;
@@ -188,7 +226,7 @@ CREATE FUNCTION t.fresh(tag text) RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE j jsonb; BEGIN j:=public.post_sale(t.lines(t.chairs(1)),'250.00','s07-rule-'||tag,t.id('mona')); INSERT INTO t.ids VALUES(tag,(j->>'id')::uuid); RETURN (j->>'id')::uuid; END $$;
 GRANT EXECUTE ON FUNCTION t.fresh(text) TO authenticated;
 SET ROLE authenticated;
-INSERT INTO t.ids SELECT 'owner-shift',(public.open_shift(t.id('main'),'0','s07-owner-shift')->>'id')::uuid;
+INSERT INTO t.ids SELECT 'owner-shift',(t.open_shift(t.id('main'),'0','s07-owner-shift')->>'id')::uuid;
 SELECT t.fresh('yesterday'); SELECT t.fresh('return'); SELECT t.fresh('claim'); SELECT t.fresh('contract');
 SELECT t.fresh('eta-pending'); SELECT t.fresh('eta-issued'); SELECT t.fresh('closed');
 RESET ROLE;

@@ -15,6 +15,7 @@ import { supabaseJobStore } from '../jobs/store';
 import { JobWorker } from '../jobs/worker';
 import { startFakeEta, type FakeEta } from '../test/fake-eta';
 import { readInviteToken } from '../test/inviteMail';
+import { DEVICE_TOKEN_HEADER, pairTestDevice } from '../test/posDevice';
 import { getEnv } from '../utils/env';
 import { createLogger } from '../utils/logger';
 import { captureProblem } from '../utils/monitoring';
@@ -66,6 +67,8 @@ describe.skipIf(!RUN)('T02 ETA e-receipts against local stack and a fake ETA', (
   let org: string;
   let branch: string;
   let device: string;
+  // O03: the token of the computer paired with that device; our shop's requests come from it.
+  let pos = '';
   let tv: string;
   let sofa: string;
   const savedEnv = new Map<string, string | undefined>();
@@ -85,6 +88,7 @@ describe.skipIf(!RUN)('T02 ETA e-receipts against local stack and a fake ETA', (
       .set('Authorization', 'Bearer ' + token);
     const orgId = options.orgId === undefined ? org : options.orgId;
     if (orgId) r.set('x-org-id', orgId);
+    if (pos && orgId === org) r.set(DEVICE_TOKEN_HEADER, pos);
     if (options.key) r.set('Idempotency-Key', options.key);
     return body ? r.send(body) : r;
   };
@@ -239,14 +243,10 @@ describe.skipIf(!RUN)('T02 ETA e-receipts against local stack and a fake ETA', (
     expect(addressed.status, JSON.stringify(addressed.body)).toBe(200);
     expect((addressed.body as { building_number: string }).building_number).toBe('14');
 
-    // No slice creates POS devices yet: the row is made with the service role.
-    const made = await service
-      .from('devices')
-      .insert({ organization_id: org, branch_id: branch, name: 'Till 1' })
-      .select('id')
-      .single();
-    expect(made.error).toBeNull();
-    device = made.data!.id as string;
+    // The POS computer of the test: a device of the branch, already paired (O03 fixture).
+    const made = await pairTestDevice(service, org, branch, 'Till 1');
+    device = made.id;
+    pos = made.token;
     const registered = await call('put', `/api/devices/${device}/eta`, owner, {
       eta_serial: SERIAL,
       eta_os_version: 'android 14',

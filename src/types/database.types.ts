@@ -1735,6 +1735,24 @@ export type Database = {
           },
         ];
       };
+      device_pairing_attempts: {
+        Row: {
+          created_at: string;
+          employee_id: string;
+          id: number;
+        };
+        Insert: {
+          created_at?: string;
+          employee_id: string;
+          id?: never;
+        };
+        Update: {
+          created_at?: string;
+          employee_id?: string;
+          id?: never;
+        };
+        Relationships: [];
+      };
       devices: {
         Row: {
           archived_at: string | null;
@@ -1752,6 +1770,11 @@ export type Database = {
           last_seen_at: string | null;
           name: string;
           organization_id: string;
+          paired_at: string | null;
+          paired_by: string | null;
+          pairing_code_hash: string | null;
+          pairing_expires_at: string | null;
+          token_hash: string | null;
           updated_at: string;
           updated_by: string | null;
         };
@@ -1771,6 +1794,11 @@ export type Database = {
           last_seen_at?: string | null;
           name: string;
           organization_id: string;
+          paired_at?: string | null;
+          paired_by?: string | null;
+          pairing_code_hash?: string | null;
+          pairing_expires_at?: string | null;
+          token_hash?: string | null;
           updated_at?: string;
           updated_by?: string | null;
         };
@@ -1790,6 +1818,11 @@ export type Database = {
           last_seen_at?: string | null;
           name?: string;
           organization_id?: string;
+          paired_at?: string | null;
+          paired_by?: string | null;
+          pairing_code_hash?: string | null;
+          pairing_expires_at?: string | null;
+          token_hash?: string | null;
           updated_at?: string;
           updated_by?: string | null;
         };
@@ -8168,6 +8201,11 @@ export type Database = {
       };
       create_category: { Args: { p_name: string; p_parent_id?: string }; Returns: string };
       create_customer: { Args: { p: Json }; Returns: Json };
+      create_device: { Args: { p_branch_id: string; p_name: string }; Returns: string };
+      create_device_pairing_code: {
+        Args: { p_code_hash: string; p_device_id: string; p_expires_at: string };
+        Returns: Json;
+      };
       create_employee: {
         Args: {
           p_branch_ids: string[];
@@ -8615,6 +8653,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      pair_device: { Args: { p_code_hash: string; p_token_hash: string }; Returns: Json };
       password_reset_lookup: { Args: { p_token_hash: string }; Returns: Json };
       post_cash_opening: {
         Args: { p_amount: string; p_id: string; p_idempotency_key: string; p_note: string };
@@ -8726,6 +8765,7 @@ export type Database = {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
         Returns: Json;
       };
+      resolve_device: { Args: { p_token_hash: string }; Returns: Json };
       retry_fiscal_submission: { Args: { p_id: string }; Returns: Json };
       reverse_expense: {
         Args: {
@@ -8814,6 +8854,10 @@ export type Database = {
         Args: { p_id: string; p_reason?: string; p_status: string };
         Returns: Json;
       };
+      set_device_active: {
+        Args: { p_active: boolean; p_device_id: string; p_reason?: string };
+        Returns: Json;
+      };
       set_device_eta: {
         Args: {
           p_device_id: string;
@@ -8867,6 +8911,7 @@ export type Database = {
       set_supplier_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
       set_tax_class_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
       supplier_statement: { Args: { p_from?: string; p_id: string; p_to?: string }; Returns: Json };
+      unpair_device: { Args: { p_device_id: string }; Returns: Json };
       update_branch: {
         Args: {
           p_address: string | null;
@@ -8883,6 +8928,10 @@ export type Database = {
       };
       update_category: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
       update_customer: { Args: { p_changes: Json; p_id: string }; Returns: Json };
+      update_device: {
+        Args: { p_branch_id?: string; p_device_id: string; p_name?: string };
+        Returns: Json;
+      };
       update_employee: {
         Args: {
           p_default_branch_id: string | null;

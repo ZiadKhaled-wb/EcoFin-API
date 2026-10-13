@@ -31,6 +31,7 @@ INSERT INTO t.no_select_policy_ok VALUES
 -- 5. public functions authenticated may EXECUTE without app.require_permission.
 CREATE TABLE t.no_permission_ok (function_name text PRIMARY KEY, reason text NOT NULL);
 INSERT INTO t.no_permission_ok VALUES
+  ('resolve_device',              'O03: read-only lookup of the caller''s own shop device by token hash'),
   ('session_context',             'session helper: resolves the caller''s own shop/role, writes nothing'),
   ('my_shops',                    'session helper: lists the caller''s own shops (shop picker), writes nothing'),
   ('my_permissions',              'session helper: the caller''s own permission keys, writes nothing'),

@@ -12,6 +12,44 @@
 \set ON_ERROR_STOP 1
 SET client_min_messages=warning;
 CREATE SCHEMA t;
+-- O03: a shift needs the paired POS device of the request. t.open_shift pairs a free device of the
+-- branch (or the one named) and puts it in the request headers the way the API does once it has
+-- resolved a device token: x-device-id with the hash of that token (x-device-token-hash). Then it
+-- calls public.open_shift unchanged.
+CREATE FUNCTION t.pos(p_branch uuid, p_device uuid DEFAULT NULL) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_org uuid := app.current_org_id(); v_id uuid := p_device; v_hash text;
+BEGIN
+  IF v_org IS NULL OR NOT EXISTS (SELECT 1 FROM public.branches b WHERE b.id = p_branch AND b.organization_id = v_org) THEN
+    RETURN NULL;
+  END IF;
+  IF v_id IS NULL THEN
+    SELECT d.id INTO v_id FROM public.devices d
+    WHERE d.organization_id = v_org AND d.branch_id = p_branch AND d.is_active AND d.archived_at IS NULL AND d.name LIKE 'Test POS %'
+      AND NOT EXISTS (SELECT 1 FROM public.shifts s WHERE s.device_id = d.id AND s.status = 'open')
+    ORDER BY d.name LIMIT 1;
+  END IF;
+  IF v_id IS NULL THEN
+    INSERT INTO public.devices (organization_id, branch_id, name) VALUES (v_org, p_branch, 'Test POS ' || gen_random_uuid())
+    RETURNING id INTO v_id;
+  END IF;
+  -- Paired, as the pairing screens leave it: the device holds the hash of a token.
+  UPDATE public.devices d
+     SET token_hash = COALESCE(d.token_hash, encode(sha256(convert_to(d.id::text, 'UTF8')), 'hex')),
+         paired_at = COALESCE(d.paired_at, now())
+   WHERE d.id = v_id AND d.organization_id = v_org
+  RETURNING d.token_hash INTO v_hash;
+  PERFORM set_config('request.headers',
+    (COALESCE(NULLIF(current_setting('request.headers', true), ''), '{}')::jsonb
+       || jsonb_build_object('x-device-id', v_id, 'x-device-token-hash', v_hash))::text, false);
+  RETURN v_id;
+END $$;
+CREATE FUNCTION t.open_shift(p_branch uuid, p_float text, p_key text, p_vault uuid DEFAULT NULL, p_device uuid DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM t.pos(p_branch, p_device);
+  RETURN public.open_shift(p_branch, p_float, p_key, p_vault, p_device);
+END $$;
+GRANT EXECUTE ON FUNCTION t.pos(uuid, uuid), t.open_shift(uuid, text, text, uuid, uuid) TO authenticated;
 CREATE TABLE t.results(name text,ok boolean,detail text);
 CREATE TABLE t.shops(tag text,result jsonb);
 CREATE TABLE t.ids(tag text,id uuid);
@@ -123,7 +161,7 @@ SELECT public.post_stock_adjustment(t.id('second'),'found',NULL,t.lines(jsonb_bu
 -- An opening unit registered in the second branch.
 SELECT public.register_units(t.id('phone'),t.id('second'),'2900.00','["T3-IMEI-9"]',NULL,'test3-units');
 -- A shift: float 500 from the safe, 120 of transport from the drawer, 370 counted (10 short).
-INSERT INTO t.ids SELECT 'shift',(public.open_shift(t.id('main'),'500.00','test3-shift',t.id('safe'))->>'id')::uuid;
+INSERT INTO t.ids SELECT 'shift',(t.open_shift(t.id('main'),'500.00','test3-shift',t.id('safe'))->>'id')::uuid;
 SELECT public.post_expense(t.id('transport'),'120.00','test3-expense-shift',NULL,NULL,true,'Delivery van');
 SELECT public.close_shift(t.id('shift'),'{"200":1,"100":1,"50":1,"20":1}',t.id('safe'),'Ten pounds short');
 -- An expense of 50 from the bank.

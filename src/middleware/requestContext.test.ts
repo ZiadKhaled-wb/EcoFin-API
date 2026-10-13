@@ -9,7 +9,8 @@ interface RpcResponse {
 
 const db = vi.hoisted(() => {
   const response: RpcResponse = { data: null, error: null };
-  return { response, rpc: vi.fn() };
+  const device: RpcResponse = { data: null, error: null };
+  return { response, device, rpc: vi.fn() };
 });
 
 vi.mock('./auth', () => ({
@@ -48,9 +49,9 @@ function refused(refusal: string) {
   };
 }
 
-function mockReq(auth = true): Request {
+function mockReq(auth = true, headers: Record<string, string> = {}): Request {
   return {
-    headers: {},
+    headers,
     requestId: 'req-1',
     ...(auth ? { auth: { userId: USER, email: null, accessToken: 'jwt' } } : {}),
   } as unknown as Request;
@@ -68,7 +69,12 @@ beforeEach(() => {
   vi.mocked(dbFor).mockClear();
   db.response = { data: okRow, error: null };
   db.rpc.mockReset();
-  db.rpc.mockImplementation(() => ({ single: () => Promise.resolve(db.response) }));
+  db.device = { data: null, error: null };
+  db.rpc.mockImplementation((fn: string) =>
+    fn === 'resolve_device'
+      ? Promise.resolve(db.device)
+      : { single: () => Promise.resolve(db.response) },
+  );
 });
 
 describe('loadRequestContext', () => {
@@ -159,6 +165,39 @@ describe('loadRequestContext', () => {
   it('a row with no employee and no refusal -> 500', async () => {
     db.response = { data: { ...refused('x'), refusal: null }, error: null };
     expect(await run(mockReq())).toMatchObject({ statusCode: 500 });
+  });
+
+  // O03 (D69): the device token is resolved right after the session gate.
+  const TOKEN = 'Dev1ce-T0ken_'.padEnd(43, 'a');
+  const DEVICE = '55555555-5555-4555-8555-555555555555';
+
+  it('a device token sets req.device, and req.ctx.db is a second client built with it', async () => {
+    db.device = {
+      data: { device_id: DEVICE, name: 'POS-1', branch_id: BRANCH, branch_name: 'Main' },
+      error: null,
+    };
+    const req = mockReq(true, { 'x-device-token': TOKEN, 'x-device-id': ORG });
+    expect(await run(req)).toBeUndefined();
+    expect(db.rpc.mock.calls.map((call) => call[0])).toEqual(['session_context', 'resolve_device']);
+    expect(req.device?.id).toBe(DEVICE);
+    expect(req.headers['x-device-id']).toBeUndefined();
+    // The lookup ran on the first client (no device); the context holds the one made after it.
+    expect(dbFor).toHaveBeenCalledTimes(2);
+    expect(req.ctx?.db).toBe(vi.mocked(dbFor).mock.results[1]?.value);
+  });
+
+  it('a device token that resolves to nothing -> 403 DEVICE_REVOKED, no req.ctx', async () => {
+    const req = mockReq(true, { 'x-device-token': TOKEN });
+    expect(await run(req)).toMatchObject({ statusCode: 403, code: 'DEVICE_REVOKED' });
+    expect(req.ctx).toBeUndefined();
+    expect(req.device).toBeUndefined();
+  });
+
+  it('a refused session is answered first: the device token is not even looked at', async () => {
+    db.response = { data: refused('SHOP_NOT_ALLOWED'), error: null };
+    const req = mockReq(true, { 'x-device-token': TOKEN });
+    expect(await run(req)).toMatchObject({ statusCode: 403, code: 'SHOP_NOT_ALLOWED' });
+    expect(db.rpc).toHaveBeenCalledTimes(1);
   });
 
   it('used before authenticate -> programming error, no DB call', async () => {

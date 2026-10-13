@@ -131,5 +131,11 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
     none: 'T02: logs a POS in at the ETA to test the stored credentials; changes nothing.',
   },
   'PUT /api/devices/:id/eta': { action: 'device.eta_updated' },
+  'POST /api/devices': { action: 'device.created' },
+  'PATCH /api/devices/:id': { action: 'device.updated' },
+  'POST /api/devices/:id/active': { action: 'device.deactivated' },
+  'POST /api/devices/:id/pairing-code': { action: 'device.pairing_code_created' },
+  'POST /api/devices/:id/unpair': { action: 'device.unpaired' },
+  'POST /api/devices/pair': { action: 'device.paired' },
   'POST /api/eta/submissions/:id/retry': { action: 'fiscal.retry_requested' },
 };

@@ -5,6 +5,7 @@
 // no `(req as any)` anywhere in the codebase.
 
 import type { RequestContext } from '../middleware/requestContext';
+import type { RequestDevice } from '../middleware/deviceContext';
 
 export interface AuthenticatedUser {
   id: string;
@@ -35,6 +36,8 @@ declare global {
       user?: AuthenticatedUser | undefined;
       /** Tenant context of the caller (F05 loadRequestContext); read it with getCtx(req). */
       ctx?: RequestContext | undefined;
+      /** The paired POS device of this request (O03 deviceContext); absent without a device token. */
+      device?: RequestDevice | undefined;
     }
   }
 }

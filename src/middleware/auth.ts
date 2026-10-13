@@ -4,7 +4,8 @@
 //                  session fails) and puts { userId, email, accessToken, orgId? } on req.auth.
 //   dbFor(req)     a fresh Supabase client that runs as the caller (+ x-org-id). The hook for
 //                  F05: its org-scope middleware loads the employee through this client.
-//   requestMeta    ip / user agent / request id for audit rows and login_attempts.
+//   requestMeta    ip / user agent / request id for audit rows and login_attempts, and the POS
+//                  device the API resolved from the device token (O03), never a client's id.
 //
 // Loading the employee per request and enforcing org scope is F05; permissions are F06.
 
@@ -16,7 +17,6 @@ import {
   type DbClient,
   type RequestMeta,
 } from '../utils/supabase';
-import { validDeviceId } from '../utils/validation';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError, BadRequest, ServerError, Unauthorized } from '../utils/errors';
 import { logger } from '../utils/logger';
@@ -48,6 +48,10 @@ function looksExpired(token: string): boolean {
 
 export const authenticate = asyncHandler(
   async (req: Request, _res: Response, next: NextFunction) => {
+    // O03: the device of a request is the one the API resolves from x-device-token
+    // (deviceContext). A device id sent by the client is dropped before anything reads it.
+    delete req.headers['x-device-id'];
+    delete req.headers['x-device-token-hash'];
     const token = bearerToken(req);
     if (!token) throw Unauthorized('Authentication required.', 'UNAUTHORIZED');
     const orgId = requestedOrgId(req);
@@ -83,7 +87,8 @@ export function requestMeta(req: Request): RequestMeta {
     ip: req.ip,
     userAgent: req.get('user-agent'),
     requestId: req.requestId,
-    deviceId: validDeviceId(req.get('x-device-id')),
+    deviceId: req.device?.id,
+    deviceTokenHash: req.device?.tokenHash,
   };
 }
 

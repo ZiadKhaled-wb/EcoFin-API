@@ -11,6 +11,7 @@ import {
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
 import { readInviteToken } from '../test/inviteMail';
+import { DEVICE_TOKEN_HEADER, pairTestDevice } from '../test/posDevice';
 
 const RUN = process.env['RUN_INTEGRATION'] === '1';
 const PASSWORD = 'LocalDev-Only-2026!';
@@ -30,6 +31,8 @@ describe.skipIf(!RUN)('S12 sale core against local stack', () => {
   let claimId: string;
   let plainLine: string;
   let ip = 0;
+  // O03: the paired POS computer every request of this test comes from.
+  let pos = '';
   const call = (
     method: 'get' | 'post',
     path: string,
@@ -42,6 +45,7 @@ describe.skipIf(!RUN)('S12 sale core against local stack', () => {
       .set('X-Forwarded-For', `198.18.79.${(++ip % 250) + 1}`)
       .set('Authorization', 'Bearer ' + token);
     if (org) r.set('x-org-id', org);
+    if (pos) r.set(DEVICE_TOKEN_HEADER, pos);
     if (key) r.set('Idempotency-Key', key);
     return body ? r.send(body) : r;
   };
@@ -90,6 +94,7 @@ describe.skipIf(!RUN)('S12 sale core against local stack', () => {
       .single();
     expect(main.error).toBeNull();
     branch = main.data!.id as string;
+    pos = (await pairTestDevice(service, org, branch)).token;
     const cashierEmail = `s12.cashier.${STAMP}@ecotech.test`;
     const user = await service.auth.admin.createUser({
       email: cashierEmail,

@@ -23,6 +23,7 @@ import {
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
 import { readInviteToken } from '../test/inviteMail';
+import { DEVICE_TOKEN_HEADER, pairTestDevice } from '../test/posDevice';
 
 const RUN = process.env['RUN_INTEGRATION'] === '1';
 const PASSWORD = 'LocalDev-Only-2026!';
@@ -43,6 +44,8 @@ describe.skipIf(!RUN)('INT-3 stock and cash end to end against local stack', () 
   let phone: string;
   let chair: string;
   let ip = 0;
+  // O03: the paired POS computer of the main branch; every request of this test comes from it.
+  let pos = '';
   const call = (
     method: 'get' | 'post' | 'put',
     path: string,
@@ -55,6 +58,7 @@ describe.skipIf(!RUN)('INT-3 stock and cash end to end against local stack', () 
       .set('X-Forwarded-For', `198.18.62.${(++ip % 250) + 1}`)
       .set('Authorization', 'Bearer ' + token);
     if (org) r.set('x-org-id', org);
+    if (pos) r.set(DEVICE_TOKEN_HEADER, pos);
     if (key) r.set('Idempotency-Key', key);
     return body ? r.send(body) : r;
   };
@@ -130,6 +134,7 @@ describe.skipIf(!RUN)('INT-3 stock and cash end to end against local stack', () 
       .single();
     expect(first.error).toBeNull();
     main = first.data!.id as string;
+    pos = (await pairTestDevice(service, org, main)).token;
     safe = first.data!.default_cash_account_id as string;
     north = (await ok<{ id: string }>('post', '/api/branches', { name: 'North', code: 'NTH' })).id;
 

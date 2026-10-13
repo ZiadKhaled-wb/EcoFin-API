@@ -18,6 +18,44 @@
 SET client_min_messages = warning;
 
 CREATE SCHEMA t;
+-- O03: a shift needs the paired POS device of the request. t.open_shift pairs a free device of the
+-- branch (or the one named) and puts it in the request headers the way the API does once it has
+-- resolved a device token: x-device-id with the hash of that token (x-device-token-hash). Then it
+-- calls public.open_shift unchanged.
+CREATE FUNCTION t.pos(p_branch uuid, p_device uuid DEFAULT NULL) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_org uuid := app.current_org_id(); v_id uuid := p_device; v_hash text;
+BEGIN
+  IF v_org IS NULL OR NOT EXISTS (SELECT 1 FROM public.branches b WHERE b.id = p_branch AND b.organization_id = v_org) THEN
+    RETURN NULL;
+  END IF;
+  IF v_id IS NULL THEN
+    SELECT d.id INTO v_id FROM public.devices d
+    WHERE d.organization_id = v_org AND d.branch_id = p_branch AND d.is_active AND d.archived_at IS NULL AND d.name LIKE 'Test POS %'
+      AND NOT EXISTS (SELECT 1 FROM public.shifts s WHERE s.device_id = d.id AND s.status = 'open')
+    ORDER BY d.name LIMIT 1;
+  END IF;
+  IF v_id IS NULL THEN
+    INSERT INTO public.devices (organization_id, branch_id, name) VALUES (v_org, p_branch, 'Test POS ' || gen_random_uuid())
+    RETURNING id INTO v_id;
+  END IF;
+  -- Paired, as the pairing screens leave it: the device holds the hash of a token.
+  UPDATE public.devices d
+     SET token_hash = COALESCE(d.token_hash, encode(sha256(convert_to(d.id::text, 'UTF8')), 'hex')),
+         paired_at = COALESCE(d.paired_at, now())
+   WHERE d.id = v_id AND d.organization_id = v_org
+  RETURNING d.token_hash INTO v_hash;
+  PERFORM set_config('request.headers',
+    (COALESCE(NULLIF(current_setting('request.headers', true), ''), '{}')::jsonb
+       || jsonb_build_object('x-device-id', v_id, 'x-device-token-hash', v_hash))::text, false);
+  RETURN v_id;
+END $$;
+CREATE FUNCTION t.open_shift(p_branch uuid, p_float text, p_key text, p_vault uuid DEFAULT NULL, p_device uuid DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM t.pos(p_branch, p_device);
+  RETURN public.open_shift(p_branch, p_float, p_key, p_vault, p_device);
+END $$;
+GRANT EXECUTE ON FUNCTION t.pos(uuid, uuid), t.open_shift(uuid, text, text, uuid, uuid) TO authenticated;
 CREATE TABLE t.results (name text, ok boolean, detail text);
 
 CREATE FUNCTION t.expect(p_name text, p_ok boolean, p_detail text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$
@@ -458,7 +496,7 @@ INSERT INTO t.denial VALUES
 -- K02: after the K01 cases made the denial safe (10.00 in it): the owner opens a shift, takes 5.00
 -- of change from the safe and closes with exactly that (case names order the calls).
 INSERT INTO t.denial VALUES
- ('open_shift','shift_1_open','shift.operate',$$SELECT public.open_shift('d2000000-0000-0000-0000-000000000011','0','denial-shift-1')$$),
+ ('open_shift','shift_1_open','shift.operate',$$SELECT t.open_shift('d2000000-0000-0000-0000-000000000011','0','denial-shift-1')$$),
  ('move_shift_cash','shift_2_cash','shift.operate',$$SELECT public.move_shift_cash((SELECT id FROM public.shifts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-shift-1'),'in','5.00',(SELECT id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial safe'),'Denial change','denial-shift-cash')$$),
  ('get_current_shift','shift_2a_current','shift.operate',$$SELECT public.get_current_shift()$$),
  ('get_shift','shift_2b_get','shift.operate',$$SELECT public.get_shift((SELECT id FROM public.shifts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-shift-1'))$$),
@@ -513,7 +551,7 @@ INSERT INTO t.denial VALUES
 -- S01: after the unit cases registered DENIAL-SN-1 (price 1): the owner opens a second shift,
 -- quotes the unit, sells it at the quoted total and reads the sale (case names order the calls).
 INSERT INTO t.denial VALUES
- ('open_shift','unit_5_sale_shift','shift.operate',$$SELECT public.open_shift('d2000000-0000-0000-0000-000000000011','0','denial-shift-sale')$$),
+ ('open_shift','unit_5_sale_shift','shift.operate',$$SELECT t.open_shift('d2000000-0000-0000-0000-000000000011','0','denial-shift-sale')$$),
  ('quote_sale','unit_6_sale_quote','sale.create',$$SELECT public.quote_sale(jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-PH'),'quantity',1,'unit_id',(SELECT id FROM public.units WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND serial='DENIAL-SN-1'))))$$),
  ('post_sale','unit_7_sale_post','sale.create',$$SELECT public.post_sale(x.l,public.quote_sale(x.l)->>'total','denial-sale-1') FROM (SELECT jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-PH'),'quantity',1,'unit_id',(SELECT id FROM public.units WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND serial='DENIAL-SN-1'))) l) x$$),
  ('get_sale','unit_8_sale_get','sale.create',$$SELECT public.get_sale((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'))$$),
@@ -572,12 +610,22 @@ INSERT INTO t.denial VALUES
  ('list_devices','eta_3_devices_list','device.manage',$$SELECT public.list_devices()$$),
  ('set_device_eta','eta_4_device_set','device.manage',$$SELECT public.set_device_eta('d5000000-0000-0000-0000-0000000000e1','DENIAL-POS','os','1',NULL,'pending')$$),
  ('retry_fiscal_submission','eta_5_retry','fiscal.retry',$$SELECT public.retry_fiscal_submission('d5000000-0000-0000-0000-0000000000e3')$$);
+-- O03: the device of the T02 cases is renamed, given a code, paired, unpaired and deactivated, in
+-- that order (case names). pair_device takes shift.operate or device.manage: the role without the
+-- first is denied on the second. resolve_device asks for no key (any employee of the shop).
+INSERT INTO t.denial VALUES
+ ('create_device','dev_1_create','device.manage',$$SELECT public.create_device('d2000000-0000-0000-0000-000000000011','Denial POS two')$$),
+ ('update_device','dev_2_update','device.manage',$$SELECT public.update_device('d5000000-0000-0000-0000-0000000000e1','Denial POS renamed')$$),
+ ('create_device_pairing_code','dev_3_code','device.manage',$$SELECT public.create_device_pairing_code('d5000000-0000-0000-0000-0000000000e1',repeat('a',64),now()+interval '10 minutes')$$),
+ ('pair_device','dev_4_pair','shift.operate',$$SELECT public.pair_device(repeat('a',64),repeat('b',64))$$),
+ ('unpair_device','dev_5_unpair','device.manage',$$SELECT public.unpair_device('d5000000-0000-0000-0000-0000000000e1')$$),
+ ('set_device_active','dev_6_active','device.manage',$$SELECT public.set_device_active('d5000000-0000-0000-0000-0000000000e1',false,'TEST-1 denial')$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
   AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
   AND p.proname NOT IN ('session_context', 'my_shops', 'my_permissions',
-                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change', 'get_subscription_status','require_module','get_shop_settings','list_tax_classes','get_shop_profile','list_categories','list_products','get_product','lookup_product','list_product_units');
+                        'auth_record_login', 'auth_record_logout', 'auth_record_password_change', 'get_subscription_status','require_module','get_shop_settings','list_tax_classes','get_shop_profile','list_categories','list_products','get_product','lookup_product','list_product_units','resolve_device');
 
 SELECT t.expect('4.0 every callable write function has a permission-denial case here',
     NOT EXISTS (SELECT 1 FROM t.write_functions w WHERE w.fn NOT IN (SELECT fn FROM t.denial)),

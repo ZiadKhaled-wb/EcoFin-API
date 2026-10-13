@@ -4,12 +4,18 @@ import { describe, it, expect } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { requestMeta } from './auth';
+import type { RequestDevice } from './deviceContext';
 import { requestId } from './requestId';
 
-function appWithTrust(trust: number | false) {
+function appWithTrust(trust: number | false, device?: RequestDevice) {
   const app = express();
   app.set('trust proxy', trust);
   app.use(requestId());
+  // What deviceContext leaves on the request once it resolved a device token.
+  app.use((req, _res, next) => {
+    req.device = device;
+    next();
+  });
   app.get('/meta', (req, res) => {
     res.json(requestMeta(req));
   });
@@ -29,19 +35,38 @@ describe('requestMeta', () => {
     expect(res.body.ip).not.toBe('6.6.6.6');
   });
 
-  it('carries the request id, the user agent and a valid device id only', async () => {
-    const device = '44444444-4444-4444-8444-444444444444';
+  it('carries the request id and the user agent', async () => {
     const ok = await request(appWithTrust(1))
       .get('/meta')
       .set('x-request-id', 'req-abc')
-      .set('user-agent', 'EcoFin-POS/1.0')
-      .set('x-device-id', device);
-    expect(ok.body).toMatchObject({
-      requestId: 'req-abc',
-      userAgent: 'EcoFin-POS/1.0',
-      deviceId: device,
-    });
-    const bad = await request(appWithTrust(1)).get('/meta').set('x-device-id', 'drop table x');
-    expect(bad.body.deviceId).toBeUndefined();
+      .set('user-agent', 'EcoFin-POS/1.0');
+    expect(ok.body).toMatchObject({ requestId: 'req-abc', userAgent: 'EcoFin-POS/1.0' });
+  });
+
+  // O03 (D69): the device of a request is the one the API resolved from the device token.
+  it('never carries a device id the client sent', async () => {
+    const forged = await request(appWithTrust(1))
+      .get('/meta')
+      .set('x-device-id', '44444444-4444-4444-8444-444444444444')
+      .set('x-device-token-hash', 'f'.repeat(64));
+    expect(forged.body.deviceId).toBeUndefined();
+    expect(forged.body.deviceTokenHash).toBeUndefined();
+  });
+
+  it('carries the resolved device, whatever device id the client sent', async () => {
+    const device: RequestDevice = {
+      id: '55555555-5555-4555-8555-555555555555',
+      name: 'POS-1',
+      branch_id: '66666666-6666-4666-8666-666666666666',
+      branch_name: 'Main',
+      tokenHash: 'a'.repeat(64),
+    };
+    const res = await request(appWithTrust(1, device))
+      .get('/meta')
+      .set('x-device-id', '44444444-4444-4444-8444-444444444444')
+      .set('x-device-token-hash', 'f'.repeat(64));
+    expect(res.body.deviceId).toBe(device.id);
+    // With its proof: the hash of the token the API resolved, never one the client sent.
+    expect(res.body.deviceTokenHash).toBe(device.tokenHash);
   });
 });

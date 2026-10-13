@@ -47,8 +47,13 @@ export interface RequestMeta {
   ip?: string | undefined;
   userAgent?: string | undefined;
   requestId?: string | undefined;
-  /** The client's `x-device-id` (F07), only when it is a UUID; the DB drops another shop's device. */
+  /** The POS device the API resolved from the device token (O03); sent on as `x-device-id`. */
   deviceId?: string | undefined;
+  /**
+   * The SHA-256 of that device token, sent on as `x-device-token-hash`: the database counts the
+   * device only with it, so an `x-device-id` written by someone calling PostgREST is no device.
+   */
+  deviceTokenHash?: string | undefined;
 }
 
 /**
@@ -94,7 +99,12 @@ export function supabaseForRequest(
   if (meta?.requestId) headers['x-request-id'] = meta.requestId;
   // app.write_audit (F07) reads these request headers for every audit row.
   const deviceId = validDeviceId(meta?.deviceId);
-  if (deviceId) headers['x-device-id'] = deviceId;
+  const deviceTokenHash = meta?.deviceTokenHash;
+  // Both or neither: a device id without its proof would be no device in the database anyway.
+  if (deviceId && deviceTokenHash !== undefined && /^[0-9a-f]{64}$/.test(deviceTokenHash)) {
+    headers['x-device-id'] = deviceId;
+    headers['x-device-token-hash'] = deviceTokenHash;
+  }
   return createClient<Database>(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
     auth: baseAuthOptions,
     global: { headers },

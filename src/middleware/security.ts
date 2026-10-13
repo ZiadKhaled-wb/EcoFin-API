@@ -35,7 +35,7 @@ export function corsAllowList(allowedOrigins: readonly string[]): RequestHandler
       'x-request-id',
       'x-org-id',
       'Idempotency-Key',
-      'x-device-id',
+      'x-device-token',
     ],
     exposedHeaders: ['x-request-id'],
   });

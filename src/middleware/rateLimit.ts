@@ -114,14 +114,16 @@ export interface LimiterOptions {
   windowMs: number;
   limit: number;
   store?: StoreOption;
+  /** The bucket of a request. Default: the client IP (+ tenantSlug). */
+  key?: (req: Request) => string;
 }
 
-/** A limiter keyed by client IP (as Express resolves it), answering with the contract error. */
+/** A limiter keyed by client IP (as Express resolves it) unless `key` says otherwise, answering with the contract error. */
 export function createLimiter(options: LimiterOptions): RequestHandler {
   return rateLimit({
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    keyGenerator,
+    keyGenerator: options.key ?? keyGenerator,
     handler: tooManyRequests,
     store: options.store ?? createMemoryStore(options.windowMs),
     windowMs: options.windowMs,
@@ -146,3 +148,10 @@ export const forgotPasswordLimiter = lazyLimiter('forgot', { windowMs: 60 * 60 *
 export const refreshLimiter = lazyLimiter('refresh', { windowMs: 60 * 1000, limit: 60 });
 // Reset tokens come from the emailed link; its own bucket so it never eats the forgot budget.
 export const resetPasswordLimiter = lazyLimiter('reset', { windowMs: 60 * 60 * 1000, limit: 10 });
+// O03: typing pairing codes, 5 a minute for each signed-in user (mounted after authenticate), so
+// a code can't be guessed and one cashier can't use up a whole shop's budget.
+export const devicePairLimiter = lazyLimiter('device-pair', {
+  windowMs: 60 * 1000,
+  limit: 5,
+  key: (req) => req.auth?.userId ?? req.ip ?? 'unknown',
+});

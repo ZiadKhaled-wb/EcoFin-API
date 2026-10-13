@@ -85,6 +85,10 @@ export const Device = z.object({
   eta_status: DeviceEtaStatus,
   has_preshared_key: z.boolean(),
   is_active: z.boolean(),
+  /** O03: this device holds a token (a computer was paired with it). Never the token. */
+  paired: z.boolean(),
+  paired_at: IsoTimestamp.nullable(),
+  last_seen_at: IsoTimestamp.nullable(),
 });
 export type Device = z.infer<typeof Device>;
 export const DeviceList = z.array(Device);

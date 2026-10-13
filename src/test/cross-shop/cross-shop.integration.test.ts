@@ -10,6 +10,7 @@ import { AuthLoginResponse, ErrorResponse } from '@ziadkhaled-wb/contracts';
 import { createApp } from '../../app';
 import { getEnv } from '../../utils/env';
 import { registeredCases, type CrossShopHarness } from './harness';
+import { DEVICE_TOKEN_HEADER, pairTestDevice } from '../posDevice';
 import './cases';
 
 const RUN = process.env['RUN_INTEGRATION'] === '1';
@@ -52,6 +53,8 @@ describe.skipIf(!RUN)('F05 cross-shop suite against local Supabase', () => {
       if (options.token) r = r.set('Authorization', `Bearer ${options.token}`);
       if (options.orgId) r = r.set('x-org-id', options.orgId);
       if (options.idempotencyKey) r = r.set('Idempotency-Key', options.idempotencyKey);
+      if (options.deviceToken) r = r.set(DEVICE_TOKEN_HEADER, options.deviceToken);
+      if (options.deviceId) r = r.set('x-device-id', options.deviceId);
       const res = options.body ? await r.send(options.body) : await r;
       return { res, ip };
     };
@@ -67,6 +70,7 @@ describe.skipIf(!RUN)('F05 cross-shop suite against local Supabase', () => {
         return AuthLoginResponse.parse(res.body);
       },
       code: (res) => ErrorResponse.parse(res.body).error.code,
+      pairDevice: (orgId, branchId, name) => pairTestDevice(service, orgId, branchId, name),
       async auditRowsFrom(orgId, ip) {
         const { count, error } = await service
           .from('audit_log')

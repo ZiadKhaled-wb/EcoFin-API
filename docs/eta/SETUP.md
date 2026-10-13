@@ -46,11 +46,17 @@ Sign in as the owner (or a user with `org.settings_manage`, `branch.manage`, `de
    client ID, the secret and that device's four values. Otherwise the ETA's reason is shown, for
    example `invalid_presharedkey`.
 
-A cashier sells on a POS device by opening their shift on it. A sale made in a shift without a
-device has no POS for its receipt and is blocked (`BLOCKED:NO_DEVICE`).
+7. **Create each POS device and pair it on its computer** (O03). On **Settings → POS devices**,
+   **Add device** (a name and its branch), then **Pair**: the page shows an 8-character code for
+   15 minutes. On the POS computer, a signed-in employee opens **Pair this computer** (the
+   account menu, or the shift screen) and types the code. The computer is that device from then
+   on; its name shows in the header. Do steps 4 and 6 for the device once it exists.
 
-> POS devices can't be created from the app yet (no slice does it): until one does, the device
-> rows are added by support.
+A cashier sells on a POS device by opening their shift on its computer: a shift can only be
+opened from a paired computer, in the device's branch, and every sale of the shift carries that
+device. A device that is not Active with a serial at the ETA still blocks its receipts
+(`BLOCKED:NO_DEVICE`, step 4). **Unpair** or **Turn off** on the devices page stops a lost or
+replaced computer on its next request.
 
 ## 4. What a blocked receipt means
 

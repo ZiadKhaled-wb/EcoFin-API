@@ -2,14 +2,22 @@
 // exactly ONE audit_log row with that action, this request's id and the client IP; and the
 // search endpoint. Skipped unless RUN_INTEGRATION=1 (env: see src/routes/auth.integration.test.ts).
 // Throwaway employees (unique per run) are used where a route changes someone's data.
+import { createHash } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { AuditSearchResponse, AuthLoginResponse, ErrorResponse } from '@ziadkhaled-wb/contracts';
+import {
+  AuditSearchResponse,
+  AuthLoginResponse,
+  ErrorResponse,
+  PAIRING_CODE_ALPHABET,
+  PAIRING_CODE_LENGTH,
+} from '@ziadkhaled-wb/contracts';
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
 import { AUDIT_REGISTRY } from '../test/audit-registry/registry';
 import { readInviteToken } from '../test/inviteMail';
+import { DEVICE_TOKEN_HEADER, pairTestDevice } from '../test/posDevice';
 
 const RUN = process.env['RUN_INTEGRATION'] === '1';
 const SEED_PASSWORD = 'LocalDev-Only-2026!';
@@ -43,7 +51,7 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
   async function send(
     method: 'get' | 'post' | 'put' | 'patch',
     path: string,
-    opts: { token?: string; orgId?: string; body?: object; key?: string } = {},
+    opts: { token?: string; orgId?: string; body?: object; key?: string; pos?: string } = {},
   ): Promise<Sent> {
     const ip = nextIp();
     const requestId = `f07-${STAMP}-${ipCounter}`;
@@ -51,6 +59,7 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     if (opts.token) r = r.set('Authorization', `Bearer ${opts.token}`);
     if (opts.orgId) r = r.set('x-org-id', opts.orgId);
     if (opts.key) r = r.set('Idempotency-Key', opts.key);
+    if (opts.pos) r = r.set(DEVICE_TOKEN_HEADER, opts.pos);
     const res = opts.body ? await r.send(opts.body) : await r;
     return { res, ip, requestId };
   }
@@ -223,11 +232,45 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     if (existing) return existing.id;
     const opened = await send('post', '/api/shifts', {
       token,
+      pos,
       key: `f07-shift-open-${STAMP}-${ipCounter}-${Math.random()}`,
       body: { branch_id: BR1, opening_float: '0' },
     });
     expect(opened.res.status, JSON.stringify(opened.res.body)).toBe(201);
     return (opened.res.body as { id: string }).id;
+  }
+  const sha256 = (value: string) => createHash('sha256').update(value, 'utf8').digest('hex');
+  /** Devices are never deleted; an archived one doesn't count against the plan. */
+  async function archiveDevice(id: string) {
+    const archived = await service
+      .from('devices')
+      .update({ is_active: false, archived_at: new Date().toISOString() })
+      .eq('id', id);
+    if (archived.error) throw new Error(archived.error.message);
+  }
+  /** O03: a device of shop one for one call of its owner, archived after it. */
+  async function withDevice<T>(
+    columns: Record<string, string>,
+    run: (id: string, token: string) => Promise<T>,
+  ): Promise<T> {
+    const owner = await login('owner.one@ecotech.test');
+    const made = await service
+      .from('devices')
+      .insert({
+        organization_id: SHOP_ONE,
+        branch_id: BR1,
+        name: `F07 ${STAMP}-${ipCounter}`,
+        ...columns,
+      })
+      .select('id')
+      .single();
+    if (made.error) throw new Error(made.error.message);
+    const id = made.data.id;
+    try {
+      return await run(id, owner.accessToken);
+    } finally {
+      await archiveDevice(id);
+    }
   }
   /** K02: closes the caller's open shift, if any (one open shift per cashier). */
   async function closeOpenShift(token: string) {
@@ -298,12 +341,15 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     return { id: emp.data.id as string, authId: user.data.user.id };
   }
 
+  // O03: shop one's paired POS computer; the shifts of this test are opened from it.
+  let pos = '';
   beforeAll(async () => {
     const env = getEnv();
     app = createApp({ env });
     service = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    pos = (await pairTestDevice(service, SHOP_ONE, BR1)).token;
     targetId = (await createEmployee(`f07.target.${STAMP}@ecotech.test`, TEMP_PASSWORD)).id;
     pwEmail = `f07.pw.${STAMP}@ecotech.test`;
     pwAuthId = (await createEmployee(pwEmail, TEMP_PASSWORD)).authId;
@@ -712,6 +758,7 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       await closeOpenShift(owner.accessToken);
       const sent = await send('post', '/api/shifts', {
         token: owner.accessToken,
+        pos,
         key: `f07-shift-${STAMP}-${ipCounter}`,
         body: { branch_id: BR1, opening_float: '0' },
       });
@@ -1129,37 +1176,71 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
-    'PUT /api/devices/:id/eta': async () => {
+    'PUT /api/devices/:id/eta': () =>
+      withDevice({}, async (id, token) => ({
+        sent: await send('put', `/api/devices/${id}/eta`, {
+          token,
+          body: {
+            eta_serial: `F07-${STAMP}-${ipCounter}`,
+            eta_os_version: 'os',
+            eta_model_framework: '1',
+            eta_status: 'pending',
+          },
+        }),
+        org: SHOP_ONE,
+      })),
+    'POST /api/devices': async () => {
       const owner = await login('owner.one@ecotech.test');
-      // No slice creates POS devices yet: a row for this call, archived after it (devices are
-      // never deleted; an archived one doesn't count against the plan).
-      const made = await service
-        .from('devices')
-        .insert({ organization_id: SHOP_ONE, branch_id: BR1, name: `F07 ${STAMP}-${ipCounter}` })
-        .select('id')
-        .single();
-      if (made.error) throw new Error(made.error.message);
-      const id = made.data.id;
-      try {
-        return {
-          sent: await send('put', `/api/devices/${id}/eta`, {
-            token: owner.accessToken,
-            body: {
-              eta_serial: `F07-${STAMP}-${ipCounter}`,
-              eta_os_version: 'os',
-              eta_model_framework: '1',
-              eta_status: 'pending',
-            },
-          }),
-          org: SHOP_ONE,
-        };
-      } finally {
-        const archived = await service
-          .from('devices')
-          .update({ is_active: false, archived_at: new Date().toISOString() })
-          .eq('id', id);
-        if (archived.error) throw new Error(archived.error.message);
+      const sent = await send('post', '/api/devices', {
+        token: owner.accessToken,
+        body: { branch_id: BR1, name: `F07 new ${STAMP}-${ipCounter}` },
+      });
+      const id = (sent.res.body as { id?: string }).id;
+      if (id) await archiveDevice(id);
+      return { sent, org: SHOP_ONE, status: 201 };
+    },
+    'PATCH /api/devices/:id': () =>
+      withDevice({}, async (id, token) => ({
+        sent: await send('patch', `/api/devices/${id}`, {
+          token,
+          body: { name: `F07 renamed ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+      })),
+    'POST /api/devices/:id/active': () =>
+      withDevice({}, async (id, token) => ({
+        sent: await send('post', `/api/devices/${id}/active`, {
+          token,
+          body: { active: false, reason: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
+      })),
+    'POST /api/devices/:id/pairing-code': () =>
+      withDevice({}, async (id, token) => ({
+        sent: await send('post', `/api/devices/${id}/pairing-code`, { token }),
+        org: SHOP_ONE,
+      })),
+    'POST /api/devices/:id/unpair': () =>
+      withDevice({ token_hash: sha256(`f07-token-${STAMP}-${ipCounter}`) }, async (id, token) => ({
+        sent: await send('post', `/api/devices/${id}/unpair`, { token }),
+        org: SHOP_ONE,
+      })),
+    'POST /api/devices/pair': () => {
+      // A code as the API makes them (8 characters of the pairing alphabet), stored as its hash.
+      let code = '';
+      for (let i = 0; i < PAIRING_CODE_LENGTH; i += 1) {
+        code += PAIRING_CODE_ALPHABET.charAt(
+          Math.floor(Math.random() * PAIRING_CODE_ALPHABET.length),
+        );
       }
+      const pairing = {
+        pairing_code_hash: sha256(code),
+        pairing_expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      };
+      return withDevice(pairing, async (_id, token) => ({
+        sent: await send('post', '/api/devices/pair', { token, body: { code } }),
+        org: SHOP_ONE,
+      }));
     },
     'POST /api/eta/submissions/:id/retry': async () => {
       // A sale of the seeded shop (ETA off: it has no receipt), given a blocked receipt by hand.

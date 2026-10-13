@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.39.0
+
+- O03 POS devices: DeviceCreateBody, DeviceCreated, DeviceUpdateBody, DeviceActiveBody (turning a device off needs a reason), DeviceActiveResult, DevicePairingCode (the code is answered once), DeviceUnpaired, DevicePairBody, DevicePaired (the device token is answered once), CurrentDevice, CurrentDeviceResponse, DEVICE_TOKEN_HEADER, PAIRING_CODE_ALPHABET, PAIRING_CODE_LENGTH, PAIRING_CODE_TTL_MINUTES, DEVICE_NAME_MAX. Device gains `paired`, `paired_at`, `last_seen_at`. Error codes DEVICE_REQUIRED, DEVICE_HAS_OPEN_SHIFT, DEVICE_NAME_TAKEN, DEVICE_BRANCH_MISMATCH, DEVICE_MISMATCH (409), DEVICE_REVOKED (403), PAIRING_CODE_INVALID (400).
+
 ## 0.38.0
 
 - S04 receipt prints: SaleReceiptPrint (`print_no`, `copy`) for `POST /api/sales/:id/receipt-prints`; SaleHistoryDetails gains `receipt_prints` (optional; 0 means the next print is the original).
