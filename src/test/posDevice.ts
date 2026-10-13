@@ -38,7 +38,7 @@ export async function pairTestDevice(
     .maybeSingle();
   if (found.error) throw new Error(found.error.message);
   if (found.data) {
-    const id = (found.data as { id: string }).id;
+    const id = found.data.id;
     const updated = await service.from('devices').update(pairing).eq('id', id);
     if (updated.error) throw new Error(updated.error.message);
     return { id, token };
@@ -49,5 +49,5 @@ export async function pairTestDevice(
     .select('id')
     .single();
   if (made.error) throw new Error(made.error.message);
-  return { id: (made.data as { id: string }).id, token };
+  return { id: made.data.id, token };
 }

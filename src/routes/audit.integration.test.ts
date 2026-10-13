@@ -265,7 +265,7 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       .select('id')
       .single();
     if (made.error) throw new Error(made.error.message);
-    const id = (made.data as { id: string }).id;
+    const id = made.data.id;
     try {
       return await run(id, owner.accessToken);
     } finally {

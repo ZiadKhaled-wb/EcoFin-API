@@ -133,18 +133,7 @@ describe.skipIf(!RUN)('O03 POS devices against local stack and a fake ETA', () =
       .eq('id', id)
       .single();
     if (error) throw new Error(error.message);
-    return data as {
-      id: string;
-      name: string;
-      branch_id: string;
-      is_active: boolean;
-      token_hash: string | null;
-      pairing_code_hash: string | null;
-      pairing_expires_at: string | null;
-      paired_at: string | null;
-      paired_by: string | null;
-      last_seen_at: string | null;
-    };
+    return data;
   }
   async function auditOf(requestId: string) {
     const { data, error } = await service
@@ -493,12 +482,7 @@ describe.skipIf(!RUN)('O03 POS devices against local stack and a fake ETA', () =
         .eq('sale_id', sale.id)
         .single();
       if (error) throw new Error(error.message);
-      return data as {
-        status: string;
-        device_id: string | null;
-        eta_uuid: string | null;
-        last_error: string | null;
-      };
+      return data;
     };
     // Prepared: the receipt has its UUID and QR text, for the POS of the sale. Never blocked.
     const prepared = await fiscal();
@@ -703,7 +687,8 @@ describe.skipIf(!RUN)('O03 POS devices against local stack and a fake ETA', () =
         },
         body: JSON.stringify(args),
       });
-      return { status: res.status, body: (await res.json().catch(() => null)) as unknown };
+      const body: unknown = await res.json().catch(() => null);
+      return { status: res.status, body };
     };
     const message = (body: unknown) => String((body as { message?: unknown } | null)?.message);
 

@@ -3,10 +3,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
 
-const db = vi.hoisted(() => ({
-  response: { data: null as unknown, error: null as unknown },
-  rpc: vi.fn(),
-}));
+interface RpcResponse {
+  data: unknown;
+  error: unknown;
+}
+
+const db = vi.hoisted(() => {
+  const response: RpcResponse = { data: null, error: null };
+  return { response, rpc: vi.fn() };
+});
 const logs = vi.hoisted(() => ({ lines: [] as string[] }));
 
 vi.mock('./auth', () => ({ dbFor: vi.fn(() => ({ rpc: db.rpc })) }));
