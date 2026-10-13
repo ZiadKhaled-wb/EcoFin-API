@@ -626,6 +626,20 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
+    'POST /api/sales/:id/receipt-prints': async () => {
+      const created = await drivers['POST /api/sales']!();
+      expect(created.sent.res.status).toBe(201);
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send(
+          'post',
+          '/api/sales/' + (created.sent.res.body as { id: string }).id + '/receipt-prints',
+          { token: owner.accessToken },
+        ),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
     'POST /api/sales/:id/void': async () => {
       const created = await drivers['POST /api/sales']!();
       expect(created.sent.res.status).toBe(201);

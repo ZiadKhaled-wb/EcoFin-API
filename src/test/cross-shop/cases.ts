@@ -3633,6 +3633,39 @@ crossShopCase({
     await closeShiftShort(h, b.shift);
   },
 });
+crossShopCase({
+  method: 'POST',
+  path: '/api/sales/:id/receipt-prints',
+  name: "another shop's sale is 404 and no print is logged",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const b = await shopBSale(h);
+    const attempt = await h.call('POST', '/api/sales/' + b.id + '/receipt-prints', {
+      token: a.accessToken,
+    });
+    h.expect(attempt.res.status).toBe(404);
+    h.expect(h.code(attempt.res)).toBe('SALE_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, attempt.ip)).toBe(0);
+    const header = await h.call('POST', '/api/sales/' + b.id + '/receipt-prints', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+    // Its own shop prints the original, then a copy, and the details count both.
+    const first = await h.call('POST', '/api/sales/' + b.id + '/receipt-prints', {
+      token: b.shift.token,
+    });
+    h.expect(first.res.status, JSON.stringify(first.res.body)).toBe(201);
+    h.expect(first.res.body).toEqual({ print_no: 1, copy: false });
+    const second = await h.call('POST', '/api/sales/' + b.id + '/receipt-prints', {
+      token: b.shift.token,
+    });
+    h.expect(second.res.body).toEqual({ print_no: 2, copy: true });
+    const detail = await h.call('GET', '/api/sales/' + b.id, { token: b.shift.token });
+    h.expect((detail.res.body as { receipt_prints: number }).receipt_prints).toBe(2);
+    await closeShiftShort(h, b.shift);
+  },
+});
 
 // S12: each request uses caller JWT; foreign claims/lines look absent.
 async function shopBClaim(h: CrossShopHarness) {
