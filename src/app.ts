@@ -34,6 +34,8 @@ import approvalsRoutes from './routes/approvals.js';
 import customersRoutes from './routes/customers.js';
 import cashAccountsRoutes from './routes/cashAccounts.js';
 import cashTransfersRoutes from './routes/cashTransfers.js';
+import etaRoutes from './routes/eta.js';
+import devicesRoutes from './routes/devices.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { noClientOrg } from './middleware/noClientOrg.js';
 import { requestId } from './middleware/requestId.js';
@@ -95,6 +97,8 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/customers', customersRoutes);
   mountRouter(app, '/api/cash-accounts', cashAccountsRoutes);
   mountRouter(app, '/api/cash-transfers', cashTransfersRoutes);
+  mountRouter(app, '/api/eta', etaRoutes);
+  mountRouter(app, '/api/devices', devicesRoutes);
   mountRouter(app, '/api/me', meRoutes);
   mountRouter(app, '/api/employees', employeesRoutes);
   mountRouter(app, '/api/warranty', warrantyRoutes);

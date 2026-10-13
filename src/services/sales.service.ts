@@ -13,6 +13,7 @@ import {
   type SaleQuoteBody,
 } from '@ziadkhaled-wb/contracts';
 import type { RequestContext } from '../middleware/requestContext';
+import { withEta, withFreshEta } from './eta.service';
 import { mapDbError, ServerError } from '../utils/errors';
 import { logger } from '../utils/logger';
 
@@ -45,6 +46,8 @@ export async function quoteSale(ctx: RequestContext, body: SaleQuoteBody): Promi
  * S03 (D65): lines and the sale may carry a discount (the total is after it, the payments must add
  * up to it). Above the caller's cap the sale answers DISCOUNT_ABOVE_CAP unless the caller has
  * discount.above_cap or sends the id of an approved request (APPROVAL_INVALID when it doesn't fit).
+ * T02 (D67): the answer carries the sale's ETA receipt (`eta`), built within 2 seconds when it can
+ * be, so the first print has the QR code; otherwise the eta.prepare job builds it.
  */
 export async function postSale(
   ctx: RequestContext,
@@ -62,14 +65,14 @@ export async function postSale(
     ...(body.discount_approval_id ? { p_discount_approval_id: body.discount_approval_id } : {}),
   });
   if (error) fail(error);
-  return Sale.parse(data);
+  return withFreshEta(ctx, Sale.parse(data));
 }
 
 /** The caller's own sale, or any sale of their branches with report.view or cash.view. */
 export async function getSale(ctx: RequestContext, id: string): Promise<Sale> {
   const { data, error } = await ctx.db.rpc('get_sale', { p_id: id });
   if (error) fail(error);
-  return Sale.parse(data);
+  return withEta(ctx, Sale.parse(data));
 }
 
 /** S02: the active banks the caller's open shift can take a transfer into, by name only. */

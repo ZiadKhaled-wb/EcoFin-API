@@ -152,7 +152,10 @@ export async function updatePasswordWithToken(
   return { ok: false, status: res.status, code };
 }
 
-/** Service role. Only for src/services/auth.admin.ts (D14), the health check (D20) and src/jobs (D34). */
+/**
+ * Service role. Only for src/services/auth.admin.ts (D14), the health check (D20), src/jobs (D34)
+ * and src/eta (D67: the worker-side receipt functions).
+ */
 export const supabaseAdmin: SupabaseClient = lazyClient(() => {
   const env = getEnv();
   return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: baseAuthOptions });

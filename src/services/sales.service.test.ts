@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createSupabaseMock } from '../test/supabase-mock';
 import type { DbClient } from '../utils/supabase';
 import type { RequestContext } from '../middleware/requestContext';
@@ -13,6 +13,18 @@ import {
   quoteSale,
   requestDiscountApproval,
 } from './sales.service';
+
+// T02: the receipt part of a sale belongs to eta.service (its own tests); here it is a stand-in.
+const ETA = {
+  status: 'pending',
+  uuid: 'a'.repeat(64),
+  qr_payload: 'https://portal/receipts/search/x/share/y#Total:500.00,IssuerRIN:1',
+  last_error_code: null,
+};
+vi.mock('./eta.service', () => ({
+  withFreshEta: vi.fn((_ctx: unknown, sold: object) => Promise.resolve({ ...sold, eta: ETA })),
+  withEta: vi.fn((_ctx: unknown, sold: object) => Promise.resolve({ ...sold, eta: null })),
+}));
 
 const ID = 'a0620000-0000-4000-8000-000000000001';
 const BRANCH = 'a0620000-0000-4000-8000-000000000002';
@@ -237,6 +249,14 @@ describe('S01 sale service', () => {
         code: message.split(':')[0],
       });
     }
+  });
+
+  it('T02: a new sale answers its ETA receipt, a read sale the receipt as it is now', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: sale, error: null });
+    expect((await postSale(ctx, { lines, expected_total: '500.00' }, KEY)).eta).toEqual(ETA);
+    db.queue({ data: sale, error: null });
+    expect((await getSale(ctx, ID)).eta).toBeNull();
   });
 
   it('reads a sale; not found is 404; a malformed answer is not passed on', async () => {

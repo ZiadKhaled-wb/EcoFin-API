@@ -9,3 +9,4 @@ docs/
 .claude/
 .github/
 *.md
+src/eta/fixtures/

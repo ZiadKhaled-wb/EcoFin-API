@@ -2,19 +2,26 @@
 //
 // Every job type the API runs, and the daily ones (D34). Add a slice's job here: a handler that is
 // safe to run twice (a retry after a crash can repeat it), plus a DAILY entry if it's scheduled.
-//   N04 'installments.assess_late_fees' (daily), T02 'eta.submit' (queued by sales, retried),
-//   K04 daily reconciliation, Q03 backups check: added by those slices.
+//   T02 'eta.prepare', 'eta.submit', 'eta.poll' (D67): queued by the database with each sale and
+//   each receipt status change, not daily.
+//   N04 'installments.assess_late_fees' (daily), K04 daily reconciliation, Q03 backups check:
+//   added by those slices.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Logger } from 'pino';
+import { etaJobHandlers } from '../eta/jobs';
+import { etaRuntime } from '../eta/runtime';
+import { supabaseEtaStore } from '../eta/store';
 import { ledgerReconcile } from './handlers/ledgerReconcile';
 import { supabaseJobStore } from './store';
 import type { DailyJob, JobHandler } from './types';
 import { JobWorker } from './worker';
 
-export function jobHandlers(db: SupabaseClient): Record<string, JobHandler> {
+export function jobHandlers(db: SupabaseClient, logger: Logger): Record<string, JobHandler> {
+  const { client, hosts } = etaRuntime();
   return {
     'ledger.reconcile': ledgerReconcile(db),
+    ...etaJobHandlers({ store: supabaseEtaStore(db), client, hosts, logger }),
   };
 }
 
@@ -28,7 +35,7 @@ export function createJobWorker(
 ): JobWorker {
   return new JobWorker({
     store: supabaseJobStore(db),
-    handlers: jobHandlers(db),
+    handlers: jobHandlers(db, logger),
     daily: DAILY_JOBS,
     logger,
     pollSeconds: options.pollSeconds,

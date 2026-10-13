@@ -73,6 +73,8 @@ const addressArgs = (body: BranchCreateBody | BranchUpdateBody) => ({
   p_governorate: body.governorate ?? null,
   p_phone: body.phone ?? null,
   p_eta_branch_code: body.eta_branch_code ?? null,
+  // T02: left out, the database stores none.
+  ...(body.building_number ? { p_building_number: body.building_number } : {}),
 });
 export async function createBranch(ctx: RequestContext, body: BranchCreateBody) {
   const { data, error } = await ctx.db.rpc('create_branch', {

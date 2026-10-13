@@ -1099,6 +1099,115 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
+    // T02 (D67). ETA stays OFF in the seeded shop, so no other test's sale gets a receipt.
+    'PUT /api/eta/settings': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('put', '/api/eta/settings', {
+          token: owner.accessToken,
+          body: {
+            environment: 'preprod',
+            client_id: `f07-${STAMP}-${ipCounter}`,
+            activity_code: '4753',
+            is_enabled: false,
+          },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'PUT /api/devices/:id/eta': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      // No slice creates POS devices yet: a row for this call, archived after it (devices are
+      // never deleted; an archived one doesn't count against the plan).
+      const made = await service
+        .from('devices')
+        .insert({ organization_id: SHOP_ONE, branch_id: BR1, name: `F07 ${STAMP}-${ipCounter}` })
+        .select('id')
+        .single();
+      if (made.error) throw new Error(made.error.message);
+      const id = made.data.id;
+      try {
+        return {
+          sent: await send('put', `/api/devices/${id}/eta`, {
+            token: owner.accessToken,
+            body: {
+              eta_serial: `F07-${STAMP}-${ipCounter}`,
+              eta_os_version: 'os',
+              eta_model_framework: '1',
+              eta_status: 'pending',
+            },
+          }),
+          org: SHOP_ONE,
+        };
+      } finally {
+        const archived = await service
+          .from('devices')
+          .update({ is_active: false, archived_at: new Date().toISOString() })
+          .eq('id', id);
+        if (archived.error) throw new Error(archived.error.message);
+      }
+    },
+    'POST /api/eta/submissions/:id/retry': async () => {
+      // A sale of the seeded shop (ETA off: it has no receipt), given a blocked receipt by hand.
+      const owner = await login('owner.one@ecotech.test');
+      await openShift(owner.accessToken);
+      const product = await newProduct(owner.accessToken);
+      const stocked = await send('post', '/api/stock/adjustments', {
+        token: owner.accessToken,
+        key: `f07-eta-stock-${STAMP}-${ipCounter}`,
+        body: { branch_id: BR1, reason: 'found', lines: [{ product_id: product, quantity: 1 }] },
+      });
+      expect(stocked.res.status, JSON.stringify(stocked.res.body)).toBe(201);
+      const lines = [{ product_id: product, quantity: 1 }];
+      const quote = await send('post', '/api/sales/quote', {
+        token: owner.accessToken,
+        body: { lines },
+      });
+      const sold = await send('post', '/api/sales', {
+        token: owner.accessToken,
+        key: `f07-eta-sale-${STAMP}-${ipCounter}`,
+        body: { lines, expected_total: (quote.res.body as { total: string }).total },
+      });
+      expect(sold.res.status, JSON.stringify(sold.res.body)).toBe(201);
+      const sale = sold.res.body as { id: string; number: string };
+      const blocked = await service
+        .from('fiscal_submissions')
+        .insert({
+          organization_id: SHOP_ONE,
+          branch_id: BR1,
+          doc_type: 'b2c_receipt',
+          sale_id: sale.id,
+          environment: 'preprod',
+          internal_id: sale.number,
+          status: 'failed',
+          last_error: 'BLOCKED:NO_DEVICE: F07 audit driver',
+        })
+        .select('id')
+        .single();
+      if (blocked.error) throw new Error(blocked.error.message);
+      const id = blocked.data.id;
+      try {
+        return {
+          sent: await send('post', `/api/eta/submissions/${id}/retry`, {
+            token: owner.accessToken,
+          }),
+          org: SHOP_ONE,
+        };
+      } finally {
+        // The retry queued an eta.prepare job: it must not outlive the call. The receipt (fiscal
+        // rows are never deleted) is cancelled, so it is never built or sent.
+        await service
+          .from('jobs')
+          .delete()
+          .eq('organization_id', SHOP_ONE)
+          .like('job_type', 'eta.%');
+        const cancelled = await service
+          .from('fiscal_submissions')
+          .update({ status: 'cancelled' })
+          .eq('id', id);
+        if (cancelled.error) throw new Error(cancelled.error.message);
+      }
+    },
     'PATCH /api/settings': async () => {
       const owner = await login('owner.one@ecotech.test');
       return {

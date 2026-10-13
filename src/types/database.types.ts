@@ -203,6 +203,7 @@ export type Database = {
         Row: {
           address: string | null;
           archived_at: string | null;
+          building_number: string | null;
           city: string | null;
           code: string;
           created_at: string;
@@ -222,6 +223,7 @@ export type Database = {
         Insert: {
           address?: string | null;
           archived_at?: string | null;
+          building_number?: string | null;
           city?: string | null;
           code: string;
           created_at?: string;
@@ -241,6 +243,7 @@ export type Database = {
         Update: {
           address?: string | null;
           archived_at?: string | null;
+          building_number?: string | null;
           city?: string | null;
           code?: string;
           created_at?: string;
@@ -1738,7 +1741,10 @@ export type Database = {
           branch_id: string;
           created_at: string;
           created_by: string | null;
+          eta_last_uuid: string | null;
+          eta_model_framework: string | null;
           eta_os_version: string | null;
+          eta_preshared_key_vault_id: string | null;
           eta_serial: string | null;
           eta_status: Database['public']['Enums']['device_status'];
           id: string;
@@ -1754,7 +1760,10 @@ export type Database = {
           branch_id: string;
           created_at?: string;
           created_by?: string | null;
+          eta_last_uuid?: string | null;
+          eta_model_framework?: string | null;
           eta_os_version?: string | null;
+          eta_preshared_key_vault_id?: string | null;
           eta_serial?: string | null;
           eta_status?: Database['public']['Enums']['device_status'];
           id?: string;
@@ -1770,7 +1779,10 @@ export type Database = {
           branch_id?: string;
           created_at?: string;
           created_by?: string | null;
+          eta_last_uuid?: string | null;
+          eta_model_framework?: string | null;
           eta_os_version?: string | null;
+          eta_preshared_key_vault_id?: string | null;
           eta_serial?: string | null;
           eta_status?: Database['public']['Enums']['device_status'];
           id?: string;
@@ -2464,6 +2476,7 @@ export type Database = {
           doc_type: Database['public']['Enums']['fiscal_doc_type'];
           environment: Database['public']['Enums']['eta_environment'];
           eta_long_id: string | null;
+          eta_submission_uuid: string | null;
           eta_uuid: string | null;
           id: string;
           internal_id: string;
@@ -2471,6 +2484,7 @@ export type Database = {
           next_retry_at: string | null;
           organization_id: string;
           payload: Json | null;
+          previous_uuid: string | null;
           qr_payload: string | null;
           return_id: string | null;
           sale_id: string | null;
@@ -2488,6 +2502,7 @@ export type Database = {
           doc_type: Database['public']['Enums']['fiscal_doc_type'];
           environment: Database['public']['Enums']['eta_environment'];
           eta_long_id?: string | null;
+          eta_submission_uuid?: string | null;
           eta_uuid?: string | null;
           id?: string;
           internal_id: string;
@@ -2495,6 +2510,7 @@ export type Database = {
           next_retry_at?: string | null;
           organization_id: string;
           payload?: Json | null;
+          previous_uuid?: string | null;
           qr_payload?: string | null;
           return_id?: string | null;
           sale_id?: string | null;
@@ -2512,6 +2528,7 @@ export type Database = {
           doc_type?: Database['public']['Enums']['fiscal_doc_type'];
           environment?: Database['public']['Enums']['eta_environment'];
           eta_long_id?: string | null;
+          eta_submission_uuid?: string | null;
           eta_uuid?: string | null;
           id?: string;
           internal_id?: string;
@@ -2519,6 +2536,7 @@ export type Database = {
           next_retry_at?: string | null;
           organization_id?: string;
           payload?: Json | null;
+          previous_uuid?: string | null;
           qr_payload?: string | null;
           return_id?: string | null;
           sale_id?: string | null;
@@ -8124,6 +8142,7 @@ export type Database = {
       create_branch: {
         Args: {
           p_address: string | null;
+          p_building_number?: string;
           p_city: string | null;
           p_code: string;
           p_eta_branch_code: string | null;
@@ -8226,6 +8245,53 @@ export type Database = {
         Args: { p_approval_id: string; p_approve: boolean; p_note?: string };
         Returns: Json;
       };
+      eta_block: {
+        Args: { p_code: string; p_fiscal_id: string; p_message: string };
+        Returns: boolean;
+      };
+      eta_claim_deadline_alerts: {
+        Args: { p_device_id: string; p_hours?: number; p_now?: string };
+        Returns: Json;
+      };
+      eta_claim_for_submit: {
+        Args: { p_device_id: string; p_lease_seconds?: number; p_limit?: number };
+        Returns: Json;
+      };
+      eta_credentials: { Args: { p_device: string; p_org: string }; Returns: Json };
+      eta_enqueue: {
+        Args: {
+          p_delay_seconds?: number;
+          p_job_type: string;
+          p_key: string;
+          p_org: string;
+          p_payload: Json;
+        };
+        Returns: undefined;
+      };
+      eta_load_pending_for_device: {
+        Args: { p_branch_id?: string; p_device_id: string; p_limit?: number };
+        Returns: Json;
+      };
+      eta_load_submitted: { Args: { p_org: string; p_submission_uuid: string }; Returns: Json };
+      eta_mark: {
+        Args: {
+          p_fields?: Json;
+          p_fiscal_id: string;
+          p_status: Database['public']['Enums']['fiscal_status'];
+        };
+        Returns: Database['public']['Enums']['fiscal_status'];
+      };
+      eta_sale_status: { Args: { p_org: string; p_sale_id: string }; Returns: Json };
+      eta_store_prepared: {
+        Args: {
+          p_fiscal_id: string;
+          p_payload: Json;
+          p_previous_uuid: string;
+          p_qr: string;
+          p_uuid: string;
+        };
+        Returns: undefined;
+      };
       expense_report: {
         Args: { p_branch_id?: string; p_from: string; p_to: string };
         Returns: Json;
@@ -8247,6 +8313,7 @@ export type Database = {
       get_current_shift: { Args: Record<PropertyKey, never>; Returns: Json };
       get_customer: { Args: { p_id: string }; Returns: Json };
       get_discount_approval: { Args: { p_approval_id: string }; Returns: Json };
+      get_eta_settings: { Args: Record<PropertyKey, never>; Returns: Json };
       get_expense: { Args: { p_id: string }; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
@@ -8345,6 +8412,7 @@ export type Database = {
         Args: { p_limit?: number; p_offset?: number; p_search?: string; p_status?: string };
         Returns: Json;
       };
+      list_devices: { Args: Record<PropertyKey, never>; Returns: Json };
       list_discount_approvals: { Args: { p_status?: string }; Returns: Json };
       list_employees: {
         Args: {
@@ -8658,6 +8726,7 @@ export type Database = {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
         Returns: Json;
       };
+      retry_fiscal_submission: { Args: { p_id: string }; Returns: Json };
       reverse_expense: {
         Args: {
           p_cash_account_id?: string;
@@ -8745,6 +8814,17 @@ export type Database = {
         Args: { p_id: string; p_reason?: string; p_status: string };
         Returns: Json;
       };
+      set_device_eta: {
+        Args: {
+          p_device_id: string;
+          p_model_framework: string;
+          p_os_version: string;
+          p_preshared_key?: string;
+          p_serial: string;
+          p_status?: Database['public']['Enums']['device_status'];
+        };
+        Returns: Json;
+      };
       set_employee_active: {
         Args: { p_active: boolean; p_employee_id: string; p_reason: string | null };
         Returns: {
@@ -8772,6 +8852,16 @@ export type Database = {
           permission_key: string;
         }[];
       };
+      set_eta_settings: {
+        Args: {
+          p_activity_code?: string;
+          p_client_id: string;
+          p_client_secret?: string;
+          p_enabled?: boolean;
+          p_environment: Database['public']['Enums']['eta_environment'];
+        };
+        Returns: Json;
+      };
       set_expense_category_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
       set_product_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
       set_supplier_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
@@ -8781,6 +8871,7 @@ export type Database = {
         Args: {
           p_address: string | null;
           p_branch_id: string;
+          p_building_number?: string;
           p_city: string | null;
           p_default_cash_account_id: string | null;
           p_eta_branch_code: string | null;

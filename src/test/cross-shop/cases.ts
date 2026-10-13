@@ -3749,3 +3749,166 @@ crossShopCase({
     h.expect(injected.res.status).toBe(400);
   },
 });
+
+// T02 ETA e-receipts (D67). The harness can't make a POS or a receipt in shop B, so these cover
+// the shop header, an injected shop key and an id that isn't the caller's; shop B's real device
+// and receipt are tried in src/eta/eta.integration.test.ts.
+const T02_UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
+const T02_SETTINGS_OFF = {
+  environment: 'preprod',
+  client_id: null,
+  activity_code: null,
+  is_enabled: false,
+};
+const T02_DEVICE_BODY = {
+  eta_serial: 'T02-CROSS',
+  eta_os_version: 'os',
+  eta_model_framework: '1',
+  eta_status: 'pending',
+};
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/eta/settings',
+  name: 'ETA settings are read for the caller shop only, and never show a secret',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/eta/settings', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    h.expect(h.code(foreign.res)).toBe('SHOP_NOT_ALLOWED');
+    const injected = await h.call('GET', '/api/eta/settings', {
+      token: a.accessToken,
+      query: 'orgId=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const own = await h.call('GET', '/api/eta/settings', { token: a.accessToken });
+    h.expect(own.res.status).toBe(200);
+    h.expect(Object.keys(own.res.body as object).sort()).toEqual([
+      'activity_code',
+      'client_id',
+      'environment',
+      'has_client_secret',
+      'is_enabled',
+      'updated_at',
+    ]);
+  },
+});
+
+crossShopCase({
+  method: 'PUT',
+  path: '/api/eta/settings',
+  name: "shop A's owner can't set shop B's ETA settings",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('PUT', '/api/eta/settings', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: T02_SETTINGS_OFF,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('PUT', '/api/eta/settings', {
+      token: a.accessToken,
+      body: { ...T02_SETTINGS_OFF, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    for (const call of [foreign, injected]) {
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/eta/settings/test',
+  name: "the ETA connection test takes the caller shop's own devices only",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('POST', '/api/eta/settings/test', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: { device_id: T02_UNKNOWN_ID },
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/eta/settings/test', {
+      token: a.accessToken,
+      body: { device_id: T02_UNKNOWN_ID, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const unknown = await h.call('POST', '/api/eta/settings/test', {
+      token: a.accessToken,
+      body: { device_id: T02_UNKNOWN_ID },
+    });
+    h.expect(unknown.res.status).toBe(404);
+    h.expect(h.code(unknown.res)).toBe('DEVICE_NOT_FOUND');
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/eta/submissions/:id/retry',
+  name: "a receipt that isn't the caller shop's can't be retried",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const path = `/api/eta/submissions/${T02_UNKNOWN_ID}/retry`;
+    const foreign = await h.call('POST', path, { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const unknown = await h.call('POST', path, { token: a.accessToken });
+    h.expect(unknown.res.status).toBe(404);
+    h.expect(h.code(unknown.res)).toBe('FISCAL_NOT_FOUND');
+    for (const call of [foreign, unknown]) {
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/devices',
+  name: 'the device list is the caller shop own, and never shows a key',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/devices', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/devices', {
+      token: a.accessToken,
+      query: 'orgId=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const own = await h.call('GET', '/api/devices', { token: a.accessToken });
+    h.expect(own.res.status).toBe(200);
+    for (const device of own.res.body as { branch_id: string }[]) {
+      h.expect([SHOP_A_BR1, SHOP_A_BR2]).toContain(device.branch_id);
+      h.expect(Object.keys(device).filter((key) => /vault|^preshared_key$/.test(key))).toEqual([]);
+    }
+  },
+});
+
+crossShopCase({
+  method: 'PUT',
+  path: '/api/devices/:id/eta',
+  name: "a device that isn't the caller shop's can't be registered with the ETA",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const path = `/api/devices/${T02_UNKNOWN_ID}/eta`;
+    const foreign = await h.call('PUT', path, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: T02_DEVICE_BODY,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('PUT', path, {
+      token: a.accessToken,
+      body: { ...T02_DEVICE_BODY, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const unknown = await h.call('PUT', path, { token: a.accessToken, body: T02_DEVICE_BODY });
+    h.expect(unknown.res.status).toBe(404);
+    h.expect(h.code(unknown.res)).toBe('DEVICE_NOT_FOUND');
+    for (const call of [foreign, injected, unknown]) {
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+  },
+});

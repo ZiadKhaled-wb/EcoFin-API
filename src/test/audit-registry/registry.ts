@@ -125,4 +125,10 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/monitoring/test-error': {
     none: 'Monitoring test (Q02): writes nothing, only raises an error on purpose.',
   },
+  'PUT /api/eta/settings': { action: 'eta.settings_updated' },
+  'POST /api/eta/settings/test': {
+    none: 'T02: logs a POS in at the ETA to test the stored credentials; changes nothing.',
+  },
+  'PUT /api/devices/:id/eta': { action: 'device.eta_updated' },
+  'POST /api/eta/submissions/:id/retry': { action: 'fiscal.retry_requested' },
 };
