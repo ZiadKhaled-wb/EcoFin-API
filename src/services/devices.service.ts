@@ -1,4 +1,4 @@
-// O03 POS devices (D68). Managing devices and pairing a computer with one. Everything goes through
+// O03 POS devices (D69). Managing devices and pairing a computer with one. Everything goes through
 // the caller's own client and the O03 database functions, which check the permission, the shop,
 // the plan limit and write the audit row. The API makes the pairing code and the device token and
 // hands the database their hashes only: each is answered once and then gone.

@@ -1,6 +1,6 @@
 // server/src/middleware/deviceContext.ts
 //
-// O03 (D68): which POS device a request comes from.
+// O03 (D69): which POS device a request comes from.
 //
 //   deviceContext        after `authenticate`: reads the `x-device-token` header of a paired
 //                        computer, hashes it and asks the database (public.resolve_device, as the

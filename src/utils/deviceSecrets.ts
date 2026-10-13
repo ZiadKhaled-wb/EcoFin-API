@@ -1,4 +1,4 @@
-// O03 (D68): the two secrets of a POS device. The pairing code is shown once on the owner's
+// O03 (D69): the two secrets of a POS device. The pairing code is shown once on the owner's
 // screen and typed on the POS computer; the device token is answered once to that computer.
 // Only their SHA-256 hashes go to the database, and neither is ever logged, returned again or
 // written to the audit log.

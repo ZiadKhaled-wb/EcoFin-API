@@ -1,7 +1,7 @@
 // The POS devices of a shop.
 // T02 (D67): each one's registration with the ETA. The pre-shared key is write-only
 // (`has_preshared_key` in answers, never the key).
-// O03 (D68): creating, renaming, moving and turning devices off, and pairing a computer with
+// O03 (D69): creating, renaming, moving and turning devices off, and pairing a computer with
 // one. A pairing code and a device token are each answered once; only their hashes are stored.
 import { Router } from 'express';
 import {

@@ -167,7 +167,7 @@ describe('loadRequestContext', () => {
     expect(await run(mockReq())).toMatchObject({ statusCode: 500 });
   });
 
-  // O03 (D68): the device token is resolved right after the session gate.
+  // O03 (D69): the device token is resolved right after the session gate.
   const TOKEN = 'Dev1ce-T0ken_'.padEnd(43, 'a');
   const DEVICE = '55555555-5555-4555-8555-555555555555';
 

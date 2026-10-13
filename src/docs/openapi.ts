@@ -1878,7 +1878,7 @@ export const openApiSpec = {
             get: {
                 tags: ['ETA'],
                 summary: 'List the POS devices of the branches of the caller (device.manage or org.settings_manage)',
-                description: 'T02 (D67). Each device with its branch and its ETA registration (serial, OS version, model framework, status). The pre-shared key is never returned: has_preshared_key says whether one is stored. O03 (D68): paired, paired_at and last_seen_at say whether a computer holds the token of the device and when it last sent a request; the token and the pairing code are never returned. Schema: DeviceList.',
+                description: 'T02 (D67). Each device with its branch and its ETA registration (serial, OS version, model framework, status). The pre-shared key is never returned: has_preshared_key says whether one is stored. O03 (D69): paired, paired_at and last_seen_at say whether a computer holds the token of the device and when it last sent a request; the token and the pairing code are never returned. Schema: DeviceList.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }],
                 responses: { 200: { description: 'DeviceList' }, 403: { $ref: '#/components/responses/Error' } },
@@ -1886,7 +1886,7 @@ export const openApiSpec = {
             post: {
                 tags: ['Devices'],
                 summary: 'Create a POS device (device.manage)',
-                description: 'O03 (D68). A device of a branch the caller works in (BRANCH_NOT_FOUND / BRANCH_DENIED), named 1 to 50 characters, unique in its branch without regard to case (DEVICE_NAME_TAKEN, 409). One more than the plan allows: PLAN_LIMIT_REACHED (409, details). The new device is active and not paired. Audited as device.created. Schema: DeviceCreateBody → DeviceCreated (201).',
+                description: 'O03 (D69). A device of a branch the caller works in (BRANCH_NOT_FOUND / BRANCH_DENIED), named 1 to 50 characters, unique in its branch without regard to case (DEVICE_NAME_TAKEN, 409). One more than the plan allows: PLAN_LIMIT_REACHED (409, details). The new device is active and not paired. Audited as device.created. Schema: DeviceCreateBody → DeviceCreated (201).',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }],
                 responses: { 201: { description: 'DeviceCreated' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
@@ -1896,7 +1896,7 @@ export const openApiSpec = {
             get: {
                 tags: ['Devices'],
                 summary: 'The POS device this computer is paired with (any signed-in employee)',
-                description: 'O03 (D68). A paired computer sends its device token in the x-device-token header on every request. The API hashes it and resolves the device (same shop, device active, branch active); only then does the request carry a device (towards the database: the device id with the hash of the token, which the database checks again). A device id or token hash sent by the client (x-device-id, x-device-token-hash) is always dropped. No token: device is null. A token that resolves to nothing (unpaired, deactivated, another shop): 403 DEVICE_REVOKED on this and every other route, and the client forgets the token. Schema: CurrentDeviceResponse.',
+                description: 'O03 (D69). A paired computer sends its device token in the x-device-token header on every request. The API hashes it and resolves the device (same shop, device active, branch active); only then does the request carry a device (towards the database: the device id with the hash of the token, which the database checks again). A device id or token hash sent by the client (x-device-id, x-device-token-hash) is always dropped. No token: device is null. A token that resolves to nothing (unpaired, deactivated, another shop): 403 DEVICE_REVOKED on this and every other route, and the client forgets the token. Schema: CurrentDeviceResponse.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'x-device-token', in: 'header', schema: { type: 'string' } }],
                 responses: { 200: { description: 'CurrentDeviceResponse' }, 403: { $ref: '#/components/responses/Error' } },
@@ -1906,7 +1906,7 @@ export const openApiSpec = {
             post: {
                 tags: ['Devices'],
                 summary: 'Pair this computer with a POS device (shift.operate or device.manage)',
-                description: 'O03 (D68). The employee types the code shown on the devices screen (8 characters; spaces, dashes and lower case are forgiven). A code that is wrong, expired (15 minutes), already used, of another shop, of a device that is not active or of a branch the caller does not work in: PAIRING_CODE_INVALID (400), always the same answer. On success the code is used up and the answer carries the device token once; only its SHA-256 is stored. Pairing a device again replaces its token: the computer paired before answers DEVICE_REVOKED. Five attempts a minute for each user (429). Audited as device.paired, without the code or the token. Schema: DevicePairBody → DevicePaired.',
+                description: 'O03 (D69). The employee types the code shown on the devices screen (8 characters; spaces, dashes and lower case are forgiven). A code that is wrong, expired (15 minutes), already used, of another shop, of a device that is not active or of a branch the caller does not work in: PAIRING_CODE_INVALID (400), always the same answer. On success the code is used up and the answer carries the device token once; only its SHA-256 is stored. Pairing a device again replaces its token: the computer paired before answers DEVICE_REVOKED. Five attempts a minute for each user (429). Audited as device.paired, without the code or the token. Schema: DevicePairBody → DevicePaired.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }],
                 responses: { 200: { description: 'DevicePaired' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 429: { $ref: '#/components/responses/Error' } },
@@ -1916,7 +1916,7 @@ export const openApiSpec = {
             patch: {
                 tags: ['Devices'],
                 summary: 'Rename a POS device or move it to another branch (device.manage)',
-                description: 'O03 (D68). name, branch_id or both. The name is unique in the branch (DEVICE_NAME_TAKEN, 409). A device with an open shift can not be moved (DEVICE_HAS_OPEN_SHIFT, 409). DEVICE_NOT_FOUND for another shop, BRANCH_NOT_FOUND for a branch that is not of the shop. Audited as device.updated. Schema: DeviceUpdateBody → Device.',
+                description: 'O03 (D69). name, branch_id or both. The name is unique in the branch (DEVICE_NAME_TAKEN, 409). A device with an open shift can not be moved (DEVICE_HAS_OPEN_SHIFT, 409). DEVICE_NOT_FOUND for another shop, BRANCH_NOT_FOUND for a branch that is not of the shop. Audited as device.updated. Schema: DeviceUpdateBody → Device.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
                 responses: { 200: { description: 'Device' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
@@ -1926,7 +1926,7 @@ export const openApiSpec = {
             post: {
                 tags: ['Devices'],
                 summary: 'Turn a POS device off or on (device.manage)',
-                description: 'O03 (D68). Turning a device off needs a reason (REASON_REQUIRED), is refused while it has an open shift (DEVICE_HAS_OPEN_SHIFT, 409) and unpairs it: its computer answers DEVICE_REVOKED from the next request. Turning it on again counts against the plan (PLAN_LIMIT_REACHED, 409) and leaves it unpaired. Audited as device.deactivated / device.reactivated. Schema: DeviceActiveBody → DeviceActiveResult.',
+                description: 'O03 (D69). Turning a device off needs a reason (REASON_REQUIRED), is refused while it has an open shift (DEVICE_HAS_OPEN_SHIFT, 409) and unpairs it: its computer answers DEVICE_REVOKED from the next request. Turning it on again counts against the plan (PLAN_LIMIT_REACHED, 409) and leaves it unpaired. Audited as device.deactivated / device.reactivated. Schema: DeviceActiveBody → DeviceActiveResult.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
                 responses: { 200: { description: 'DeviceActiveResult' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
@@ -1936,7 +1936,7 @@ export const openApiSpec = {
             post: {
                 tags: ['Devices'],
                 summary: 'Make a pairing code for a POS device (device.manage)',
-                description: 'O03 (D68). An 8-character code (letters and digits without 0, O, 1, I, L) that is good for 15 minutes and for one pairing. It is answered here once and never again: only its SHA-256 is stored, and it is not logged or audited. A new code replaces an unused older one. The device must be active (DEVICE_INVALID). Audited as device.pairing_code_created. Schema: DevicePairingCode.',
+                description: 'O03 (D69). An 8-character code (letters and digits without 0, O, 1, I, L) that is good for 15 minutes and for one pairing. It is answered here once and never again: only its SHA-256 is stored, and it is not logged or audited. A new code replaces an unused older one. The device must be active (DEVICE_INVALID). Audited as device.pairing_code_created. Schema: DevicePairingCode.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
                 responses: { 200: { description: 'DevicePairingCode' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
@@ -1946,7 +1946,7 @@ export const openApiSpec = {
             post: {
                 tags: ['Devices'],
                 summary: 'Unpair a POS device (device.manage)',
-                description: 'O03 (D68). The token of the device and any unused pairing code stop working: its computer answers DEVICE_REVOKED from the next request. A shift open on the device stays open and can be closed. Audited as device.unpaired. Schema: DeviceUnpaired.',
+                description: 'O03 (D69). The token of the device and any unused pairing code stop working: its computer answers DEVICE_REVOKED from the next request. A shift open on the device stays open and can be closed. Audited as device.unpaired. Schema: DeviceUnpaired.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
                 responses: { 200: { description: 'DeviceUnpaired' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
@@ -1983,7 +1983,7 @@ export const openApiSpec = {
             post: {
                 tags: ['Cash'],
                 summary: 'Open a shift (shift.operate)',
-                description: 'K02 (D60). The caller opens their own shift in a branch they work in, on the paired POS device the request comes from (O03, D68): without one DEVICE_REQUIRED (409); a device of another branch DEVICE_BRANCH_MISMATCH (409); a device_id in the body that is not that device DEVICE_MISMATCH (409). The shift keeps the device, and every sale of the shift carries it. opening_float is 0 or more; above 0 it leaves vault_id, an active safe of the branch (VAULT_INVALID / CASH_ACCOUNT_INACTIVE; a safe can not go below 0: INSUFFICIENT_FUNDS), as a cash transfer (CX) into the drawer of the shift. One open shift per cashier and per device: SHIFT_ALREADY_OPEN. Numbered SH. The same Idempotency-Key returns the same shift. Audited as shift.opened. Schema: ShiftOpenBody → Shift.',
+                description: 'K02 (D60). The caller opens their own shift in a branch they work in, on the paired POS device the request comes from (O03, D69): without one DEVICE_REQUIRED (409); a device of another branch DEVICE_BRANCH_MISMATCH (409); a device_id in the body that is not that device DEVICE_MISMATCH (409). The shift keeps the device, and every sale of the shift carries it. opening_float is 0 or more; above 0 it leaves vault_id, an active safe of the branch (VAULT_INVALID / CASH_ACCOUNT_INACTIVE; a safe can not go below 0: INSUFFICIENT_FUNDS), as a cash transfer (CX) into the drawer of the shift. One open shift per cashier and per device: SHIFT_ALREADY_OPEN. Numbered SH. The same Idempotency-Key returns the same shift. Audited as shift.opened. Schema: ShiftOpenBody → Shift.',
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     { $ref: '#/components/parameters/OrgId' },

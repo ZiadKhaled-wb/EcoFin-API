@@ -43,7 +43,7 @@ describe('requestMeta', () => {
     expect(ok.body).toMatchObject({ requestId: 'req-abc', userAgent: 'EcoFin-POS/1.0' });
   });
 
-  // O03 (D68): the device of a request is the one the API resolved from the device token.
+  // O03 (D69): the device of a request is the one the API resolved from the device token.
   it('never carries a device id the client sent', async () => {
     const forged = await request(appWithTrust(1))
       .get('/meta')

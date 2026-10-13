@@ -3922,7 +3922,7 @@ crossShopCase({
   },
 });
 
-// O03 POS devices (D68). Each shop gets a paired test device (h.pairDevice, the O03 fixture):
+// O03 POS devices (D69). Each shop gets a paired test device (h.pairDevice, the O03 fixture):
 // shop A's is the computer its cashier works on, shop B's the one shop A aims at.
 const O03_DEVICE_NAME = 'Cross-shop POS';
 const o03Name = () => `XS device ${Date.now()}-${Math.random()}`;

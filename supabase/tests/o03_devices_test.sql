@@ -1,4 +1,4 @@
--- O03 POS devices (EC-146, D68).
+-- O03 POS devices (EC-146, D69).
 -- Run by: node scripts/db-smoke.mjs supabase/tests/o03_devices_test.sql (inside BEGIN ... ROLLBACK).
 -- A device is created inside the plan limit, paired with a one-time code whose hash is all the
 -- database ever holds, and resolved from a token hash for its own shop only. A shift needs the

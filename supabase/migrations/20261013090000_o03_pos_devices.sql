@@ -1,4 +1,4 @@
--- O03 POS devices (EC-146, D68).
+-- O03 POS devices (EC-146, D69).
 --
 -- A shop registers its POS computers (device.manage) and pairs each browser once with a one-time
 -- code. The browser then holds a device token; the API hashes it, resolves it here

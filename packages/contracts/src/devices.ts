@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { IsoTimestamp, Uuid } from './common.js';
 
 /**
- * O03 POS devices (D68). A device is a row an owner creates; a computer becomes that device by
+ * O03 POS devices (D69). A device is a row an owner creates; a computer becomes that device by
  * typing a one-time pairing code, and from then on sends its device token in a header. The code
  * and the token are each answered once and never again: only their hashes are stored.
  */
