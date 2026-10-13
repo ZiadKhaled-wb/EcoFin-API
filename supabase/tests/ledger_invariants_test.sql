@@ -17,40 +17,44 @@ SET client_min_messages = warning;
 SET TIME ZONE 'Africa/Cairo';
 
 CREATE SCHEMA t;
--- O03: a shift needs the paired POS device of the request. t.open_shift puts a free device of the
--- branch in the request headers (x-device-id, as the API does once it has resolved a device
--- token) and then calls public.open_shift unchanged.
-CREATE FUNCTION t.pos(p_branch uuid) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_org uuid := app.current_org_id(); v_id uuid;
+-- O03: a shift needs the paired POS device of the request. t.open_shift pairs a free device of the
+-- branch (or the one named) and puts it in the request headers the way the API does once it has
+-- resolved a device token: x-device-id with the hash of that token (x-device-token-hash). Then it
+-- calls public.open_shift unchanged.
+CREATE FUNCTION t.pos(p_branch uuid, p_device uuid DEFAULT NULL) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_org uuid := app.current_org_id(); v_id uuid := p_device; v_hash text;
 BEGIN
   IF v_org IS NULL OR NOT EXISTS (SELECT 1 FROM public.branches b WHERE b.id = p_branch AND b.organization_id = v_org) THEN
     RETURN NULL;
   END IF;
-  SELECT d.id INTO v_id FROM public.devices d
-  WHERE d.organization_id = v_org AND d.branch_id = p_branch AND d.is_active AND d.archived_at IS NULL AND d.name LIKE 'Test POS %'
-    AND NOT EXISTS (SELECT 1 FROM public.shifts s WHERE s.device_id = d.id AND s.status = 'open')
-  ORDER BY d.name LIMIT 1;
+  IF v_id IS NULL THEN
+    SELECT d.id INTO v_id FROM public.devices d
+    WHERE d.organization_id = v_org AND d.branch_id = p_branch AND d.is_active AND d.archived_at IS NULL AND d.name LIKE 'Test POS %'
+      AND NOT EXISTS (SELECT 1 FROM public.shifts s WHERE s.device_id = d.id AND s.status = 'open')
+    ORDER BY d.name LIMIT 1;
+  END IF;
   IF v_id IS NULL THEN
     INSERT INTO public.devices (organization_id, branch_id, name) VALUES (v_org, p_branch, 'Test POS ' || gen_random_uuid())
     RETURNING id INTO v_id;
   END IF;
+  -- Paired, as the pairing screens leave it: the device holds the hash of a token.
+  UPDATE public.devices d
+     SET token_hash = COALESCE(d.token_hash, encode(sha256(convert_to(d.id::text, 'UTF8')), 'hex')),
+         paired_at = COALESCE(d.paired_at, now())
+   WHERE d.id = v_id AND d.organization_id = v_org
+  RETURNING d.token_hash INTO v_hash;
   PERFORM set_config('request.headers',
-    (COALESCE(NULLIF(current_setting('request.headers', true), ''), '{}')::jsonb || jsonb_build_object('x-device-id', v_id))::text, false);
+    (COALESCE(NULLIF(current_setting('request.headers', true), ''), '{}')::jsonb
+       || jsonb_build_object('x-device-id', v_id, 'x-device-token-hash', v_hash))::text, false);
   RETURN v_id;
 END $$;
 CREATE FUNCTION t.open_shift(p_branch uuid, p_float text, p_key text, p_vault uuid DEFAULT NULL, p_device uuid DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql AS $$
 BEGIN
-  -- A named device is the one "paired" for this call; otherwise any free device of the branch.
-  IF p_device IS NOT NULL THEN
-    PERFORM set_config('request.headers',
-      (COALESCE(NULLIF(current_setting('request.headers', true), ''), '{}')::jsonb || jsonb_build_object('x-device-id', p_device))::text, false);
-  ELSE
-    PERFORM t.pos(p_branch);
-  END IF;
+  PERFORM t.pos(p_branch, p_device);
   RETURN public.open_shift(p_branch, p_float, p_key, p_vault, p_device);
 END $$;
-GRANT EXECUTE ON FUNCTION t.pos(uuid), t.open_shift(uuid, text, text, uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION t.pos(uuid, uuid), t.open_shift(uuid, text, text, uuid, uuid) TO authenticated;
 CREATE TABLE t.results (name text, ok boolean, detail text);
 
 CREATE FUNCTION t.expect(p_name text, p_ok boolean, p_detail text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$
@@ -310,7 +314,9 @@ INSERT INTO t.replay_tested VALUES
  ('public.create_stock_transfer','i03_transfers_test.sql: same key -> same transfer'),
  ('public.create_purchase_invoice','u02_purchase_invoices_test.sql: same key -> same invoice, no second row or audit'),
  ('app.post_sale_core','s01_sale_core_test.sql: only reached through public.post_sale, which answers a repeated key before calling it'),
- ('public.post_sale','s01_sale_core_test.sql: same key -> same sale; no second document, movement, payment or number'),
+ ('public.open_warranty_claim','s12_warranty_test.sql: same key returns the same claim; conflict rejected'),
+ ('public.void_sale','s07_sales_history_test.sql: same key returns the same reversal'),
+   ('public.post_sale','s01_sale_core_test.sql: same key -> same sale; no second document, movement, payment or number'),
  ('public.post_expense','k03_expenses_test.sql: same key -> same expense, nothing spent twice'),
  ('public.reverse_expense','k03_expenses_test.sql: same key -> same reversal; the key of another expense -> IDEMPOTENCY_CONFLICT'),
  ('public.open_shift','k02_shifts_test.sql: same key -> same shift, nothing moves'),

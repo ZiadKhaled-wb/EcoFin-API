@@ -200,7 +200,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/devices/:id/unpair',
       ]),
     );
-    expect(keys).toHaveLength(183);
+    expect(keys).toHaveLength(191);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

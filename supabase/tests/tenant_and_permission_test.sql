@@ -18,40 +18,44 @@
 SET client_min_messages = warning;
 
 CREATE SCHEMA t;
--- O03: a shift needs the paired POS device of the request. t.open_shift puts a free device of the
--- branch in the request headers (x-device-id, as the API does once it has resolved a device
--- token) and then calls public.open_shift unchanged.
-CREATE FUNCTION t.pos(p_branch uuid) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_org uuid := app.current_org_id(); v_id uuid;
+-- O03: a shift needs the paired POS device of the request. t.open_shift pairs a free device of the
+-- branch (or the one named) and puts it in the request headers the way the API does once it has
+-- resolved a device token: x-device-id with the hash of that token (x-device-token-hash). Then it
+-- calls public.open_shift unchanged.
+CREATE FUNCTION t.pos(p_branch uuid, p_device uuid DEFAULT NULL) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_org uuid := app.current_org_id(); v_id uuid := p_device; v_hash text;
 BEGIN
   IF v_org IS NULL OR NOT EXISTS (SELECT 1 FROM public.branches b WHERE b.id = p_branch AND b.organization_id = v_org) THEN
     RETURN NULL;
   END IF;
-  SELECT d.id INTO v_id FROM public.devices d
-  WHERE d.organization_id = v_org AND d.branch_id = p_branch AND d.is_active AND d.archived_at IS NULL AND d.name LIKE 'Test POS %'
-    AND NOT EXISTS (SELECT 1 FROM public.shifts s WHERE s.device_id = d.id AND s.status = 'open')
-  ORDER BY d.name LIMIT 1;
+  IF v_id IS NULL THEN
+    SELECT d.id INTO v_id FROM public.devices d
+    WHERE d.organization_id = v_org AND d.branch_id = p_branch AND d.is_active AND d.archived_at IS NULL AND d.name LIKE 'Test POS %'
+      AND NOT EXISTS (SELECT 1 FROM public.shifts s WHERE s.device_id = d.id AND s.status = 'open')
+    ORDER BY d.name LIMIT 1;
+  END IF;
   IF v_id IS NULL THEN
     INSERT INTO public.devices (organization_id, branch_id, name) VALUES (v_org, p_branch, 'Test POS ' || gen_random_uuid())
     RETURNING id INTO v_id;
   END IF;
+  -- Paired, as the pairing screens leave it: the device holds the hash of a token.
+  UPDATE public.devices d
+     SET token_hash = COALESCE(d.token_hash, encode(sha256(convert_to(d.id::text, 'UTF8')), 'hex')),
+         paired_at = COALESCE(d.paired_at, now())
+   WHERE d.id = v_id AND d.organization_id = v_org
+  RETURNING d.token_hash INTO v_hash;
   PERFORM set_config('request.headers',
-    (COALESCE(NULLIF(current_setting('request.headers', true), ''), '{}')::jsonb || jsonb_build_object('x-device-id', v_id))::text, false);
+    (COALESCE(NULLIF(current_setting('request.headers', true), ''), '{}')::jsonb
+       || jsonb_build_object('x-device-id', v_id, 'x-device-token-hash', v_hash))::text, false);
   RETURN v_id;
 END $$;
 CREATE FUNCTION t.open_shift(p_branch uuid, p_float text, p_key text, p_vault uuid DEFAULT NULL, p_device uuid DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql AS $$
 BEGIN
-  -- A named device is the one "paired" for this call; otherwise any free device of the branch.
-  IF p_device IS NOT NULL THEN
-    PERFORM set_config('request.headers',
-      (COALESCE(NULLIF(current_setting('request.headers', true), ''), '{}')::jsonb || jsonb_build_object('x-device-id', p_device))::text, false);
-  ELSE
-    PERFORM t.pos(p_branch);
-  END IF;
+  PERFORM t.pos(p_branch, p_device);
   RETURN public.open_shift(p_branch, p_float, p_key, p_vault, p_device);
 END $$;
-GRANT EXECUTE ON FUNCTION t.pos(uuid), t.open_shift(uuid, text, text, uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION t.pos(uuid, uuid), t.open_shift(uuid, text, text, uuid, uuid) TO authenticated;
 CREATE TABLE t.results (name text, ok boolean, detail text);
 
 CREATE FUNCTION t.expect(p_name text, p_ok boolean, p_detail text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$
@@ -341,7 +345,7 @@ SELECT 'd1000000-0000-0000-0000-000000000001', emp, 'd2000000-0000-0000-0000-000
 -- A role (not OWNER) whose defaults lack p_key.
 CREATE FUNCTION t.role_without(p_key text) RETURNS public.employee_role LANGUAGE sql STABLE AS $$
     SELECT ru.role FROM t.role_user ru
-    WHERE NOT EXISTS (SELECT 1 FROM public.role_permissions rp WHERE rp.role = ru.role AND rp.permission_key = p_key)
+    WHERE NOT EXISTS (SELECT 1 FROM public.role_permissions rp WHERE rp.role = ru.role AND rp.permission_key = ANY(string_to_array(p_key,'|')))
     ORDER BY ru.role LIMIT 1
 $$;
 
@@ -576,6 +580,20 @@ INSERT INTO t.denial VALUES
  ('set_customer_status','customer_3_status','customer.edit',$$SELECT public.set_customer_status((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial customer'),'blocked','Denial test')$$),
  ('list_customers','customer_4_list','customer.create',$$SELECT public.list_customers()$$),
  ('get_customer','customer_5_get','customer.create',$$SELECT public.get_customer((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial customer'))$$);
+INSERT INTO t.denial VALUES
+ ('search_sales','zz_s07_1_history','sale.create|report.view',$$SELECT public.search_sales()$$),
+ ('get_sale_details','zz_s07_2_details','sale.create|report.view',$$SELECT public.get_sale_details((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'))$$),
+ ('void_sale','zz_s07_3_void','sale.void',$$SELECT public.void_sale((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'),'S07 denial test','denial-s07-void')$$);
+INSERT INTO t.denial VALUES
+ ('post_sale','zz_s12_0_sale','sale.create',$$SELECT public.post_sale(x.l,public.quote_sale(x.l)->>'total','denial-s12-sale') FROM (SELECT jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-PH'),'quantity',1,'unit_id',(SELECT id FROM public.units WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND serial='DENIAL-SN-1'))) l) x$$),
+ ('warranty_lookup','zz_s12_1_lookup','warranty.manage',$$SELECT public.warranty_lookup(NULL,NULL,(SELECT number FROM public.sales WHERE id=(SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale')))$$),
+ ('list_warranty_claims','zz_s12_2_list','warranty.manage',$$SELECT public.list_warranty_claims()$$),
+ ('open_warranty_claim','zz_s12_3_open','warranty.manage',$$SELECT public.open_warranty_claim((SELECT id FROM public.sale_lines WHERE sale_id=(SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale') LIMIT 1),(SELECT unit_id FROM public.sale_lines WHERE sale_id=(SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale') LIMIT 1),'Broken item','Used item','denial-s12-open')$$),
+ ('get_warranty_claim','zz_s12_4_get','warranty.manage',$$SELECT public.get_warranty_claim((SELECT id FROM public.warranty_claims WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-open'))$$),
+ ('move_warranty_claim','zz_s12_5_move','warranty.manage',$$SELECT public.move_warranty_claim((SELECT id FROM public.warranty_claims WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-open'),'in_repair','Manager decision')$$),
+ ('request_claim_refund','zz_s12_6_refund','warranty.manage',$$SELECT public.request_claim_refund((SELECT id FROM public.warranty_claims WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-open'))$$);
+
+
 -- T02: a POS of shop one, and a blocked receipt of one of its sales, for the device and retry cases
 -- (rows made as the database owner; ETA is off in shop one, so the sale gets no receipt of its own).
 -- list_devices takes device.manage or org.settings_manage: the role without the first has neither.
@@ -636,7 +654,7 @@ BEGIN
                              v_owner_err = 'SUPER_ADMIN_REQUIRED', v_owner_err);
         ELSE
             PERFORM t.expect(format('4.2 %s: the same call works for the owner (valid arguments)', d.case_name),
-                             v_owner_err = '', v_owner_err);
+                             v_owner_err = CASE WHEN d.fn='request_claim_refund' THEN 'CLAIM_REFUND_NEEDS_RETURN' ELSE '' END, v_owner_err);
         END IF;
     END LOOP;
     PERFORM t.as_user(NULL);

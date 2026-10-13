@@ -1,3 +1,4 @@
+import salesHistoryRoutes from './routes/salesHistory';
 // server/src/app.ts
 import express from 'express';
 import type { Router } from 'express';
@@ -8,6 +9,7 @@ import branchesRoutes from './routes/branches.js';
 import monitoringRoutes from './routes/monitoring.js';
 import authRoutes from './routes/auth.js';
 import employeesRoutes from './routes/employees.js';
+import warrantyRoutes from './routes/warranty.js';
 import filesRoutes from './routes/files.js';
 import healthRoutes from './routes/health.js';
 import meRoutes from './routes/me.js';
@@ -89,6 +91,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/shifts', shiftsRoutes);
   mountRouter(app, '/api/expense-categories', expenseCategoriesRoutes);
   mountRouter(app, '/api/expenses', expensesRoutes);
+  mountRouter(app, '/api/sales', salesHistoryRoutes);
   mountRouter(app, '/api/sales', salesRoutes);
   mountRouter(app, '/api/approvals', approvalsRoutes);
   mountRouter(app, '/api/customers', customersRoutes);
@@ -98,6 +101,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/devices', devicesRoutes);
   mountRouter(app, '/api/me', meRoutes);
   mountRouter(app, '/api/employees', employeesRoutes);
+  mountRouter(app, '/api/warranty', warrantyRoutes);
   mountRouter(app, '/api/files', filesRoutes);
   mountRouter(app, '/api/audit', auditRoutes);
   mountRouter(app, '/api/monitoring', monitoringRoutes);

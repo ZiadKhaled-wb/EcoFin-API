@@ -687,6 +687,102 @@ describe.skipIf(!RUN)('O03 POS devices against local stack and a fake ETA', () =
     }
   });
 
+  it('the database itself refuses a hand-made device and counts failed pairings (no API in between)', async () => {
+    // Anyone signed in can call PostgREST with the public key and their own JWT, so the rules
+    // can't live in the API alone.
+    const env = getEnv();
+    const direct = async (fn: string, args: object, headers: Record<string, string> = {}) => {
+      const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+        method: 'POST',
+        headers: {
+          apikey: env.SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${cashier}`,
+          'Content-Type': 'application/json',
+          'x-org-id': org,
+          ...headers,
+        },
+        body: JSON.stringify(args),
+      });
+      return { status: res.status, body: (await res.json().catch(() => null)) as unknown };
+    };
+    const message = (body: unknown) => String((body as { message?: unknown } | null)?.message);
+
+    // POS-2 is paired through the API, so the cashier's browser holds its token.
+    const made = await newCode(pos2);
+    const paired = await call('post', '/api/devices/pair', cashier, { code: made.code });
+    expect(paired.status, JSON.stringify(paired.body)).toBe(200);
+    const held = DevicePaired.parse(paired.body).device_token;
+
+    const shiftArgs = (key: string) => ({
+      p_branch_id: branch,
+      p_opening_float: '0',
+      p_idempotency_key: `o03-direct-${key}-${STAMP}`,
+    });
+    // The real id of a paired device, written by hand: no device without the hash of its token.
+    const forged = await direct('open_shift', shiftArgs('forged'), { 'x-device-id': pos2 });
+    expect(forged.status).toBe(400);
+    expect(message(forged.body)).toMatch(/^DEVICE_REQUIRED/);
+    const wrongProof = await direct('open_shift', shiftArgs('wrong'), {
+      'x-device-id': pos2,
+      'x-device-token-hash': sha256('not-the-token'),
+    });
+    expect(message(wrongProof.body)).toMatch(/^DEVICE_REQUIRED/);
+    // The hashes can't be read to forge one.
+    const read = await direct('resolve_device', { p_token_hash: sha256('guess') });
+    expect(read.body).toBeNull();
+    const column = await fetch(`${env.SUPABASE_URL}/rest/v1/devices?select=token_hash`, {
+      headers: {
+        apikey: env.SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${cashier}`,
+        'x-org-id': org,
+      },
+    });
+    expect(column.status).toBeGreaterThanOrEqual(400);
+    const { count } = await service
+      .from('shifts')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', org)
+      .eq('status', 'open');
+    expect(count).toBe(0);
+    // The computer that holds the token is the device, with or without the API.
+    const real = await direct('open_shift', shiftArgs('held'), {
+      'x-device-id': pos2,
+      'x-device-token-hash': sha256(held),
+    });
+    expect(real.status, JSON.stringify(real.body)).toBe(200);
+    const shiftId = (real.body as { id: string }).id;
+    const closed = await call(
+      'post',
+      `/api/shifts/${shiftId}/close`,
+      cashier,
+      { counts: {}, difference_reason: 'O03 test' },
+      { pos: held },
+    );
+    expect(closed.status, JSON.stringify(closed.body)).toBe(200);
+
+    // Guessing codes straight at the database: every miss answers null and is counted, and
+    // after five in a minute even the right code is not looked at.
+    const target = await newCode(pos1);
+    for (let attempt = 1; attempt <= 6; attempt += 1) {
+      const guess = await direct('pair_device', {
+        p_code_hash: sha256(`guess-${attempt}`),
+        p_token_hash: sha256(`token-${attempt}`),
+      });
+      expect(guess.status).toBe(200);
+      expect(guess.body).toBeNull();
+    }
+    const right = await direct('pair_device', {
+      p_code_hash: sha256(target.code),
+      p_token_hash: sha256('stolen-pairing'),
+    });
+    expect(right.status).toBe(200);
+    expect(right.body).toBeNull();
+    expect(await deviceRow(pos1)).toMatchObject({
+      token_hash: null,
+      pairing_code_hash: sha256(target.code),
+    });
+  });
+
   it('pairing attempts are limited to five a minute for each user', async () => {
     // The owner has typed no code yet in this run.
     for (let attempt = 1; attempt <= 5; attempt += 1) {

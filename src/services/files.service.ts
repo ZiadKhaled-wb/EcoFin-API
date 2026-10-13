@@ -132,7 +132,12 @@ export async function uploadFile(
   if (file === undefined) throw BadRequest('A file is required.', 'VALIDATION_FAILED');
 
   // Before anything is stored: the permission for this purpose.
-  await assertPermission(ctx, UPLOAD_PERMISSION[body.purpose]);
+  await assertPermission(
+    ctx,
+    body.purpose === 'other' && body.entityType === 'warranty_claim'
+      ? 'warranty.manage'
+      : UPLOAD_PERMISSION[body.purpose],
+  );
 
   assertUploadSize(file.buffer.length, settings.maxBytes);
   const originalName = sanitizeOriginalName(file.originalname);
@@ -196,13 +201,22 @@ export async function getFileUrl(
   // RLS limits the row to the caller's shop: another shop's file reads as "not found".
   const { data, error } = await ctx.db
     .from('files')
-    .select('id, purpose, path')
+    .select('id, purpose, path, entity_type, entity_id')
     .eq('id', fileId)
     .maybeSingle();
   if (error) fail(error, 'files read for url');
   if (data === null) throw new AppError(safeMessage('FILE_NOT_FOUND'), 'FILE_NOT_FOUND');
 
-  await assertPermission(ctx, READ_PERMISSION[data.purpose]);
+  await assertPermission(
+    ctx,
+    data.purpose === 'other' && data.entity_type === 'warranty_claim'
+      ? 'warranty.manage'
+      : READ_PERMISSION[data.purpose],
+  );
+  if (data.entity_type === 'warranty_claim' && data.entity_id) {
+    const claim = await ctx.db.rpc('get_warranty_claim', { p_claim_id: data.entity_id });
+    if (claim.error) fail(claim.error, 'claim photo access');
+  }
 
   const path = assertOwnPath(ctx, data.path);
   const url = await storage.createSignedUrl(path, settings.urlTtlSeconds);
@@ -217,6 +231,10 @@ export async function listFiles(
   ctx: RequestContext,
   query: ListFilesQuery,
 ): Promise<FileListResponse> {
+  if (query.entityType === 'warranty_claim') {
+    const claim = await ctx.db.rpc('get_warranty_claim', { p_claim_id: query.entityId });
+    if (claim.error) fail(claim.error, 'claim photo list');
+  }
   const table = entityTable(query.entityType);
   await assertSameOrg(ctx, table, [query.entityId]);
 
@@ -233,7 +251,10 @@ export async function listFiles(
   const { keys } = await getMyPermissions(ctx);
   const items = (data ?? [])
     .filter((row) => {
-      const key = READ_PERMISSION[row.purpose];
+      const key =
+        row.purpose === 'other' && row.entity_type === 'warranty_claim'
+          ? 'warranty.manage'
+          : READ_PERMISSION[row.purpose];
       return key === null || keys.includes(key);
     })
     .map(toFileResponse);

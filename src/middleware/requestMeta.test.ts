@@ -47,8 +47,10 @@ describe('requestMeta', () => {
   it('never carries a device id the client sent', async () => {
     const forged = await request(appWithTrust(1))
       .get('/meta')
-      .set('x-device-id', '44444444-4444-4444-8444-444444444444');
+      .set('x-device-id', '44444444-4444-4444-8444-444444444444')
+      .set('x-device-token-hash', 'f'.repeat(64));
     expect(forged.body.deviceId).toBeUndefined();
+    expect(forged.body.deviceTokenHash).toBeUndefined();
   });
 
   it('carries the resolved device, whatever device id the client sent', async () => {
@@ -57,10 +59,14 @@ describe('requestMeta', () => {
       name: 'POS-1',
       branch_id: '66666666-6666-4666-8666-666666666666',
       branch_name: 'Main',
+      tokenHash: 'a'.repeat(64),
     };
     const res = await request(appWithTrust(1, device))
       .get('/meta')
-      .set('x-device-id', '44444444-4444-4444-8444-444444444444');
+      .set('x-device-id', '44444444-4444-4444-8444-444444444444')
+      .set('x-device-token-hash', 'f'.repeat(64));
     expect(res.body.deviceId).toBe(device.id);
+    // With its proof: the hash of the token the API resolved, never one the client sent.
+    expect(res.body.deviceTokenHash).toBe(device.tokenHash);
   });
 });

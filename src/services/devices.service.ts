@@ -110,6 +110,11 @@ export async function pairDevice(ctx: RequestContext, typed: string): Promise<De
     p_token_hash: sha256Hex(token),
   });
   if (error) fail(error);
+  // NULL is the database's answer to every failed attempt (it counts them: 5 a minute for each
+  // employee, also for calls that never came through this API).
+  if (data === null) {
+    throw new AppError(safeMessage('PAIRING_CODE_INVALID'), 'PAIRING_CODE_INVALID');
+  }
   const row = PairedRow.parse(data);
   return DevicePaired.parse({
     device_token: token,

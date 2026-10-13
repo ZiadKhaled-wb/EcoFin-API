@@ -60,10 +60,11 @@ describe('deviceContext', () => {
     expect(db.rpc).not.toHaveBeenCalled();
   });
 
-  it('removes a device id the client sent, with or without a token', async () => {
-    const plain = mockReq({ 'x-device-id': OTHER });
+  it('removes a device id and a token hash the client sent, with or without a token', async () => {
+    const plain = mockReq({ 'x-device-id': OTHER, 'x-device-token-hash': 'f'.repeat(64) });
     await run(plain);
     expect(plain.headers['x-device-id']).toBeUndefined();
+    expect(plain.headers['x-device-token-hash']).toBeUndefined();
     expect(plain.device).toBeUndefined();
 
     const paired = mockReq({ 'x-device-id': OTHER, 'x-device-token': TOKEN });
@@ -79,11 +80,13 @@ describe('deviceContext', () => {
     expect(db.rpc).toHaveBeenCalledTimes(1);
     expect(db.rpc).toHaveBeenCalledWith('resolve_device', { p_token_hash: sha256Hex(TOKEN) });
     expect(JSON.stringify(db.rpc.mock.calls)).not.toContain(TOKEN);
+    // The hash stays with the device: it is the proof the database asks for with the device id.
     expect(req.device).toEqual({
       id: DEVICE,
       name: 'POS-1',
       branch_id: BRANCH,
       branch_name: 'Main',
+      tokenHash: sha256Hex(TOKEN),
     });
   });
 
@@ -123,7 +126,13 @@ describe('deviceContext', () => {
 
   it('a stale req.device never survives a request without a token', async () => {
     const req = mockReq();
-    req.device = { id: OTHER, name: 'old', branch_id: BRANCH, branch_name: 'Main' };
+    req.device = {
+      id: OTHER,
+      name: 'old',
+      branch_id: BRANCH,
+      branch_name: 'Main',
+      tokenHash: 'f'.repeat(64),
+    };
     await resolveDevice(req);
     expect(req.device).toBeUndefined();
   });

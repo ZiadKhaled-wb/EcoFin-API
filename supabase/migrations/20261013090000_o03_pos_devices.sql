@@ -2,8 +2,11 @@
 --
 -- A shop registers its POS computers (device.manage) and pairs each browser once with a one-time
 -- code. The browser then holds a device token; the API hashes it, resolves it here
--- (public.resolve_device) and only then sends x-device-id to the database. A client-sent
--- x-device-id never reaches the database, so app.current_device_id() can be trusted.
+-- (public.resolve_device) and only then sends x-device-id to the database, together with the
+-- token's hash (x-device-token-hash). The database is reachable without the API (PostgREST with
+-- a user's own JWT), so app.current_device_id() trusts neither header alone: the device counts
+-- only when the hash is the one stored for it. A hand-made x-device-id is no device.
+-- For the same reason failed pairing attempts are counted here, not only by the API's limiter.
 -- Opening a shift needs that device; a sale takes its device from its shift (a trigger: the sale
 -- function is not touched), and T02's fiscal trigger then sees it.
 -- Only SHA-256 hashes of the pairing code and of the device token are stored, in columns
@@ -25,25 +28,44 @@ CREATE UNIQUE INDEX devices_branch_name_idx ON public.devices (organization_id, 
 -- devices has column grants (T02): the two hashes are not granted.
 GRANT SELECT (pairing_expires_at, paired_at, paired_by) ON public.devices TO authenticated;
 
+-- Failed pairing attempts, for the limit in public.pair_device. No policy and no grant: only
+-- that function reads and writes it.
+CREATE TABLE public.device_pairing_attempts (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    employee_id uuid NOT NULL,
+    created_at  timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX device_pairing_attempts_employee_idx ON public.device_pairing_attempts (employee_id, created_at DESC);
+ALTER TABLE public.device_pairing_attempts ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.device_pairing_attempts FROM PUBLIC, anon, authenticated;
+
 -- 2. The device of this request ------------------------------------------------------------------------
 
 -- The x-device-id header's device, only when it is an active, unarchived device of the caller's
--- shop. The API sets that header itself, after resolving the device token.
+-- shop AND the request also carries that device's token hash (x-device-token-hash). The API sets
+-- both headers itself, after resolving the device token. Someone who calls the database directly
+-- can write any x-device-id, but not the hash of a token they don't hold.
 CREATE FUNCTION app.current_device_id()
 RETURNS uuid LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = ''
 AS $$
-DECLARE v_id uuid; v_org uuid := app.current_org_id();
+DECLARE v_id uuid; v_proof text; v_org uuid := app.current_org_id(); v_headers jsonb;
 BEGIN
     IF v_org IS NULL THEN
         RETURN NULL;
     END IF;
     BEGIN
-        v_id := NULLIF(NULLIF(current_setting('request.headers', true), '')::jsonb ->> 'x-device-id', '')::uuid;
+        v_headers := NULLIF(current_setting('request.headers', true), '')::jsonb;
+        v_id := NULLIF(v_headers ->> 'x-device-id', '')::uuid;
+        v_proof := v_headers ->> 'x-device-token-hash';
     EXCEPTION WHEN others THEN
         RETURN NULL;
     END;
+    IF v_id IS NULL OR v_proof IS NULL OR v_proof !~ '^[0-9a-f]{64}$' THEN
+        RETURN NULL;
+    END IF;
     RETURN (SELECT d.id FROM public.devices d
-            WHERE d.id = v_id AND d.organization_id = v_org AND d.is_active AND d.archived_at IS NULL);
+            WHERE d.id = v_id AND d.organization_id = v_org AND d.is_active AND d.archived_at IS NULL
+              AND d.token_hash = v_proof);
 END;
 $$;
 
@@ -240,12 +262,16 @@ END;
 $$;
 
 -- An employee of the same shop (shift.operate or device.manage) turns a code into a paired
--- device. Every failure is PAIRING_CODE_INVALID: wrong, expired, used, another shop's, a device
--- that is not active or in a branch the caller can't use. Pairing again replaces the token.
+-- device. Every failure answers NULL, which the API turns into PAIRING_CODE_INVALID: wrong,
+-- expired, used, another shop's, a device that is not active or in a branch the caller can't
+-- use. A failure is not an exception because it must be counted, and an exception would undo the
+-- count: after 5 failures in a minute an employee gets NULL without the code being looked at,
+-- whether they came through the API (which has its own limiter) or straight to the database.
+-- Pairing again replaces the token.
 CREATE FUNCTION public.pair_device(p_code_hash text, p_token_hash text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $$
-DECLARE v_emp uuid; v_org uuid; v_d public.devices; v_branch public.branches;
+DECLARE v_emp uuid; v_org uuid; v_d public.devices; v_branch public.branches; v_failures integer;
 BEGIN
     IF app.has_permission('shift.operate') THEN
         v_emp := app.require_permission('shift.operate');
@@ -256,6 +282,16 @@ BEGIN
     IF p_token_hash IS NULL OR p_token_hash !~ '^[0-9a-f]{64}$' THEN
         RAISE EXCEPTION 'VALIDATION_FAILED: device token' USING ERRCODE = 'P0001';
     END IF;
+    -- One attempt at a time for each employee, so the count can't be raced.
+    PERFORM 1 FROM public.employees e WHERE e.id = v_emp AND e.organization_id = v_org FOR UPDATE;
+    DELETE FROM public.device_pairing_attempts a
+     WHERE a.employee_id = v_emp AND a.created_at < clock_timestamp() - interval '1 hour';
+    SELECT count(*) INTO v_failures FROM public.device_pairing_attempts a
+     WHERE a.employee_id = v_emp AND a.created_at > clock_timestamp() - interval '1 minute';
+    IF v_failures >= 5 THEN
+        RETURN NULL;
+    END IF;
+
     SELECT * INTO v_d FROM public.devices d
     WHERE d.organization_id = v_org AND d.pairing_code_hash = p_code_hash AND p_code_hash ~ '^[0-9a-f]{64}$'
     FOR UPDATE;
@@ -265,7 +301,8 @@ BEGIN
     IF v_d.id IS NULL OR v_d.pairing_expires_at IS NULL OR v_d.pairing_expires_at <= now()
        OR NOT v_d.is_active OR v_d.archived_at IS NOT NULL OR NOT v_branch.is_active
        OR NOT app.has_branch_access(v_d.branch_id) THEN
-        RAISE EXCEPTION 'PAIRING_CODE_INVALID' USING ERRCODE = 'P0001';
+        INSERT INTO public.device_pairing_attempts (employee_id) VALUES (v_emp);
+        RETURN NULL;
     END IF;
     UPDATE public.devices d
        SET token_hash = p_token_hash, paired_at = now(), paired_by = v_emp,

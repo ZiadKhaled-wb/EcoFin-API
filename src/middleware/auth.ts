@@ -51,6 +51,7 @@ export const authenticate = asyncHandler(
     // O03: the device of a request is the one the API resolves from x-device-token
     // (deviceContext). A device id sent by the client is dropped before anything reads it.
     delete req.headers['x-device-id'];
+    delete req.headers['x-device-token-hash'];
     const token = bearerToken(req);
     if (!token) throw Unauthorized('Authentication required.', 'UNAUTHORIZED');
     const orgId = requestedOrgId(req);
@@ -87,6 +88,7 @@ export function requestMeta(req: Request): RequestMeta {
     userAgent: req.get('user-agent'),
     requestId: req.requestId,
     deviceId: req.device?.id,
+    deviceTokenHash: req.device?.tokenHash,
   };
 }
 

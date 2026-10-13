@@ -78,6 +78,7 @@ export const ENTITY_TABLES = {
   contract: 'contracts',
   legal_case: 'legal_cases',
   delivery: 'deliveries',
+  warranty_claim: 'warranty_claims',
 } as const satisfies Record<string, SameOrgTable>;
 
 export type EntityType = keyof typeof ENTITY_TABLES;

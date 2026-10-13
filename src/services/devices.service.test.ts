@@ -128,6 +128,16 @@ describe('O03 pairing', () => {
     expect(sent).not.toContain('ABCDEFGH');
   });
 
+  it('NULL from the database (a failed or rate-limited attempt) is PAIRING_CODE_INVALID, and no token is answered', async () => {
+    const { db, ctx } = setup();
+    db.queue({ data: null, error: null });
+    await expect(pairDevice(ctx, 'ABCDEFGH')).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'PAIRING_CODE_INVALID',
+    });
+    expect(db.rpc).toHaveBeenCalledTimes(1);
+  });
+
   it('two pairings never share a token', async () => {
     const { db, ctx } = setup();
     db.queue({ data: paired, error: null }, { data: paired, error: null });

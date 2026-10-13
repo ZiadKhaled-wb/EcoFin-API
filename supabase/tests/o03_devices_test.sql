@@ -17,10 +17,14 @@ BEGIN BEGIN EXECUTE q; RAISE EXCEPTION 'T_NO_ERROR'; EXCEPTION WHEN others THEN 
 -- The statement must fail with SQLSTATE s.
 CREATE FUNCTION t.state(n text,q text,s text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN BEGIN EXECUTE q; RAISE EXCEPTION 'T_NO_ERROR'; EXCEPTION WHEN others THEN PERFORM t.expect(n,SQLERRM<>'T_NO_ERROR' AND SQLSTATE=s,SQLSTATE||' '||SQLERRM); END; END $$;
--- The caller, the shop and (d) the x-device-id header the API sets once it resolved a device token.
-CREATE FUNCTION t.as_user(u text,o uuid DEFAULT NULL,d text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$
+-- The caller, the shop and (d) the two headers the API sets once it resolved a device token:
+-- x-device-id and the hash of that token. h: 'stored' sends the hash the device holds now (a
+-- request from its paired computer), NULL sends none (a hand-made x-device-id), anything else is
+-- sent as it is.
+CREATE FUNCTION t.as_user(u text,o uuid DEFAULT NULL,d text DEFAULT NULL,h text DEFAULT 'stored') RETURNS void LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claim.sub',COALESCE(u,''),false),set_config('app.org_id','',false),
-         set_config('request.headers',(jsonb_strip_nulls(jsonb_build_object('x-org-id',o,'x-device-id',d)))::text,false) $$;
+         set_config('request.headers',(jsonb_strip_nulls(jsonb_build_object('x-org-id',o,'x-device-id',d,'x-device-token-hash',
+           CASE WHEN h='stored' THEN (SELECT x.token_hash FROM public.devices x WHERE x.id::text=d) ELSE h END)))::text,false) $$;
 CREATE FUNCTION t.org(s text) RETURNS uuid LANGUAGE sql AS $$ SELECT (result->>'organization_id')::uuid FROM t.shops WHERE tag=s $$;
 CREATE FUNCTION t.id(s text) RETURNS uuid LANGUAGE sql AS $$ SELECT id FROM t.ids WHERE tag=s $$;
 -- A SHA-256 shaped hash made of one hex digit.
@@ -62,7 +66,18 @@ INSERT INTO public.employee_branches(organization_id,employee_id,branch_id)
 CREATE FUNCTION t.owner_s() RETURNS void LANGUAGE sql AS $$ SELECT t.as_user('a9030000-0000-0000-8000-000000000001',t.org('s')) $$;
 CREATE FUNCTION t.owner_r(d text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$ SELECT t.as_user('a9030000-0000-0000-8000-000000000002',t.org('r'),d) $$;
 CREATE FUNCTION t.owner_b(d text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$ SELECT t.as_user('a9030000-0000-0000-8000-000000000003',t.org('b'),d) $$;
-CREATE FUNCTION t.cashier(d text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$ SELECT t.as_user('a9030000-0000-0000-8000-000000000004',t.org('r'),d) $$;
+CREATE FUNCTION t.cashier(d text DEFAULT NULL,h text DEFAULT 'stored') RETURNS void LANGUAGE sql AS $$ SELECT t.as_user('a9030000-0000-0000-8000-000000000004',t.org('r'),d,h) $$;
+-- A pairing attempt that must fail: the answer is NULL (the API's PAIRING_CODE_INVALID), never an error.
+CREATE FUNCTION t.refused(n text,code text,token text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE v jsonb;
+BEGIN
+  BEGIN v := public.pair_device(code,token); PERFORM t.expect(n,v IS NULL,v::text);
+  EXCEPTION WHEN others THEN PERFORM t.expect(n,false,SQLERRM); END;
+END $$;
+-- The failed attempts counted so far are forgotten, so a case can make its own.
+CREATE FUNCTION t.forget_attempts() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ DELETE FROM public.device_pairing_attempts WHERE true $$;
+CREATE FUNCTION t.attempts(emp text) RETURNS bigint LANGUAGE sql SECURITY DEFINER AS $$
+  SELECT count(*) FROM public.device_pairing_attempts a WHERE a.employee_id=t.id(emp) $$;
 CREATE FUNCTION t.accountant() RETURNS void LANGUAGE sql AS $$ SELECT t.as_user('a9030000-0000-0000-8000-000000000005',t.org('r')) $$;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA t TO authenticated;
 
@@ -135,14 +150,17 @@ SELECT t.error('pairing: an employee with neither shift.operate nor device.manag
 RESET ROLE;
 SELECT t.owner_b();
 SET ROLE authenticated;
-SELECT t.error('pairing: the code of another shop''s device',format('SELECT public.pair_device(%L,%L)',t.h('1'),t.h('a')),'PAIRING_CODE_INVALID');
+SELECT t.refused('pairing: the code of another shop''s device',t.h('1'),t.h('a'));
 RESET ROLE;
 SELECT t.cashier();
 SET ROLE authenticated;
-SELECT t.error('pairing: a wrong code',format('SELECT public.pair_device(%L,%L)',t.h('2'),t.h('a')),'PAIRING_CODE_INVALID');
-SELECT t.error('pairing: a code that is not a hash',format('SELECT public.pair_device(''ABCDEFGH'',%L)',t.h('a')),'PAIRING_CODE_INVALID');
+SELECT t.refused('pairing: a wrong code',t.h('2'),t.h('a'));
+SELECT t.refused('pairing: a code that is not a hash','ABCDEFGH',t.h('a'));
 SELECT t.error('pairing: a token hash of the wrong shape',format('SELECT public.pair_device(%L,''token'')',t.h('1')),'VALIDATION_FAILED');
 RESET ROLE;
+SELECT t.expect('pairing: each failed attempt was counted for the employee who made it; a refused permission was not',
+  t.attempts('cashier')=2 AND t.attempts('accountant')=0);
+SELECT t.forget_attempts();
 SELECT t.expect('pairing: none of the failed attempts used the code up or paired the device',
   (SELECT d.pairing_code_hash=t.h('1') AND d.token_hash IS NULL FROM t.dev('r1') d) AND t.audits('r','device.paired')=0);
 SET ROLE authenticated;
@@ -150,10 +168,11 @@ SELECT t.expect('pairing: a cashier (shift.operate) pairs with the code and is t
   (SELECT j->>'device_id'=t.id('r1')::text AND j->>'name'='POS-1' AND j->>'branch_id'=t.id('main')::text AND j->>'branch_name'='Main'
      AND j::text NOT LIKE '%'||t.h('a')||'%' AND j::text NOT LIKE '%'||t.h('1')||'%'
    FROM (SELECT public.pair_device(t.h('1'),t.h('a')) j) x));
-SELECT t.error('pairing: a used code',format('SELECT public.pair_device(%L,%L)',t.h('1'),t.h('b')),'PAIRING_CODE_INVALID');
+SELECT t.refused('pairing: a used code',t.h('1'),t.h('b'));
 RESET ROLE;
 SELECT t.expect('pairing: the device holds the token hash, who paired it and when; the code is gone',
   (SELECT d.token_hash=t.h('a') AND d.paired_at=now() AND d.paired_by=t.id('cashier') AND d.pairing_code_hash IS NULL AND d.pairing_expires_at IS NULL FROM t.dev('r1') d));
+SELECT t.forget_attempts();
 -- An expired code: made a quarter of an hour ago.
 SELECT t.owner_r();
 SET ROLE authenticated;
@@ -162,7 +181,7 @@ RESET ROLE;
 UPDATE public.devices SET pairing_expires_at=now()-interval '1 second' WHERE id=t.id('r2');
 SELECT t.cashier();
 SET ROLE authenticated;
-SELECT t.error('pairing: an expired code',format('SELECT public.pair_device(%L,%L)',t.h('3'),t.h('b')),'PAIRING_CODE_INVALID');
+SELECT t.refused('pairing: an expired code',t.h('3'),t.h('b'));
 RESET ROLE;
 -- A new code replaces an older unused one.
 SELECT t.owner_r();
@@ -172,10 +191,11 @@ SELECT t.code('r2','5');
 RESET ROLE;
 SELECT t.cashier();
 SET ROLE authenticated;
-SELECT t.error('pairing: an older code, once a new one was made',format('SELECT public.pair_device(%L,%L)',t.h('4'),t.h('b')),'PAIRING_CODE_INVALID');
+SELECT t.refused('pairing: an older code, once a new one was made',t.h('4'),t.h('b'));
 SELECT public.pair_device(t.h('5'),t.h('b'));
 RESET ROLE;
 SELECT t.expect('pairing: the newer code paired the second device',(SELECT d.token_hash=t.h('b') FROM t.dev('r2') d));
+SELECT t.forget_attempts();
 -- A device in a branch the employee doesn't work in, and a device turned off after its code was made.
 SELECT t.owner_r();
 SET ROLE authenticated;
@@ -183,12 +203,12 @@ SELECT t.code('r3','6');
 RESET ROLE;
 SELECT t.cashier();
 SET ROLE authenticated;
-SELECT t.error('pairing: a device of a branch the employee does not work in',format('SELECT public.pair_device(%L,%L)',t.h('6'),t.h('c')),'PAIRING_CODE_INVALID');
+SELECT t.refused('pairing: a device of a branch the employee does not work in',t.h('6'),t.h('c'));
 RESET ROLE;
 UPDATE public.devices SET is_active=false WHERE id=t.id('r3');
 SELECT t.owner_r();
 SET ROLE authenticated;
-SELECT t.error('pairing: a device that was turned off after its code was made',format('SELECT public.pair_device(%L,%L)',t.h('6'),t.h('c')),'PAIRING_CODE_INVALID');
+SELECT t.refused('pairing: a device that was turned off after its code was made',t.h('6'),t.h('c'));
 SELECT t.error('pairing: no code for a device that is off','SELECT t.code(''r3'',''7'')','DEVICE_INVALID');
 RESET ROLE;
 UPDATE public.devices SET is_active=true WHERE id=t.id('r3');
@@ -206,6 +226,37 @@ SELECT t.expect('pairing: each pairing is audited; the one that replaced a pairi
      AND count(*) FILTER(WHERE a.severity='info' AND NOT (a."after"->>'replaced_pairing')::boolean)=3
    FROM public.audit_log a WHERE a.organization_id=t.org('r') AND a.action='device.paired'),
   (SELECT string_agg(a.severity||' '||a."after"::text,' | ') FROM public.audit_log a WHERE a.organization_id=t.org('r') AND a.action='device.paired'));
+
+-- The limit: 5 failures in a minute, then nothing is looked at, not even the right code. It is
+-- counted in the database, so it holds for a call that never went through the API.
+SELECT t.forget_attempts();
+SELECT t.owner_r();
+SET ROLE authenticated;
+SELECT t.code('r2','e');
+RESET ROLE;
+SELECT t.cashier();
+SET ROLE authenticated;
+SELECT t.refused('limit: wrong code '||n,t.h('f'),t.h('b')) FROM generate_series(1,5) n;
+SELECT t.refused('limit: the sixth attempt in a minute is refused even with the right code',t.h('e'),t.h('b'));
+RESET ROLE;
+SELECT t.expect('limit: five failures were counted, the refused sixth changed nothing',
+  t.attempts('cashier')=5 AND (SELECT d.pairing_code_hash=t.h('e') AND d.token_hash=t.h('b') FROM t.dev('r2') d));
+SELECT t.owner_r();
+SET ROLE authenticated;
+SELECT t.refused('limit: it is counted for each employee: the owner is not held back, and fails on their own',t.h('f'),t.h('b'));
+RESET ROLE;
+UPDATE public.device_pairing_attempts SET created_at=created_at-interval '61 seconds';
+SELECT t.cashier();
+SET ROLE authenticated;
+SELECT t.expect('limit: a minute later the right code pairs again',public.pair_device(t.h('e'),t.h('b'))->>'device_id'=t.id('r2')::text);
+RESET ROLE;
+SELECT t.forget_attempts();
+SELECT t.expect('limit: the attempts table is the function''s own: no grant, RLS on, no policy',
+  NOT has_table_privilege('authenticated','public.device_pairing_attempts','SELECT')
+  AND NOT has_table_privilege('authenticated','public.device_pairing_attempts','INSERT')
+  AND NOT has_table_privilege('anon','public.device_pairing_attempts','SELECT')
+  AND (SELECT c.relrowsecurity FROM pg_class c WHERE c.oid='public.device_pairing_attempts'::regclass)
+  AND NOT EXISTS (SELECT 1 FROM pg_policies p WHERE p.schemaname='public' AND p.tablename='device_pairing_attempts'));
 
 -- ---------------------------------------------------------------- 4. resolve_device
 SELECT t.cashier();
@@ -264,6 +315,15 @@ SELECT t.cashier(t.id('b1')::text);
 SELECT t.expect('current device: another shop''s device is no device',app.current_device_id() IS NULL);
 SELECT t.cashier(t.id('s2')::text);
 SELECT t.expect('current device: another shop''s inactive device is no device',app.current_device_id() IS NULL);
+-- The proof: a device id alone is what anyone can write who calls the database without the API.
+SELECT t.cashier(t.id('r1')::text,NULL);
+SELECT t.expect('current device: a hand-made x-device-id without the token hash is no device',app.current_device_id() IS NULL);
+SELECT t.cashier(t.id('r1')::text,t.h('a'));
+SELECT t.expect('current device: with the hash of a token that was replaced it is no device',app.current_device_id() IS NULL);
+SELECT t.cashier(t.id('r1')::text,(SELECT d.token_hash FROM t.dev('r2') d));
+SELECT t.expect('current device: with another device''s hash it is no device',app.current_device_id() IS NULL);
+SELECT t.cashier(t.id('r1')::text,'not-a-hash');
+SELECT t.expect('current device: with a text that is no hash it is no device',app.current_device_id() IS NULL);
 SELECT t.cashier('not-a-uuid');
 SELECT t.expect('current device: a header that is no uuid is no device',app.current_device_id() IS NULL);
 SELECT t.cashier();
@@ -286,6 +346,10 @@ RESET ROLE;
 SELECT t.cashier(t.id('b1')::text);
 SET ROLE authenticated;
 SELECT t.error('shift: a hand-made header naming another shop''s device',format('SELECT public.open_shift(%L,''0'',''o03-foreign-device'')',t.id('main')),'DEVICE_REQUIRED');
+RESET ROLE;
+SELECT t.cashier(t.id('r1')::text,NULL);
+SET ROLE authenticated;
+SELECT t.error('shift: a hand-made header naming a paired device of the shop, without its token hash',format('SELECT public.open_shift(%L,''0'',''o03-forged-device'')',t.id('main')),'DEVICE_REQUIRED');
 RESET ROLE;
 SELECT t.cashier(t.id('r3')::text);
 SET ROLE authenticated;
@@ -352,7 +416,7 @@ SET ROLE authenticated;
 SELECT t.code('r2','9');
 SELECT t.expect('unpair: answers the device as unpaired',public.unpair_device(t.id('r2'))=jsonb_build_object('id',t.id('r2'),'paired',false));
 SELECT t.expect('unpair: the token of the device resolves to nothing from now on',public.resolve_device(t.h('b')) IS NULL);
-SELECT t.error('unpair: the code made before it is gone too',format('SELECT public.pair_device(%L,%L)',t.h('9'),t.h('f')),'PAIRING_CODE_INVALID');
+SELECT t.refused('unpair: the code made before it is gone too',t.h('9'),t.h('f'));
 RESET ROLE;
 SELECT t.expect('unpair: no token, no code, still an active device',
   (SELECT d.token_hash IS NULL AND d.paired_at IS NULL AND d.paired_by IS NULL AND d.pairing_code_hash IS NULL AND d.is_active FROM t.dev('r2') d)
@@ -372,7 +436,7 @@ SET ROLE authenticated;
 SELECT t.code('r1','0');
 SELECT t.expect('off: answers id and is_active',public.set_device_active(t.id('r1'),false,' Stolen ')=jsonb_build_object('id',t.id('r1'),'is_active',false));
 SELECT t.expect('off: the token of the device resolves to nothing',public.resolve_device(t.h('d')) IS NULL);
-SELECT t.error('off: its pairing code is gone',format('SELECT public.pair_device(%L,%L)',t.h('0'),t.h('f')),'PAIRING_CODE_INVALID');
+SELECT t.refused('off: its pairing code is gone',t.h('0'),t.h('f'));
 RESET ROLE;
 SELECT t.owner_r(t.id('r1')::text);
 SET ROLE authenticated;

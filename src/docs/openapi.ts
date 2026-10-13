@@ -1896,7 +1896,7 @@ export const openApiSpec = {
             get: {
                 tags: ['Devices'],
                 summary: 'The POS device this computer is paired with (any signed-in employee)',
-                description: 'O03 (D68). A paired computer sends its device token in the x-device-token header on every request. The API hashes it and resolves the device (same shop, device active, branch active); only then does the request carry a device. A device id sent by the client (x-device-id) is always dropped. No token: device is null. A token that resolves to nothing (unpaired, deactivated, another shop): 403 DEVICE_REVOKED on this and every other route, and the client forgets the token. Schema: CurrentDeviceResponse.',
+                description: 'O03 (D68). A paired computer sends its device token in the x-device-token header on every request. The API hashes it and resolves the device (same shop, device active, branch active); only then does the request carry a device (towards the database: the device id with the hash of the token, which the database checks again). A device id or token hash sent by the client (x-device-id, x-device-token-hash) is always dropped. No token: device is null. A token that resolves to nothing (unpaired, deactivated, another shop): 403 DEVICE_REVOKED on this and every other route, and the client forgets the token. Schema: CurrentDeviceResponse.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'x-device-token', in: 'header', schema: { type: 'string' } }],
                 responses: { 200: { description: 'CurrentDeviceResponse' }, 403: { $ref: '#/components/responses/Error' } },

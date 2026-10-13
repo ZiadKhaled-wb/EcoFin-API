@@ -6,7 +6,10 @@
 //                        computer, hashes it and asks the database (public.resolve_device, as the
 //                        caller: same shop, device active, branch active). Only then is
 //                        req.device set, and only req.device becomes the `x-device-id` the
-//                        database sees (requestMeta). A device id sent by the client is deleted.
+//                        database sees (requestMeta), sent with the token's hash as its proof
+//                        (`x-device-token-hash`): the database is reachable without the API, so
+//                        it counts a device id only with the hash it stores for that device.
+//                        A device id or hash sent by the client is deleted.
 //   resolveDevice        the same step for requestContext, which runs it on every route of a
 //                        shop right after the session gate.
 //
@@ -24,8 +27,12 @@ import { isDeviceToken, sha256Hex } from '../utils/deviceSecrets';
 import { logger } from '../utils/logger';
 import type { DbClient } from '../utils/supabase';
 
-/** The paired POS device of one request. */
-export type RequestDevice = CurrentDevice;
+/**
+ * The paired POS device of one request. `tokenHash` is the SHA-256 of the token that resolved to
+ * it: it goes to the database with the device id as the proof that the API resolved it, and
+ * nowhere else (never into an answer or a log).
+ */
+export type RequestDevice = CurrentDevice & { tokenHash: string };
 
 const Resolved = z.object({
   device_id: z.string().uuid(),
@@ -44,12 +51,14 @@ function revoked(): AppError {
  */
 export async function resolveDevice(req: Request, db: DbClient = dbFor(req)): Promise<void> {
   delete req.headers['x-device-id'];
+  delete req.headers['x-device-token-hash'];
   req.device = undefined;
   const token = req.headers[DEVICE_TOKEN_HEADER];
   if (token === undefined || token === '') return;
   if (!isDeviceToken(token)) throw revoked();
 
-  const { data, error } = await db.rpc('resolve_device', { p_token_hash: sha256Hex(token) });
+  const tokenHash = sha256Hex(token);
+  const { data, error } = await db.rpc('resolve_device', { p_token_hash: tokenHash });
   if (error) {
     const mapped = mapDbError(error);
     if (mapped) throw mapped;
@@ -63,6 +72,7 @@ export async function resolveDevice(req: Request, db: DbClient = dbFor(req)): Pr
     name: device.data.name,
     branch_id: device.data.branch_id,
     branch_name: device.data.branch_name,
+    tokenHash,
   };
 }
 

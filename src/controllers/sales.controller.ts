@@ -11,6 +11,7 @@ import {
 } from '@ziadkhaled-wb/contracts';
 import { getCtx } from '../middleware/requestContext';
 import * as service from '../services/sales.service';
+import { getSaleDetails } from '../services/salesHistory.service';
 export async function quote(req: Request, res: Response) {
   res.json(await service.quoteSale(getCtx(req), SaleQuoteBody.parse(req.body)));
 }
@@ -23,7 +24,7 @@ export async function paymentAccounts(req: Request, res: Response) {
 }
 
 export async function get(req: Request, res: Response) {
-  res.json(await service.getSale(getCtx(req), SaleIdParams.parse(req.params).id));
+  res.json(await getSaleDetails(getCtx(req), SaleIdParams.parse(req.params).id));
 }
 
 // S03 (D65): the over-cap discount approval.

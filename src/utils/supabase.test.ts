@@ -56,6 +56,7 @@ describe('supabaseForRequest', () => {
       userAgent: 'Mozilla/5.0 test',
       requestId: 'req-123',
       deviceId: device,
+      deviceTokenHash: 'a'.repeat(64),
     });
     expect(created.calls[0]?.options['global']).toEqual({
       headers: {
@@ -64,14 +65,30 @@ describe('supabaseForRequest', () => {
         'user-agent': 'Mozilla/5.0 test',
         'x-request-id': 'req-123',
         'x-device-id': device.toLowerCase(),
+        'x-device-token-hash': 'a'.repeat(64),
       },
     });
   });
 
+  // O03: the database counts a device only with the hash of its token.
+  it.each([[undefined], ['not-a-hash'], ['A'.repeat(64)], ['a'.repeat(63)]])(
+    'never forwards a device id without the hash of its token (%s)',
+    (deviceTokenHash) => {
+      supabaseForRequest('jwt-a', undefined, {
+        deviceId: '44444444-4444-4444-8444-444444444444',
+        deviceTokenHash,
+      });
+      const headers = (created.calls[0]?.options['global'] as { headers: Record<string, string> })
+        .headers;
+      expect(headers).not.toHaveProperty('x-device-id');
+      expect(headers).not.toHaveProperty('x-device-token-hash');
+    },
+  );
+
   it.each([['not-a-uuid'], ['44444444-4444-4444-8444-444444444444, 55555555'], ['']])(
     'never forwards an invalid device id (%s)',
     (deviceId) => {
-      supabaseForRequest('jwt-a', undefined, { deviceId });
+      supabaseForRequest('jwt-a', undefined, { deviceId, deviceTokenHash: 'a'.repeat(64) });
       const headers = (created.calls[0]?.options['global'] as { headers: Record<string, string> })
         .headers;
       expect(headers).not.toHaveProperty('x-device-id');
