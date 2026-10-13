@@ -260,3 +260,53 @@ describe('listFiles', () => {
     );
   });
 });
+
+describe('S12 claim photos', () => {
+  it('cashier warranty.manage can upload own claim photo without settings permission', async () => {
+    perms.keys = ['warranty.manage'];
+    db.queue(
+      { data: [{ id: ENTITY }], error: null },
+      { data: FILE_ID, error: null },
+      {
+        data: {
+          id: FILE_ID,
+          purpose: 'other',
+          mime: 'image/png',
+          size_bytes: PNG.length,
+          original_name: 'photo.png',
+          entity_type: 'warranty_claim',
+          entity_id: ENTITY,
+          created_at: '2026-10-13T12:00:00Z',
+        },
+        error: null,
+      },
+    );
+    expect(
+      await upload({ purpose: 'other', entityType: 'warranty_claim', entityId: ENTITY }),
+    ).toMatchObject({ purpose: 'other', entityType: 'warranty_claim' });
+    expect(storageMock.putObject).toHaveBeenCalledOnce();
+  });
+  it('warranty permission does not grant other ordinary file uploads', async () => {
+    perms.keys = ['warranty.manage'];
+    expect(await codeOf(upload({ purpose: 'other' }))).toBe('PERMISSION_DENIED');
+    expect(storageMock.putObject).not.toHaveBeenCalled();
+  });
+  it('claim signed links require accessible claim branch', async () => {
+    perms.keys = ['warranty.manage'];
+    db.queue(
+      {
+        data: {
+          id: FILE_ID,
+          purpose: 'other',
+          path: ORG + '/other/photo.png',
+          entity_type: 'warranty_claim',
+          entity_id: ENTITY,
+        },
+        error: null,
+      },
+      { data: null, error: { message: 'NOT_FOUND' } },
+    );
+    expect(await codeOf(getFileUrl(ctx, FILE_ID, SETTINGS))).toBe('NOT_FOUND');
+    expect(storageMock.createSignedUrl).not.toHaveBeenCalled();
+  });
+});

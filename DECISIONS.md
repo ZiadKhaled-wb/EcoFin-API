@@ -467,3 +467,5 @@ O02: Case A username login resolves the linked auth email (username-only invites
 - Shortcuts: F2 search, F4 customer, F7 sale discount, F8 hold, F9 held carts, F10 confirm and pay, Esc closes, Enter scans / pays / starts the next sale. While a dialog is open only Esc and that dialog's keys work.
 
 S07: void = a full reversal in sales_returns (kind void); same day, open shift, no returns, claims or contract; refused after the ETA receipt is issued (use a return).
+
+- S12: warranty end is set by a trigger from the sale date (delivery date when S10 lands); new sales normalize the non-NULL S03 date as approved, while populated legacy dates stay unchanged; out-of-warranty claims require a manager decision; replacements retain the original warranty end and serial chain; refunds wait for S05; warranty_claim photos use warranty.manage as approved, with other F14 permissions preserved.

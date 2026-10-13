@@ -593,6 +593,39 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
+    'POST /api/warranty/claims': async () => {
+      const sale = await drivers['POST /api/sales']!();
+      expect(sale.sent.res.status).toBe(201);
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', '/api/warranty/claims', {
+          token: owner.accessToken,
+          key: 'f07-s12-' + STAMP + '-' + ipCounter,
+          body: {
+            sale_line_id: (sale.sent.res.body as { lines: { id: string }[] }).lines[0]!.id,
+            issue: 'Broken product',
+            condition: 'Used product',
+          },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'POST /api/warranty/claims/:id/move': async () => {
+      const opened = await drivers['POST /api/warranty/claims']!();
+      expect(opened.sent.res.status).toBe(201);
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send(
+          'post',
+          '/api/warranty/claims/' +
+            (opened.sent.res.body as { claim_id: string }).claim_id +
+            '/move',
+          { token: owner.accessToken, body: { to: 'rejected', note: 'Audit warranty decision' } },
+        ),
+        org: SHOP_ONE,
+      };
+    },
     'POST /api/sales/:id/void': async () => {
       const created = await drivers['POST /api/sales']!();
       expect(created.sent.res.status).toBe(201);

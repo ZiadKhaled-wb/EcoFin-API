@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.36.0
+
+- S12 warranty lookup, claims, transitions and receipt contracts.
+
+
 ## 0.35.0
 
 - S07 branch-scoped sales history, computed status, void eligibility and reversal contracts.

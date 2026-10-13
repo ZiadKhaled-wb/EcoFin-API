@@ -116,6 +116,11 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'PUT /api/employees/:employeeId/permissions': { action: 'employee.permission_set' },
   'PUT /api/employees/:employeeId/branches': { action: 'employee.branches_set' },
   'PUT /api/employees/:employeeId/active': { action: 'employee.active_set' },
+  'POST /api/warranty/claims': { action: 'warranty_claim.opened' },
+  'POST /api/warranty/claims/:id/move': { action: 'warranty_claim.moved' },
+  'POST /api/warranty/claims/:id/refund': {
+    none: 'S12 refund placeholder always returns 409; no writes.',
+  },
   'POST /api/files': { action: 'file.upload' },
   'POST /api/monitoring/test-error': {
     none: 'Monitoring test (Q02): writes nothing, only raises an error on purpose.',

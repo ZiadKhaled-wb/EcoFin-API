@@ -7995,6 +7995,42 @@ export type Database = {
       };
     };
     Functions: {
+      warranty_lookup: {
+        Args: { p_phone?: string; p_sale_number?: string; p_serial?: string };
+        Returns: Json;
+      };
+      get_warranty_claim: { Args: { p_claim_id: string }; Returns: Json };
+      list_warranty_claims: {
+        Args: {
+          p_branch_id?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_out_of_warranty?: boolean;
+          p_status?: Database['public']['Enums']['claim_status'];
+        };
+        Returns: Json;
+      };
+      open_warranty_claim: {
+        Args: {
+          p_condition: string;
+          p_idempotency_key: string;
+          p_issue: string;
+          p_sale_line_id: string;
+          p_unit_id: string | null;
+        };
+        Returns: Json;
+      };
+      move_warranty_claim: {
+        Args: {
+          p_claim_id: string;
+          p_note: string | null;
+          p_replacement_unit_id?: string | null;
+          p_to: Database['public']['Enums']['claim_status'];
+        };
+        Returns: Json;
+      };
+      request_claim_refund: { Args: { p_claim_id: string }; Returns: undefined };
+
       accept_invite: { Args: { p_auth_user_id: string; p_token_hash: string }; Returns: Json };
       admin_change_plan: {
         Args: { p_organization_id: string; p_plan_key: string; p_reason: string };

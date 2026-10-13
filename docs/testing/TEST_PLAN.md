@@ -330,3 +330,7 @@ See [S03 plan](plans/S03.md). Covers the Done when (a cashier can't exceed their
 ## S07 ? sales history and void (EC-74)
 
 See [S07 plan](plans/S07.md): accessible-branch history, immutable full stock/cash/tax reversal, rules, fiscal cancellation, idempotency and concurrent voids.
+
+## S12 - Warranty
+
+See [S12 plan](plans/S12.md): dates/backfill, out-of-warranty decisions, serial chains, transitions, photos, ledger invariants, API security and AR/EN receipt verification.
