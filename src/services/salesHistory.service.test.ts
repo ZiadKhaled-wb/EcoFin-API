@@ -6,6 +6,10 @@ import type { DbClient } from '../utils/supabase';
 import type { RequestContext } from '../middleware/requestContext';
 import { getSaleDetails, searchSales, voidSale } from './salesHistory.service';
 import { voidSale as voidController } from '../controllers/salesHistory.controller';
+const runtime = vi.hoisted(() => ({ saleStatus: vi.fn() }));
+vi.mock('../eta/runtime', () => ({
+  etaRuntime: () => ({ store: { saleStatus: runtime.saleStatus } }),
+}));
 const ID = 'a7070000-0000-4000-8000-000000000001';
 function fixture() {
   const db = createSupabaseMock();
@@ -97,6 +101,54 @@ describe('S07 history and void service', () => {
       statusCode,
     });
   });
+  it.each(['accepted', 'rejected', null] as const)(
+    'returns current ETA status %s without losing history details',
+    async (status) => {
+      const { db, ctx } = fixture();
+      const details = {
+        id: ID,
+        number: 'SL',
+        branch_id: ID,
+        shift_id: null,
+        shift_number: null,
+        customer_id: null,
+        customer_name: null,
+        prices_include_vat: true,
+        subtotal: '250.00',
+        discount_total: '0.00',
+        discount_reason: null,
+        tax_total: '0.00',
+        total: '250.00',
+        business_date: '2026-10-12',
+        issued_at: '2026-10-12T10:00:00Z',
+        created_by_name: 'Owner',
+        lines: [],
+        payments: [],
+        paid_total: '250.00',
+        change_total: '0.00',
+        branch: { id: ID, name: 'Main' },
+        cashier: null,
+        customer: null,
+        status: 'completed',
+        voidable: false,
+        void_block_reason: 'VOID_FISCALIZED',
+        returns: [],
+      };
+      const eta =
+        status === null
+          ? null
+          : {
+              status,
+              uuid: 'a'.repeat(64),
+              qr_payload: 'receipt-qr',
+              last_error_code: status === 'rejected' ? 'REJECTED' : null,
+            };
+      db.queue({ data: details, error: null });
+      runtime.saleStatus.mockResolvedValueOnce(eta === null ? null : { eta });
+      expect(await getSaleDetails(ctx, ID)).toEqual({ ...details, eta });
+      expect(runtime.saleStatus).toHaveBeenCalledWith(ctx.orgId, ID);
+    },
+  );
   it('a foreign or inaccessible detail is not found', async () => {
     const { db, ctx } = fixture();
     db.queue({ data: null, error: { message: 'SALE_NOT_FOUND' } });

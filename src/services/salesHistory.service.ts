@@ -5,6 +5,7 @@ import {
   type SalesHistoryQuery,
 } from '@ziadkhaled-wb/contracts';
 import type { RequestContext } from '../middleware/requestContext';
+import { withEta } from './eta.service';
 import { mapDbError, ServerError } from '../utils/errors';
 
 function fail(error: unknown): never {
@@ -32,14 +33,16 @@ export async function searchSales(ctx: RequestContext, query: SalesHistoryQuery)
   }
   return SalesHistoryResponse.parse({ items: result.data ?? [], total });
 }
-/** S07 mapper preserves all S01/S02/S03 response fields alongside computed history. */
+/** Preserves the sale fields alongside computed S07 history. */
 export function mapSaleHistoryDetails(data: unknown) {
   return SaleHistoryDetails.parse(data);
 }
 export async function getSaleDetails(ctx: RequestContext, id: string) {
   const { data, error } = await ctx.db.rpc('get_sale_details', { p_sale_id: id });
   if (error) fail(error);
-  return mapSaleHistoryDetails(data);
+  const details = mapSaleHistoryDetails(data);
+  const { eta } = await withEta(ctx, details);
+  return { ...details, eta };
 }
 export async function voidSale(ctx: RequestContext, id: string, reason: string, key: string) {
   const { data, error } = await ctx.db.rpc('void_sale', {
