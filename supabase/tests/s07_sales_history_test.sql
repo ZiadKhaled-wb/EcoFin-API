@@ -265,6 +265,31 @@ SELECT t.expect('void serializes sale, shift and stock locks before checks',
  AND (SELECT count(*)=1 FROM public.sales_returns WHERE sale_id=t.id('sale') AND kind='void'));
 SELECT t.expect('all final ledgers reconcile',NOT EXISTS(SELECT 1 FROM app.ledger_mismatches(t.org('a'))));
 
+-- S04 (D68): the first print of a sale is the original, later ones are copies; each is one audit row.
+SELECT t.as_user('a7070000-0000-0000-8000-000000000003',t.org('a'));
+SET ROLE authenticated;
+SELECT t.expect('S04 no print yet',public.get_sale_details(t.id('sale'))->>'receipt_prints'='0');
+SELECT t.expect('S04 first print is the original',public.record_sale_receipt_print(t.id('sale'))=jsonb_build_object('print_no',1,'copy',false));
+SELECT t.expect('S04 second print is a copy',public.record_sale_receipt_print(t.id('sale'))=jsonb_build_object('print_no',2,'copy',true));
+SELECT t.expect('S04 details count the prints',public.get_sale_details(t.id('sale'))->>'receipt_prints'='2');
+SELECT t.expect('S04 another sale starts at 1',public.record_sale_receipt_print(t.id('closed'))->>'print_no'='1');
+RESET ROLE;
+SELECT t.expect('S04 one audit row per print, with its number',(SELECT count(*)=2 AND bool_and(severity='info') AND array_agg((after->>'print_no')::int ORDER BY created_at,id)=ARRAY[1,2]
+  FROM public.audit_log WHERE action='sale.receipt_printed' AND entity_id=t.id('sale') AND entity_type='sale' AND organization_id=t.org('a')));
+SELECT t.expect('S04 printing leaves the sale unchanged',(SELECT to_jsonb(s)=t.original.j FROM public.sales s,t.original WHERE s.id=t.id('sale')));
+SELECT t.as_user('a7070000-0000-0000-8000-000000000002',t.org('b'));
+SET ROLE authenticated;
+SELECT t.error('S04 other shop cannot log a print',format('SELECT public.record_sale_receipt_print(%L)',t.id('sale')),'SALE_NOT_FOUND');
+RESET ROLE;
+SELECT t.as_user('a7070000-0000-0000-8000-000000000006',t.org('a'));
+SET ROLE authenticated;
+SELECT t.error('S04 warehouse cannot log a print',format('SELECT public.record_sale_receipt_print(%L)',t.id('sale')),'PERMISSION_DENIED');
+RESET ROLE;
+SELECT t.as_user('a7070000-0000-0000-8000-000000000005',t.org('a'));
+SET ROLE authenticated;
+SELECT t.expect('S04 a reader with report.view prints a copy',public.record_sale_receipt_print(t.id('sale'))=jsonb_build_object('print_no',3,'copy',true));
+RESET ROLE;
+SELECT t.expect('S04 foreign and denied calls logged nothing',(SELECT count(*)=3 FROM public.audit_log WHERE action='sale.receipt_printed' AND entity_id=t.id('sale')));
 
 -- P05 compatibility: existing sale details remain readable after subscription expiry.
 UPDATE public.organizations SET subscription_start=app.org_today(t.org('a'))-365,subscription_end=app.org_today(t.org('a'))-1 WHERE id=t.org('a');
@@ -272,6 +297,8 @@ SELECT t.as_user('a7070000-0000-0000-8000-000000000001',t.org('a'));
 SET ROLE authenticated;
 SELECT t.expect('expired owner can read history',EXISTS(SELECT 1 FROM public.search_sales('S7-IMEI-1',NULL,NULL,NULL,NULL,NULL,NULL,20,0) WHERE id=t.id('sale')));
 SELECT t.expect('expired owner can read detail',public.get_sale_details(t.id('sale'))->>'status'='voided');
+SELECT t.error('S04 expired shop cannot log a print',format('SELECT public.record_sale_receipt_print(%L)',t.id('sale')),'SUBSCRIPTION_EXPIRED');
+SELECT t.expect('S04 expired shop still reads the count',public.get_sale_details(t.id('sale'))->>'receipt_prints'='3');
 SELECT t.error('expired owner cannot void',format('SELECT public.void_sale(%L,%L,%L)',t.id('closed'),'Duplicate','s07-expired-void'),'SUBSCRIPTION_EXPIRED');
 RESET ROLE;
 SELECT t.as_user('a7070000-0000-0000-8000-000000000006',t.org('a'));

@@ -23,3 +23,8 @@ export async function voidSale(req: Request, res: Response) {
       ),
     );
 }
+export async function recordReceiptPrint(req: Request, res: Response) {
+  res
+    .status(201)
+    .json(await history.recordReceiptPrint(getCtx(req), SaleIdParams.parse(req.params).id));
+}

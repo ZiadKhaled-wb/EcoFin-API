@@ -8956,6 +8956,7 @@ export type Database = {
       };
       update_supplier: { Args: { p_changes: Json; p_id: string }; Returns: Json };
       update_tax_class: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
+      record_sale_receipt_print: { Args: { p_sale_id: string }; Returns: Json };
       void_sale: {
         Args: { p_idempotency_key: string; p_reason: string; p_sale_id: string };
         Returns: Json;

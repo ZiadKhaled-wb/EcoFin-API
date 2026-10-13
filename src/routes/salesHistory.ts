@@ -24,4 +24,13 @@ router.post(
   validate({ params: SaleIdParams, body: SaleVoidBody }),
   asyncHandler(controller.voidSale),
 );
+// S04: SQL checks sale.create OR report.view, plus accessible branches (whoever reads the sale).
+router.post(
+  '/:id/receipt-prints',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ params: SaleIdParams }),
+  asyncHandler(controller.recordReceiptPrint),
+);
 export default router;

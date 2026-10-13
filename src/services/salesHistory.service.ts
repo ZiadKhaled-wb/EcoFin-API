@@ -1,5 +1,6 @@
 import {
   SaleHistoryDetails,
+  SaleReceiptPrint,
   SalesHistoryResponse,
   SaleVoidResponse,
   type SalesHistoryQuery,
@@ -52,4 +53,10 @@ export async function voidSale(ctx: RequestContext, id: string, reason: string, 
   });
   if (error) fail(error);
   return SaleVoidResponse.parse(data);
+}
+/** S04 (D68): logs one print of the sale's receipt and answers its number (1 = the original). */
+export async function recordReceiptPrint(ctx: RequestContext, id: string) {
+  const { data, error } = await ctx.db.rpc('record_sale_receipt_print', { p_sale_id: id });
+  if (error) fail(error);
+  return SaleReceiptPrint.parse(data);
 }

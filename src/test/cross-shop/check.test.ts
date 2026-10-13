@@ -180,6 +180,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/sales/quote',
         'POST /api/sales',
         'GET /api/sales/:id',
+        'POST /api/sales/:id/receipt-prints',
         'GET /api/customers',
         'GET /api/customers/:id',
         'POST /api/customers',
@@ -200,7 +201,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/devices/:id/unpair',
       ]),
     );
-    expect(keys).toHaveLength(191);
+    expect(keys).toHaveLength(192);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

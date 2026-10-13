@@ -4,7 +4,7 @@ import { SalesHistoryQuery } from '@ziadkhaled-wb/contracts';
 import { createSupabaseMock } from '../test/supabase-mock';
 import type { DbClient } from '../utils/supabase';
 import type { RequestContext } from '../middleware/requestContext';
-import { getSaleDetails, searchSales, voidSale } from './salesHistory.service';
+import { getSaleDetails, recordReceiptPrint, searchSales, voidSale } from './salesHistory.service';
 import { voidSale as voidController } from '../controllers/salesHistory.controller';
 const runtime = vi.hoisted(() => ({ saleStatus: vi.fn() }));
 vi.mock('../eta/runtime', () => ({
@@ -153,6 +153,17 @@ describe('S07 history and void service', () => {
     const { db, ctx } = fixture();
     db.queue({ data: null, error: { message: 'SALE_NOT_FOUND' } });
     await expect(getSaleDetails(ctx, ID)).rejects.toMatchObject({
+      code: 'SALE_NOT_FOUND',
+      statusCode: 404,
+    });
+  });
+  it('S04: logs a receipt print through the caller JWT and answers its number', async () => {
+    const { db, ctx } = fixture();
+    db.queue({ data: { print_no: 2, copy: true }, error: null });
+    expect(await recordReceiptPrint(ctx, ID)).toEqual({ print_no: 2, copy: true });
+    expect(db.rpc).toHaveBeenCalledWith('record_sale_receipt_print', { p_sale_id: ID });
+    db.queue({ data: null, error: { message: 'SALE_NOT_FOUND' } });
+    await expect(recordReceiptPrint(ctx, ID)).rejects.toMatchObject({
       code: 'SALE_NOT_FOUND',
       statusCode: 404,
     });
