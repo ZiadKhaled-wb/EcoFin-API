@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.35.0
+
+- T02 ETA e-receipts: EtaEnvironment, DeviceEtaStatus, FiscalStatus, EtaSettings (`has_client_secret`, never the secret), EtaSettingsBody (the secret is write-only), EtaTestBody, EtaTestResult, Device (`has_preshared_key`, never the key), DeviceList, DeviceIdParams, DeviceEtaBody, FiscalSubmissionIdParams, FiscalRetryResult, SaleEta, ETA_ACTIVITY_CODE_PATTERN. Sale gains `eta` (status, uuid, qr_payload, last_error_code; null or absent without a receipt). BranchCreateBody, BranchUpdateBody and ManagedBranch gain `building_number`. Error codes DEVICE_NOT_FOUND, FISCAL_NOT_FOUND (404), DEVICE_SERIAL_TAKEN, ETA_ENV_BUSY, ETA_ENV_MISMATCH, FISCAL_NOT_RETRYABLE (409). Money: divideMoney(amount, divisor, decimals), a quotient with a fixed number of decimals (the ETA unit price has 5).
+
 ## 0.34.0
 
 - S03 discounts: Discount (amount or percent), DiscountReason. SaleLineInput gains `discount`; SaleQuoteBody gains `sale_discount`; SaleCreateBody gains `sale_discount`, `discount_reason`, `discount_approval_id`. SaleLine and SaleQuoteLine gain `discount_amount`; SaleQuoteLine gains `effective_pct`; SaleQuote gains `discount_total` and `max_effective_pct`; Sale gains `discount_reason`. Approval on the spot: DiscountApprovalRequestBody, DiscountApprovalRequested, DiscountApproval (Line, Status, List, ListQuery, IdParams, DecideBody, Result), DiscountAboveCapDetail. Error codes DISCOUNT_INVALID, DISCOUNT_REASON_REQUIRED, APPROVAL_NOT_NEEDED (400), APPROVAL_INVALID, APPROVAL_NOT_PENDING (409), APPROVAL_SELF (403), APPROVAL_NOT_FOUND (404); DISCOUNT_ABOVE_CAP (403) now carries details.

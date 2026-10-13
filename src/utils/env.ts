@@ -96,6 +96,16 @@ const envSchema = z.object({
   SENTRY_ENVIRONMENT: z.string().min(1).max(64).optional(),
   // The deployed build (image tag `sha-<commit>`), set by the Dockerfile.
   APP_RELEASE: z.string().min(1).max(100).optional(),
+
+  // T02 ETA e-receipts (D67). The hosts of the two ETA systems; the defaults are the ones the
+  // SDK documents (docs/eta/ERECEIPT_SPEC.md, section 1). A shop's eta_settings.environment picks
+  // the set: a prod shop is never sent to a preprod host or the reverse.
+  ETA_PREPROD_ID_URL: z.string().url().default('https://id.preprod.eta.gov.eg'),
+  ETA_PREPROD_API_URL: z.string().url().default('https://api.preprod.invoicing.eta.gov.eg'),
+  ETA_PREPROD_PORTAL_URL: z.string().url().default('https://preprod.invoicing.eta.gov.eg'),
+  ETA_PROD_ID_URL: z.string().url().default('https://id.eta.gov.eg'),
+  ETA_PROD_API_URL: z.string().url().default('https://api.invoicing.eta.gov.eg'),
+  ETA_PROD_PORTAL_URL: z.string().url().default('https://invoicing.eta.gov.eg'),
 });
 
 type ParsedEnv = z.infer<typeof envSchema>;
@@ -123,6 +133,13 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     }
   } else {
     const data = parsed.data;
+    // Two environments on one host would send test receipts to the real ETA (or the reverse).
+    for (const kind of ['ID', 'API'] as const) {
+      const prod = new URL(data[`ETA_PROD_${kind}_URL`]).host;
+      if (prod === new URL(data[`ETA_PREPROD_${kind}_URL`]).host) {
+        problems.set(`ETA_PROD_${kind}_URL`, 'must not be the pre-production host');
+      }
+    }
     if (data.NODE_ENV === 'production') {
       if (!data.SMTP_URL) problems.set('SMTP_URL', 'missing (required in production)');
       if (!data.MAIL_FROM) problems.set('MAIL_FROM', 'missing (required in production)');

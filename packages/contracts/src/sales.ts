@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PositiveMoney } from './cash.js';
 import { BusinessDate, IsoTimestamp, MONEY_PATTERN, Money, Uuid } from './common.js';
+import { SaleEta } from './eta.js';
 import { compareMoney } from './money.js';
 
 /**
@@ -293,6 +294,8 @@ export const Sale = z.object({
   payments: z.array(SalePayment),
   paid_total: Money,
   change_total: Money,
+  /** T02: the sale's ETA receipt; null or absent when it has none (ETA off, or a B2B sale). */
+  eta: SaleEta.nullable().optional(),
 });
 export type Sale = z.infer<typeof Sale>;
 

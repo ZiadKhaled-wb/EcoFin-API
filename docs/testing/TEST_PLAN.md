@@ -326,3 +326,7 @@ See [S02 plan](plans/S02.md). Covers the Done when (a sale paid half cash, half 
 ## S03 — discounts (EC-70)
 
 See [S03 plan](plans/S03.md). Covers the Done when (a cashier can't exceed their cap through the API; the tax on a discounted sale is correct) and the D65 rules (line discount then sale discount spread by largest remainder, a per-line effective cap, the on-the-spot approval as a single-use 15-minute request bound to a server-side cart fingerprint).
+
+## T02 — ETA e-receipts (EC-90)
+
+See [T02 plan](plans/T02.md). Covers the Done when: (2) a retried submission doesn't create a duplicate (an answer lost after the ETA took the submission, a 422 DuplicateSubmission and a 503 each end with the receipt received once by the fake ETA); (1) acceptance by the ETA pre-production system is `npm run eta:preprod-smoke`, **not run yet: it needs the shop's pre-production credentials** ([setup](../eta/SETUP.md)). And the D67 rules: a fiscal record with every consumer sale, the UUID chain per POS by compare-and-set, blocked receipts, secrets in Vault, the 20-hour alert, the environment guard.

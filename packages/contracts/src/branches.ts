@@ -12,6 +12,8 @@ const fields = {
   governorate: z.string().nullable().optional(),
   phone: z.string().nullable().optional(),
   eta_branch_code: z.string().max(20).nullable().optional(),
+  /** The ETA receipt's branch address needs it (T02). */
+  building_number: z.string().trim().max(100).nullable().optional(),
 };
 export const BranchCreateBody = z.object({ ...fields, code: BranchCode }).strict();
 export type BranchCreateBody = z.infer<typeof BranchCreateBody>;
@@ -50,6 +52,7 @@ export const ManagedBranch = BranchSummary.extend({
   governorate: z.string().nullable(),
   phone: z.string().nullable(),
   eta_branch_code: z.string().nullable(),
+  building_number: z.string().nullable(),
   is_active: z.boolean(),
   default_cash_account_id: Uuid.nullable(),
   default_vault: BranchVault.nullable(),
