@@ -51,6 +51,10 @@ export interface CallOptions {
   query?: string;
   /** Sent as the Idempotency-Key header (stock and money writes). */
   idempotencyKey?: string;
+  /** Sent as the x-device-token header: the request comes from that paired POS computer (O03). */
+  deviceToken?: string;
+  /** Sent as a hand-made x-device-id header, which the API must ignore (O03). */
+  deviceId?: string;
 }
 
 export interface CrossShopHarness {
@@ -64,6 +68,12 @@ export interface CrossShopHarness {
   call(method: string, path: string, options?: CallOptions): Promise<{ res: Response; ip: string }>;
   /** error.code of a contract error response. */
   code(res: Response): string;
+  /** A paired POS device of that branch, found by name (O03 fixture, service role, test only). */
+  pairDevice(
+    orgId: string,
+    branchId: string,
+    name?: string,
+  ): Promise<{ id: string; token: string }>;
   /** audit_log rows in `orgId` written from `ip` since its latest call (service-role read, test only). */
   auditRowsFrom(orgId: string, ip: string): Promise<number>;
   /** An employee's permission overrides, branch ids and active flag (service-role read, test only). */

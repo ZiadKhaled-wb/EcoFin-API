@@ -49,7 +49,7 @@ describe('supabaseForRequest', () => {
   });
 
   // F07: app.write_audit reads these headers for every audit row.
-  it('forwards request id, resolved IP, user agent and a valid device id', () => {
+  it('forwards request id, resolved IP, user agent and the resolved device id', () => {
     const device = '44444444-4444-4444-8444-44444444ABCD';
     supabaseForRequest('jwt-a', undefined, {
       ip: '203.0.113.9',

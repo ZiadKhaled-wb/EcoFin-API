@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.36.0
+
+- O03 POS devices: DeviceCreateBody, DeviceCreated, DeviceUpdateBody, DeviceActiveBody (turning a device off needs a reason), DeviceActiveResult, DevicePairingCode (the code is answered once), DeviceUnpaired, DevicePairBody, DevicePaired (the device token is answered once), CurrentDevice, CurrentDeviceResponse, DEVICE_TOKEN_HEADER, PAIRING_CODE_ALPHABET, PAIRING_CODE_LENGTH, PAIRING_CODE_TTL_MINUTES, DEVICE_NAME_MAX. Device gains `paired`, `paired_at`, `last_seen_at`. Error codes DEVICE_REQUIRED, DEVICE_HAS_OPEN_SHIFT, DEVICE_NAME_TAKEN, DEVICE_BRANCH_MISMATCH, DEVICE_MISMATCH (409), DEVICE_REVOKED (403), PAIRING_CODE_INVALID (400).
+
 ## 0.35.0
 
 - T02 ETA e-receipts: EtaEnvironment, DeviceEtaStatus, FiscalStatus, EtaSettings (`has_client_secret`, never the secret), EtaSettingsBody (the secret is write-only), EtaTestBody, EtaTestResult, Device (`has_preshared_key`, never the key), DeviceList, DeviceIdParams, DeviceEtaBody, FiscalSubmissionIdParams, FiscalRetryResult, SaleEta, ETA_ACTIVITY_CODE_PATTERN. Sale gains `eta` (status, uuid, qr_payload, last_error_code; null or absent without a receipt). BranchCreateBody, BranchUpdateBody and ManagedBranch gain `building_number`. Error codes DEVICE_NOT_FOUND, FISCAL_NOT_FOUND (404), DEVICE_SERIAL_TAKEN, ETA_ENV_BUSY, ETA_ENV_MISMATCH, FISCAL_NOT_RETRYABLE (409). Money: divideMoney(amount, divisor, decimals), a quotient with a fixed number of decimals (the ETA unit price has 5).

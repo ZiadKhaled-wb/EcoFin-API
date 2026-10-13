@@ -257,10 +257,16 @@ try {
     INSERT INTO public.employee_branches (organization_id, employee_id, branch_id)
     SELECT e.organization_id, e.id, ${SCHEMA}.id('main') FROM public.employees e
     WHERE e.organization_id = ${SCHEMA}.id('org') AND e.role = 'CASHIER';
+    -- O03: a shift needs the paired POS device of the request, so each cashier works on a device
+    -- of their own; its id is in the request headers, as the API sets it from a device token.
+    INSERT INTO public.devices (id, organization_id, branch_id, name)
+    SELECT ('f3030000-0000-0000-8000-00000000002' || n)::uuid, ${SCHEMA}.id('org'), ${SCHEMA}.id('main'),
+           'Proof POS ' || n FROM generate_series(1, ${CASHIERS}) n;
     CREATE FUNCTION ${SCHEMA}.sign_in_as(p_cashier integer) RETURNS void LANGUAGE sql AS $$
       SELECT set_config('request.jwt.claim.sub', 'f3030000-0000-0000-8000-00000000001' || p_cashier, true),
              set_config('app.org_id', '', true),
-             set_config('request.headers', json_build_object('x-org-id', ${SCHEMA}.id('org'))::text, true) $$;
+             set_config('request.headers', json_build_object('x-org-id', ${SCHEMA}.id('org'),
+               'x-device-id', 'f3030000-0000-0000-8000-00000000002' || p_cashier)::text, true) $$;
     ${Array.from(
       { length: CASHIERS },
       (_, i) => `BEGIN; SELECT ${SCHEMA}.sign_in_as(${i + 1});

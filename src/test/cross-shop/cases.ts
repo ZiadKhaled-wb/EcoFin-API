@@ -2767,12 +2767,19 @@ const OWNER_B_EMPLOYEE_ID = 'd3000000-0000-0000-0000-000000000021';
 const shiftKey = () => `xs-k02-${Date.now()}-${Math.random()}`;
 async function openShiftOf(h: CrossShopHarness, email: string, branchId: string) {
   const who = await h.login(email);
+  // O03: a shift is opened from the paired POS computer of the branch.
+  const pos = await h.pairDevice(
+    branchId === SHOP_B_BR1 ? SHOP_B : SHOP_A,
+    branchId,
+    'Cross-shop POS',
+  );
   const current = await h.call('GET', '/api/shifts/current', { token: who.accessToken });
   const existing = (current.res.body as { shift: { id: string } | null }).shift;
   if (existing) return { id: existing.id, token: who.accessToken };
   const opened = await h.call('POST', '/api/shifts', {
     token: who.accessToken,
     idempotencyKey: shiftKey(),
+    deviceToken: pos.token,
     body: { branch_id: branchId, opening_float: '0' },
   });
   h.expect(opened.res.status, JSON.stringify(opened.res.body)).toBe(201);
@@ -2896,6 +2903,7 @@ crossShopCase({
   name: "opening a shift refuses a foreign header, an org id, shop B's branch and a float from B's safe",
   async run(h) {
     const theirSafe = await shopBSafe(h);
+    const pos = await h.pairDevice(SHOP_A, SHOP_A_BR1, 'Cross-shop POS');
     const a = await h.login(CASHIER_A_EMAIL);
     const before = await h.call('GET', '/api/shifts/current', { token: a.accessToken });
     const had = (before.res.body as { shift: { id: string } | null }).shift?.id ?? null;
@@ -2903,6 +2911,7 @@ crossShopCase({
       h.call('POST', '/api/shifts', {
         token: a.accessToken,
         idempotencyKey: shiftKey(),
+        deviceToken: pos.token,
         body,
         ...(orgId ? { orgId } : {}),
       });
@@ -3754,5 +3763,230 @@ crossShopCase({
     for (const call of [foreign, injected, unknown]) {
       h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
     }
+  },
+});
+
+// O03 POS devices (D68). Each shop gets a paired test device (h.pairDevice, the O03 fixture):
+// shop A's is the computer its cashier works on, shop B's the one shop A aims at.
+const O03_DEVICE_NAME = 'Cross-shop POS';
+const o03Name = () => `XS device ${Date.now()}-${Math.random()}`;
+/** Shop B's device as its owner sees it in the list. */
+async function o03DeviceOfB(h: CrossShopHarness, id: string) {
+  const b = await h.login(OWNER_B);
+  const list = await h.call('GET', '/api/devices', { token: b.accessToken });
+  h.expect(list.res.status, JSON.stringify(list.res.body)).toBe(200);
+  return (
+    list.res.body as { id: string; name: string; is_active: boolean; paired: boolean }[]
+  ).find((device) => device.id === id);
+}
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/devices',
+  name: "a device can't be created in shop B: foreign header, org id in the body, B's branch",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = { branch_id: SHOP_A_BR1, name: o03Name() };
+    const foreign = await h.call('POST', '/api/devices', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/devices', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const branch = await h.call('POST', '/api/devices', {
+      token: a.accessToken,
+      body: { ...body, branch_id: SHOP_B_BR1 },
+    });
+    h.expect(branch.res.status).toBe(404);
+    h.expect(h.code(branch.res)).toBe('BRANCH_NOT_FOUND');
+    for (const call of [foreign, injected, branch]) {
+      h.expect(await h.auditRowsFrom(SHOP_A, call.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+  },
+});
+
+crossShopCase({
+  method: 'PATCH',
+  path: '/api/devices/:id',
+  name: "shop B's device can't be renamed, and shop A's can't be moved to B's branch",
+  async run(h) {
+    const theirs = await h.pairDevice(SHOP_B, SHOP_B_BR1, O03_DEVICE_NAME);
+    const mine = await h.pairDevice(SHOP_A, SHOP_A_BR1, O03_DEVICE_NAME);
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('PATCH', `/api/devices/${theirs.id}`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: { name: 'Taken over' },
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const rename = await h.call('PATCH', `/api/devices/${theirs.id}`, {
+      token: a.accessToken,
+      body: { name: 'Taken over' },
+    });
+    h.expect(rename.res.status).toBe(404);
+    h.expect(h.code(rename.res)).toBe('DEVICE_NOT_FOUND');
+    const move = await h.call('PATCH', `/api/devices/${mine.id}`, {
+      token: a.accessToken,
+      body: { branch_id: SHOP_B_BR1 },
+    });
+    h.expect(move.res.status).toBe(404);
+    h.expect(h.code(move.res)).toBe('BRANCH_NOT_FOUND');
+    for (const call of [foreign, rename, move]) {
+      h.expect(await h.auditRowsFrom(SHOP_A, call.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+    h.expect((await o03DeviceOfB(h, theirs.id))?.name).toBe(O03_DEVICE_NAME);
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/devices/:id/active',
+  name: "shop B's device can't be turned off from shop A",
+  async run(h) {
+    const theirs = await h.pairDevice(SHOP_B, SHOP_B_BR1, O03_DEVICE_NAME);
+    const a = await h.login(OWNER_A);
+    const path = `/api/devices/${theirs.id}/active`;
+    const body = { active: false, reason: 'cross-shop' };
+    const foreign = await h.call('POST', path, { token: a.accessToken, orgId: SHOP_B, body });
+    h.expect(foreign.res.status).toBe(403);
+    const direct = await h.call('POST', path, { token: a.accessToken, body });
+    h.expect(direct.res.status).toBe(404);
+    h.expect(h.code(direct.res)).toBe('DEVICE_NOT_FOUND');
+    for (const call of [foreign, direct]) {
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+    h.expect(await o03DeviceOfB(h, theirs.id)).toMatchObject({ is_active: true, paired: true });
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/devices/:id/pairing-code',
+  name: "shop A gets no pairing code for shop B's device",
+  async run(h) {
+    const theirs = await h.pairDevice(SHOP_B, SHOP_B_BR1, O03_DEVICE_NAME);
+    const a = await h.login(OWNER_A);
+    const path = `/api/devices/${theirs.id}/pairing-code`;
+    const foreign = await h.call('POST', path, { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const direct = await h.call('POST', path, { token: a.accessToken });
+    h.expect(direct.res.status).toBe(404);
+    h.expect(h.code(direct.res)).toBe('DEVICE_NOT_FOUND');
+    for (const call of [foreign, direct]) {
+      h.expect(JSON.stringify(call.res.body)).not.toContain('expires_at');
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/devices/:id/unpair',
+  name: "shop B's device can't be unpaired from shop A: its computer stays paired",
+  async run(h) {
+    const theirs = await h.pairDevice(SHOP_B, SHOP_B_BR1, O03_DEVICE_NAME);
+    const a = await h.login(OWNER_A);
+    const path = `/api/devices/${theirs.id}/unpair`;
+    const foreign = await h.call('POST', path, { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const direct = await h.call('POST', path, { token: a.accessToken });
+    h.expect(direct.res.status).toBe(404);
+    h.expect(h.code(direct.res)).toBe('DEVICE_NOT_FOUND');
+    for (const call of [foreign, direct]) {
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+    const b = await h.login(OWNER_B);
+    const still = await h.call('GET', '/api/devices/current', {
+      token: b.accessToken,
+      deviceToken: theirs.token,
+    });
+    h.expect(still.res.status).toBe(200);
+    h.expect((still.res.body as { device: { id: string } | null }).device?.id).toBe(theirs.id);
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/devices/pair',
+  name: 'a pairing code of shop B is an invalid code in shop A, and stays good for shop B',
+  async run(h) {
+    const theirs = await h.pairDevice(SHOP_B, SHOP_B_BR1, O03_DEVICE_NAME);
+    const b = await h.login(OWNER_B);
+    const made = await h.call('POST', `/api/devices/${theirs.id}/pairing-code`, {
+      token: b.accessToken,
+    });
+    h.expect(made.res.status, JSON.stringify(made.res.body)).toBe(200);
+    const code = (made.res.body as { code: string }).code;
+
+    const a = await h.login(CASHIER_A_EMAIL);
+    const foreign = await h.call('POST', '/api/devices/pair', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: { code },
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/devices/pair', {
+      token: a.accessToken,
+      body: { code, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const typed = await h.call('POST', '/api/devices/pair', {
+      token: a.accessToken,
+      body: { code },
+    });
+    h.expect(typed.res.status).toBe(400);
+    h.expect(h.code(typed.res)).toBe('PAIRING_CODE_INVALID');
+    for (const call of [foreign, injected, typed]) {
+      h.expect(JSON.stringify(call.res.body)).not.toContain('device_token');
+      h.expect(await h.auditRowsFrom(SHOP_A, call.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+    // The code was not used up: shop B's own employee pairs with it.
+    const own = await h.call('POST', '/api/devices/pair', { token: b.accessToken, body: { code } });
+    h.expect(own.res.status, JSON.stringify(own.res.body)).toBe(200);
+    h.expect((own.res.body as { device: { id: string } }).device.id).toBe(theirs.id);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/devices/current',
+  name: "shop B's device token is no device in shop A, and a hand-made device id is ignored",
+  async run(h) {
+    const theirs = await h.pairDevice(SHOP_B, SHOP_B_BR1, O03_DEVICE_NAME);
+    const mine = await h.pairDevice(SHOP_A, SHOP_A_BR1, O03_DEVICE_NAME);
+    const a = await h.login(CASHIER_A_EMAIL);
+    const foreign = await h.call('GET', '/api/devices/current', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      deviceToken: theirs.token,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    h.expect(h.code(foreign.res)).toBe('SHOP_NOT_ALLOWED');
+    const stolen = await h.call('GET', '/api/devices/current', {
+      token: a.accessToken,
+      deviceToken: theirs.token,
+    });
+    h.expect(stolen.res.status).toBe(403);
+    h.expect(h.code(stolen.res)).toBe('DEVICE_REVOKED');
+    const forged = await h.call('GET', '/api/devices/current', {
+      token: a.accessToken,
+      deviceId: theirs.id,
+    });
+    h.expect(forged.res.status).toBe(200);
+    h.expect(forged.res.body).toEqual({ device: null });
+    const own = await h.call('GET', '/api/devices/current', {
+      token: a.accessToken,
+      deviceToken: mine.token,
+    });
+    h.expect(own.res.status).toBe(200);
+    h.expect(own.res.body).toMatchObject({ device: { id: mine.id, branch_id: SHOP_A_BR1 } });
   },
 });

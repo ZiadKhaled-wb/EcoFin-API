@@ -1,6 +1,40 @@
 \set ON_ERROR_STOP 1
 SET client_min_messages=warning;
 CREATE SCHEMA t;
+-- O03: a shift needs the paired POS device of the request. t.open_shift puts a free device of the
+-- branch in the request headers (x-device-id, as the API does once it has resolved a device
+-- token) and then calls public.open_shift unchanged.
+CREATE FUNCTION t.pos(p_branch uuid) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_org uuid := app.current_org_id(); v_id uuid;
+BEGIN
+  IF v_org IS NULL OR NOT EXISTS (SELECT 1 FROM public.branches b WHERE b.id = p_branch AND b.organization_id = v_org) THEN
+    RETURN NULL;
+  END IF;
+  SELECT d.id INTO v_id FROM public.devices d
+  WHERE d.organization_id = v_org AND d.branch_id = p_branch AND d.is_active AND d.archived_at IS NULL AND d.name LIKE 'Test POS %'
+    AND NOT EXISTS (SELECT 1 FROM public.shifts s WHERE s.device_id = d.id AND s.status = 'open')
+  ORDER BY d.name LIMIT 1;
+  IF v_id IS NULL THEN
+    INSERT INTO public.devices (organization_id, branch_id, name) VALUES (v_org, p_branch, 'Test POS ' || gen_random_uuid())
+    RETURNING id INTO v_id;
+  END IF;
+  PERFORM set_config('request.headers',
+    (COALESCE(NULLIF(current_setting('request.headers', true), ''), '{}')::jsonb || jsonb_build_object('x-device-id', v_id))::text, false);
+  RETURN v_id;
+END $$;
+CREATE FUNCTION t.open_shift(p_branch uuid, p_float text, p_key text, p_vault uuid DEFAULT NULL, p_device uuid DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql AS $$
+BEGIN
+  -- A named device is the one "paired" for this call; otherwise any free device of the branch.
+  IF p_device IS NOT NULL THEN
+    PERFORM set_config('request.headers',
+      (COALESCE(NULLIF(current_setting('request.headers', true), ''), '{}')::jsonb || jsonb_build_object('x-device-id', p_device))::text, false);
+  ELSE
+    PERFORM t.pos(p_branch);
+  END IF;
+  RETURN public.open_shift(p_branch, p_float, p_key, p_vault, p_device);
+END $$;
+GRANT EXECUTE ON FUNCTION t.pos(uuid), t.open_shift(uuid, text, text, uuid, uuid) TO authenticated;
 CREATE TABLE t.results(name text,ok boolean,detail text);
 CREATE TABLE t.shops(tag text,result jsonb);
 CREATE TABLE t.ids(tag text,id uuid);

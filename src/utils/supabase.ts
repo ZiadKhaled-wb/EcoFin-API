@@ -47,7 +47,7 @@ export interface RequestMeta {
   ip?: string | undefined;
   userAgent?: string | undefined;
   requestId?: string | undefined;
-  /** The client's `x-device-id` (F07), only when it is a UUID; the DB drops another shop's device. */
+  /** The POS device the API resolved from the device token (O03); sent on as `x-device-id`. */
   deviceId?: string | undefined;
 }
 

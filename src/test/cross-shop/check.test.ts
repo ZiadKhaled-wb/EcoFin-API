@@ -191,9 +191,16 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/eta/submissions/:id/retry',
         'GET /api/devices',
         'PUT /api/devices/:id/eta',
+        'POST /api/devices',
+        'GET /api/devices/current',
+        'POST /api/devices/pair',
+        'PATCH /api/devices/:id',
+        'POST /api/devices/:id/active',
+        'POST /api/devices/:id/pairing-code',
+        'POST /api/devices/:id/unpair',
       ]),
     );
-    expect(keys).toHaveLength(176);
+    expect(keys).toHaveLength(183);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

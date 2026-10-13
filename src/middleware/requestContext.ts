@@ -4,6 +4,8 @@
 //                        (public.session_context(), one round trip), applies the per-request
 //                        status gate and sets req.ctx. Handlers read req.ctx.db / req.ctx.orgId
 //                        only (getCtx), never an org id from the client.
+//                        Then resolves the POS device of the request (O03 deviceContext); the
+//                        client in req.ctx carries that device and no other.
 //   requestContext(opts) the same with options; { allowMustChangePassword: true } is for
 //                        /auth/me and /auth/change-password.
 //
@@ -15,6 +17,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { EmployeeRole } from '@ziadkhaled-wb/contracts';
 import { dbFor } from './auth';
+import { resolveDevice } from './deviceContext';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError, ServerError, mapDbError, safeMessage, type ErrorCode } from '../utils/errors';
 import { logger } from '../utils/logger';
@@ -82,6 +85,10 @@ export function requestContext(options: RequestContextOptions = {}) {
       throw new AppError(safeMessage('MUST_CHANGE_PASSWORD'), 'MUST_CHANGE_PASSWORD');
     }
 
+    // O03: only now, with the shop known, is a device token worth anything. With a device the
+    // request gets a client that sends its id; without one no device id goes to the database.
+    await resolveDevice(req, db);
+
     req.ctx = {
       userId: req.auth.userId,
       employeeId: data.employee_id,
@@ -90,7 +97,7 @@ export function requestContext(options: RequestContextOptions = {}) {
       defaultBranchId: data.default_branch_id,
       branchIds: data.branch_ids ?? [],
       mustChangePassword,
-      db,
+      db: req.device ? dbFor(req) : db,
     };
     next();
   });

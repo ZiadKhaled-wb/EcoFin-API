@@ -225,7 +225,7 @@ describe('security headers and CORS', () => {
       'x-request-id',
       'x-org-id',
       'idempotency-key',
-      'x-device-id',
+      'x-device-token',
     ]) {
       expect(allowed).toContain(header);
     }

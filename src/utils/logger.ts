@@ -23,6 +23,9 @@ export const SENSITIVE_KEYS = [
   'apikey',
   'x-api-key',
   'license_key',
+  // O03: a paired computer's device token, as a header and in the pairing answer.
+  'x-device-token',
+  'device_token',
   'jwt',
   'SUPABASE_SERVICE_ROLE_KEY',
   'SUPABASE_ANON_KEY',

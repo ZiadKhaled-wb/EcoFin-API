@@ -74,6 +74,9 @@ describe('T02 ETA contracts', () => {
       eta_status: 'unregistered',
       has_preshared_key: false,
       is_active: true,
+      paired: false,
+      paired_at: null,
+      last_seen_at: null,
     };
     expect(
       Device.parse({ ...device, preshared_key: 'leak', eta_preshared_key_vault_id: ID }),

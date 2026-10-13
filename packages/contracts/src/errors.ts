@@ -223,6 +223,14 @@ export const errorCodeHttpStatus = {
   ETA_ENV_MISMATCH: 409,
   FISCAL_NOT_FOUND: 404,
   FISCAL_NOT_RETRYABLE: 409,
+  // O03 POS devices
+  DEVICE_REQUIRED: 409,
+  DEVICE_REVOKED: 403,
+  DEVICE_HAS_OPEN_SHIFT: 409,
+  DEVICE_NAME_TAKEN: 409,
+  DEVICE_BRANCH_MISMATCH: 409,
+  DEVICE_MISMATCH: 409,
+  PAIRING_CODE_INVALID: 400,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

@@ -37,6 +37,53 @@ describe('rate limiter behind a proxy', () => {
   });
 });
 
+// O03: the pairing limiter counts for each signed-in user, not for each IP.
+describe('a limiter with its own key', () => {
+  function pairApp() {
+    const app = express();
+    app.set('trust proxy', 1);
+    app.use(requestId());
+    app.use((req, _res, next) => {
+      const user = req.get('x-test-user');
+      if (user) req.auth = { userId: user, email: null, accessToken: 'jwt' };
+      next();
+    });
+    app.use(
+      createLimiter({
+        windowMs: 60_000,
+        limit: 5,
+        key: (req) => req.auth?.userId ?? req.ip ?? 'unknown',
+      }),
+    );
+    app.post('/pair', (_req, res) => {
+      res.json({ ok: true });
+    });
+    return app;
+  }
+
+  it('five attempts a minute for one user, from any IP; another user is not affected', async () => {
+    const app = pairApp();
+    for (let i = 1; i <= 5; i += 1) {
+      const res = await request(app)
+        .post('/pair')
+        .set('X-Forwarded-For', `203.0.113.${i}`)
+        .set('x-test-user', 'cashier-1');
+      expect(res.status).toBe(200);
+    }
+    const sixth = await request(app)
+      .post('/pair')
+      .set('X-Forwarded-For', '203.0.113.99')
+      .set('x-test-user', 'cashier-1');
+    expect(sixth.status).toBe(429);
+    expect(sixth.body).toMatchObject({ error: { code: 'TOO_MANY_REQUESTS' } });
+    const other = await request(app)
+      .post('/pair')
+      .set('X-Forwarded-For', '203.0.113.1')
+      .set('x-test-user', 'cashier-2');
+    expect(other.status).toBe(200);
+  });
+});
+
 describe('login limiter key', () => {
   function loginApp() {
     const app = express();

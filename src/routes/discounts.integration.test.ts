@@ -18,6 +18,7 @@ import {
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
 import { readInviteToken } from '../test/inviteMail';
+import { DEVICE_TOKEN_HEADER, pairTestDevice } from '../test/posDevice';
 
 const RUN = process.env['RUN_INTEGRATION'] === '1';
 const PASSWORD = 'LocalDev-Only-2026!';
@@ -35,6 +36,10 @@ describe.skipIf(!RUN)('S03 discounts against local stack', () => {
   let branch: string;
   let tv: string;
   let ip = 0;
+  // O03: two paired POS computers of the shop, as the owner and the cashier each keep a shift
+  // open: the owner's requests come from the second one, everyone else's from the first.
+  let pos = '';
+  let ownerPos = '';
   const call = (
     method: 'get' | 'post' | 'patch',
     path: string,
@@ -48,6 +53,8 @@ describe.skipIf(!RUN)('S03 discounts against local stack', () => {
       .set('X-Forwarded-For', `198.18.65.${(++ip % 250) + 1}`)
       .set('Authorization', 'Bearer ' + token);
     if (shop) r.set('x-org-id', shop);
+    const device = token === owner ? ownerPos : pos;
+    if (device && shop === org) r.set(DEVICE_TOKEN_HEADER, device);
     if (key) r.set('Idempotency-Key', key);
     return body ? r.send(body) : r;
   };
@@ -151,6 +158,8 @@ describe.skipIf(!RUN)('S03 discounts against local stack', () => {
     const main = await service.from('branches').select('id').eq('organization_id', org).single();
     expect(main.error).toBeNull();
     branch = main.data!.id as string;
+    pos = (await pairTestDevice(service, org, branch)).token;
+    ownerPos = (await pairTestDevice(service, org, branch, 'Test POS 2')).token;
     cashier = await employee('CASHIER', 'cashier');
     manager = await employee('BRANCH_MANAGER', 'manager');
 
