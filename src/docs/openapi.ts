@@ -1829,10 +1829,68 @@ export const openApiSpec = {
             get: {
                 tags: ['Sales'],
                 summary: 'Read a sale with its lines and payments',
-                description: 'S01 (D62). The own sales of the caller with sale.create; with report.view or cash.view any sale of a branch the caller works in. Others: SALE_NOT_FOUND. Costs are never part of the answer. Schema: Sale.',
+                description: 'S01 (D62). The own sales of the caller with sale.create; with report.view or cash.view any sale of a branch the caller works in. Others: SALE_NOT_FOUND. Costs are never part of the answer. T02 (D67): `eta` is the ETA receipt of the sale (status, uuid, qr_payload to print as a QR code, last_error_code), null without one; POST /api/sales answers it too, built within 2 seconds when it can be. Schema: Sale.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
                 responses: { 200: { description: 'Sale' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/eta/settings': {
+            get: {
+                tags: ['ETA'],
+                summary: 'Read the ETA connection of the shop (org.settings_manage)',
+                description: 'T02 (D67). The environment (preprod or prod), the client id, the activity code and whether ETA is on. The client secret is never returned: has_client_secret says whether one is stored. Schema: EtaSettings.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'EtaSettings' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+            put: {
+                tags: ['ETA'],
+                summary: 'Set the ETA connection of the shop (org.settings_manage)',
+                description: 'T02 (D67). Replaces the settings. client_secret is write-only and goes to Supabase Vault; left out or null keeps the stored one. Turning ETA on needs the client id, a secret and the activity code (VALIDATION_FAILED). The environment cannot change while a receipt is pending or submitted (ETA_ENV_BUSY, 409). Needs the eta module (MODULE_NOT_IN_PLAN). One audit row eta.settings_updated, without the secret. Schema: EtaSettingsBody → EtaSettings.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'EtaSettings' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/eta/settings/test': {
+            post: {
+                tags: ['ETA'],
+                summary: 'Test the ETA connection with one POS (org.settings_manage)',
+                description: 'T02 (D67). Logs one of the POS devices of the caller in at the ETA of the environment of the shop, with the stored credentials. Answers ok true, or ok false with the error code of the ETA (for example invalid_presharedkey), incomplete_settings or unreachable. Never a secret or a token. Changes nothing. DEVICE_NOT_FOUND for a POS of another shop. Schema: EtaTestBody → EtaTestResult.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'EtaTestResult' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/eta/submissions/{id}/retry': {
+            post: {
+                tags: ['ETA'],
+                summary: 'Put a failed or rejected receipt back in the queue (fiscal.retry)',
+                description: 'T02 (D67). Only a failed (blocked) or rejected receipt (FISCAL_NOT_RETRYABLE, 409). A receipt without a UUID is built again; one with a UUID is sent again as it is. Refused when the receipt belongs to the other ETA environment (ETA_ENV_MISMATCH, 409). FISCAL_NOT_FOUND for another shop or a branch the caller does not work in. One audit row fiscal.retry_requested. Schema: FiscalRetryResult.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'FiscalRetryResult' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/devices': {
+            get: {
+                tags: ['ETA'],
+                summary: 'List the POS devices of the branches of the caller (device.manage or org.settings_manage)',
+                description: 'T02 (D67). Each device with its branch and its ETA registration (serial, OS version, model framework, status). The pre-shared key is never returned: has_preshared_key says whether one is stored. Schema: DeviceList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'DeviceList' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/devices/{id}/eta': {
+            put: {
+                tags: ['ETA'],
+                summary: 'Set the ETA registration of a POS (device.manage)',
+                description: 'T02 (D67). The serial, OS version and model framework the ETA knows the POS by, its pre-shared key (write-only, to Supabase Vault; left out or null keeps the stored one) and its status. Status active needs all four (VALIDATION_FAILED). A serial another device of the shop has: DEVICE_SERIAL_TAKEN (409). A new serial starts the receipt chain of the POS again. DEVICE_NOT_FOUND for another shop. One audit row device.eta_updated, without the key. Schema: DeviceEtaBody → Device.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Device' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
         '/api/shifts': {

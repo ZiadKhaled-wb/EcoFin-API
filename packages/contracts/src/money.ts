@@ -99,6 +99,20 @@ export function multiplyMoney(amount: Money, factor: string | number): Money {
   return toMoney(money(amount).times(f));
 }
 
+/**
+ * amount / divisor, rounded half-up to `decimals` places and printed with exactly that many:
+ * divideMoney("1000.00", 3, 5) -> "333.33333". For values that are not money, such as the ETA
+ * unit price (5 decimals); a result that goes back into money maths is rounded with roundMoney.
+ */
+export function divideMoney(amount: Money, divisor: number, decimals: number): string {
+  count(divisor, 'Divisor');
+  if (!Number.isSafeInteger(decimals) || decimals < 0 || decimals > 10) {
+    throw new RangeError(`Decimals must be a whole number from 0 to 10, got ${String(decimals)}`);
+  }
+  const result = money(amount).div(String(divisor)).round(decimals, Big.roundHalfUp);
+  return result.eq('0') ? Dec('0').toFixed(decimals) : result.toFixed(decimals);
+}
+
 /** `percent`% of `amount`, rounded half-up. Percent is a string like "14" or "2.5" (0 to 100). */
 export function percentOf(amount: Money, percentValue: string): Money {
   return toMoney(money(amount).times(percent(percentValue)).div('100'));

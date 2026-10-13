@@ -3,6 +3,7 @@ import {
   addMoney,
   allocateMoney,
   compareMoney,
+  divideMoney,
   formatEgp,
   multiplyMoney,
   percentOf,
@@ -295,5 +296,25 @@ describe('formatEgp: EGP in Arabic and English', () => {
     expect(formatEgp('1.005', 'en')).toBe('1.01 EGP'); // as a float, 1.005 would print 1.00
     expect(formatEgp('9999999999999999.99', 'en')).toBe('9,999,999,999,999,999.99 EGP');
     expect(formatEgp('-0.004', 'en')).toBe('0.00 EGP');
+  });
+});
+
+describe('divideMoney: a quotient with a fixed number of decimals', () => {
+  it('rounds half-up and always prints the decimals asked for', () => {
+    expect(divideMoney('1000.00', 3, 5)).toBe('333.33333');
+    expect(divideMoney('2000.00', 3, 5)).toBe('666.66667');
+    expect(divideMoney('1000.00', 1, 5)).toBe('1000.00000');
+    expect(divideMoney('0.01', 3, 2)).toBe('0.00');
+    expect(divideMoney('0.05', 10, 2)).toBe('0.01'); // 0.005 rounds up
+    expect(divideMoney('0.00', 7, 5)).toBe('0.00000');
+    expect(divideMoney('10.00', 4, 0)).toBe('3'); // 2.5 rounds up
+  });
+
+  it('refuses a JS number amount, a bad divisor and bad decimals', () => {
+    expect(() => divideMoney(10 as unknown as string, 2, 5)).toThrow(RangeError);
+    expect(() => divideMoney('10.00', 0, 5)).toThrow(RangeError);
+    expect(() => divideMoney('10.00', 1.5, 5)).toThrow(RangeError);
+    expect(() => divideMoney('10.00', 2, -1)).toThrow(RangeError);
+    expect(() => divideMoney('10.00', 2, 11)).toThrow(RangeError);
   });
 });

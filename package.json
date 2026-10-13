@@ -43,12 +43,14 @@
     "precheck:permissions": "npm run build:contracts",
     "check:permissions": "tsx scripts/check-permissions.ts",
     "precheck:audit": "npm run build:contracts",
-    "check:audit": "tsx scripts/check-audit.ts"
+    "check:audit": "tsx scripts/check-audit.ts",
+    "preeta:preprod-smoke": "npm run build:contracts",
+    "eta:preprod-smoke": "tsx scripts/eta-preprod-smoke.ts"
   },
   "dependencies": {
     "@sentry/node": "11.4.0",
     "@supabase/supabase-js": "^2.117.2",
-    "@ziadkhaled-wb/contracts": "0.34.0",
+    "@ziadkhaled-wb/contracts": "0.35.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.4",
     "express": "^4.22.3",

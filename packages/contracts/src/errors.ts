@@ -216,6 +216,13 @@ export const errorCodeHttpStatus = {
   APPROVAL_NOT_PENDING: 409,
   APPROVAL_SELF: 403,
   APPROVAL_NOT_FOUND: 404,
+  // T02 ETA e-receipts
+  DEVICE_NOT_FOUND: 404,
+  DEVICE_SERIAL_TAKEN: 409,
+  ETA_ENV_BUSY: 409,
+  ETA_ENV_MISMATCH: 409,
+  FISCAL_NOT_FOUND: 404,
+  FISCAL_NOT_RETRYABLE: 409,
 } as const;
 
 export type ErrorCode = keyof typeof errorCodeHttpStatus;

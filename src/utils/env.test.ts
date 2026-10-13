@@ -91,4 +91,31 @@ describe('loadEnv', () => {
     expect(loadEnv(valid).INVITE_TTL_HOURS).toBe(72);
     expect(() => loadEnv({ ...valid, INVITE_TTL_HOURS: '169' })).toThrow(/INVITE_TTL_HOURS/);
   });
+  it('T02: the ETA hosts default to the ones the SDK documents', () => {
+    const env = loadEnv(valid);
+    expect(env.ETA_PREPROD_ID_URL).toBe('https://id.preprod.eta.gov.eg');
+    expect(env.ETA_PREPROD_API_URL).toBe('https://api.preprod.invoicing.eta.gov.eg');
+    expect(env.ETA_PREPROD_PORTAL_URL).toBe('https://preprod.invoicing.eta.gov.eg');
+    expect(env.ETA_PROD_ID_URL).toBe('https://id.eta.gov.eg');
+    expect(env.ETA_PROD_API_URL).toBe('https://api.invoicing.eta.gov.eg');
+    expect(env.ETA_PROD_PORTAL_URL).toBe('https://invoicing.eta.gov.eg');
+  });
+  it('T02: production and pre-production can never share an ETA host', () => {
+    expect(() =>
+      loadEnv({ ...valid, ETA_PROD_API_URL: 'https://api.preprod.invoicing.eta.gov.eg/' }),
+    ).toThrow(/ETA_PROD_API_URL \(must not be the pre-production host\)/);
+    expect(() => loadEnv({ ...valid, ETA_PREPROD_ID_URL: 'https://id.eta.gov.eg' })).toThrow(
+      /ETA_PROD_ID_URL/,
+    );
+    expect(() => loadEnv({ ...valid, ETA_PREPROD_API_URL: 'not a url' })).toThrow(
+      /ETA_PREPROD_API_URL \(invalid\)/,
+    );
+    // A local fake ETA for tests is fine, as long as the two systems stay apart.
+    const env = loadEnv({
+      ...valid,
+      ETA_PREPROD_ID_URL: 'http://127.0.0.1:4010',
+      ETA_PREPROD_API_URL: 'http://127.0.0.1:4010',
+    });
+    expect(env.ETA_PREPROD_API_URL).toBe('http://127.0.0.1:4010');
+  });
 });

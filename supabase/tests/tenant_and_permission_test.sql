@@ -542,6 +542,21 @@ INSERT INTO t.denial VALUES
  ('set_customer_status','customer_3_status','customer.edit',$$SELECT public.set_customer_status((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial customer'),'blocked','Denial test')$$),
  ('list_customers','customer_4_list','customer.create',$$SELECT public.list_customers()$$),
  ('get_customer','customer_5_get','customer.create',$$SELECT public.get_customer((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial customer'))$$);
+-- T02: a POS of shop one, and a blocked receipt of one of its sales, for the device and retry cases
+-- (rows made as the database owner; ETA is off in shop one, so the sale gets no receipt of its own).
+-- list_devices takes device.manage or org.settings_manage: the role without the first has neither.
+INSERT INTO public.devices(id,organization_id,branch_id,name)
+  VALUES('d5000000-0000-0000-0000-0000000000e1','d1000000-0000-0000-0000-000000000001','d2000000-0000-0000-0000-000000000011','Denial POS');
+INSERT INTO public.sales(id,organization_id,number,branch_id,kind,is_b2b,prices_include_vat,subtotal,total,business_date,idempotency_key)
+  VALUES('d5000000-0000-0000-0000-0000000000e2','d1000000-0000-0000-0000-000000000001','DENIAL-ETA-1','d2000000-0000-0000-0000-000000000011','pos',false,true,100,100,current_date,'denial-eta-sale-1');
+INSERT INTO public.fiscal_submissions(id,organization_id,branch_id,doc_type,sale_id,environment,internal_id,status,last_error)
+  VALUES('d5000000-0000-0000-0000-0000000000e3','d1000000-0000-0000-0000-000000000001','d2000000-0000-0000-0000-000000000011','b2c_receipt','d5000000-0000-0000-0000-0000000000e2','preprod','DENIAL-ETA-1','failed','BLOCKED:NO_DEVICE: TEST-1 denial');
+INSERT INTO t.denial VALUES
+ ('get_eta_settings','eta_1_settings_get','org.settings_manage',$$SELECT public.get_eta_settings()$$),
+ ('set_eta_settings','eta_2_settings_set','org.settings_manage',$$SELECT public.set_eta_settings('preprod','denial-client',NULL,'4753',false)$$),
+ ('list_devices','eta_3_devices_list','device.manage',$$SELECT public.list_devices()$$),
+ ('set_device_eta','eta_4_device_set','device.manage',$$SELECT public.set_device_eta('d5000000-0000-0000-0000-0000000000e1','DENIAL-POS','os','1',NULL,'pending')$$),
+ ('retry_fiscal_submission','eta_5_retry','fiscal.retry',$$SELECT public.retry_fiscal_submission('d5000000-0000-0000-0000-0000000000e3')$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
