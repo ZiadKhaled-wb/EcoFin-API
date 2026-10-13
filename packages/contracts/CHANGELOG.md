@@ -1,6 +1,17 @@
 # Changelog
 
+## 0.37.0
+
+- Combine S07 sales history, S12 warranty, and T02 ETA e-receipts contracts after merging main.
+
+## 0.36.0
+
+- S12 warranty lookup, claims, transitions and receipt contracts.
+
+
 ## 0.35.0
+
+- S07 branch-scoped sales history, computed status, void eligibility and reversal contracts.
 
 - T02 ETA e-receipts: EtaEnvironment, DeviceEtaStatus, FiscalStatus, EtaSettings (`has_client_secret`, never the secret), EtaSettingsBody (the secret is write-only), EtaTestBody, EtaTestResult, Device (`has_preshared_key`, never the key), DeviceList, DeviceIdParams, DeviceEtaBody, FiscalSubmissionIdParams, FiscalRetryResult, SaleEta, ETA_ACTIVITY_CODE_PATTERN. Sale gains `eta` (status, uuid, qr_payload, last_error_code; null or absent without a receipt). BranchCreateBody, BranchUpdateBody and ManagedBranch gain `building_number`. Error codes DEVICE_NOT_FOUND, FISCAL_NOT_FOUND (404), DEVICE_SERIAL_TAKEN, ETA_ENV_BUSY, ETA_ENV_MISMATCH, FISCAL_NOT_RETRYABLE (409). Money: divideMoney(amount, divisor, decimals), a quotient with a fixed number of decimals (the ETA unit price has 5).
 

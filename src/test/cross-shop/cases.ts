@@ -3594,6 +3594,162 @@ crossShopCase({
   },
 });
 
+// S07 history is branch-scoped; void never reaches another tenant's sale.
+crossShopCase({
+  method: 'GET',
+  path: '/api/sales',
+  name: 'history excludes shop B and rejects an injected organization',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const b = await shopBSale(h);
+    const rows = await h.call('GET', '/api/sales', { token: a.accessToken });
+    h.expect(rows.res.status).toBe(200);
+    h.expect((rows.res.body as { items: { id: string }[] }).items.some((r) => r.id === b.id)).toBe(
+      false,
+    );
+    const injected = await h.call('GET', '/api/sales', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    await closeShiftShort(h, b.shift);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/sales/:id/void',
+  name: 'foreign sale is 404 without audit or a reversal',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const b = await shopBSale(h);
+    const attempt = await h.call('POST', '/api/sales/' + b.id + '/void', {
+      token: a.accessToken,
+      idempotencyKey: saleKey(),
+      body: { reason: 'S07 cross-shop' },
+    });
+    h.expect(attempt.res.status).toBe(404);
+    h.expect(h.code(attempt.res)).toBe('SALE_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, attempt.ip)).toBe(0);
+    await closeShiftShort(h, b.shift);
+  },
+});
+
+// S12: each request uses caller JWT; foreign claims/lines look absent.
+async function shopBClaim(h: CrossShopHarness) {
+  const sale = await shopBSale(h);
+  const detail = await h.call('GET', '/api/sales/' + sale.id, { token: sale.shift.token });
+  h.expect(detail.res.status).toBe(200);
+  const line = (detail.res.body as { lines: { id: string }[]; number: string }).lines[0]!.id;
+  const claim = await h.call('POST', '/api/warranty/claims', {
+    token: sale.shift.token,
+    idempotencyKey: key('warranty'),
+    body: { sale_line_id: line, issue: 'Broken item', condition: 'Used item' },
+  });
+  h.expect(claim.res.status, JSON.stringify(claim.res.body)).toBe(201);
+  await closeShiftShort(h, sale.shift);
+  return {
+    id: (claim.res.body as { claim_id: string }).claim_id,
+    line,
+    number: (detail.res.body as { number: string }).number,
+    token: sale.shift.token,
+  };
+}
+crossShopCase({
+  method: 'GET',
+  path: '/api/warranty/lookup',
+  name: 'warranty lookup cannot see foreign receipt',
+  async run(h) {
+    const b = await shopBClaim(h);
+    const a = await h.login(OWNER_A);
+    const r = await h.call('GET', '/api/warranty/lookup', {
+      token: a.accessToken,
+      query: 'sale_number=' + encodeURIComponent(b.number),
+    });
+    h.expect(r.res.status).toBe(200);
+    h.expect(
+      (r.res.body as { items: { sale_line_id: string }[] }).items.some(
+        (l) => l.sale_line_id === b.line,
+      ),
+    ).toBe(false);
+    const injected = await h.call('GET', '/api/warranty/lookup', {
+      token: a.accessToken,
+      query: 'serial=A&organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/warranty/claims',
+  name: 'claims list excludes foreign claims',
+  async run(h) {
+    const b = await shopBClaim(h);
+    const a = await h.login(OWNER_A);
+    const r = await h.call('GET', '/api/warranty/claims', { token: a.accessToken });
+    h.expect(r.res.status).toBe(200);
+    h.expect((r.res.body as { items: { id: string }[] }).items.some((c) => c.id === b.id)).toBe(
+      false,
+    );
+    const injected = await h.call('GET', '/api/warranty/claims', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+  },
+});
+for (const action of ['detail', 'move', 'refund'] as const) {
+  crossShopCase({
+    method: action === 'detail' ? 'GET' : 'POST',
+    path: '/api/warranty/claims/:id' + (action === 'detail' ? '' : '/' + action),
+    name: 'foreign warranty ' + action + ' is 404 without writes',
+    async run(h) {
+      const b = await shopBClaim(h);
+      const a = await h.login(OWNER_A);
+      const r = await h.call(
+        action === 'detail' ? 'GET' : 'POST',
+        '/api/warranty/claims/' + b.id + (action === 'detail' ? '' : '/' + action),
+        {
+          token: a.accessToken,
+          ...(action === 'move' ? { body: { to: 'rejected', note: 'Foreign decision' } } : {}),
+        },
+      );
+      h.expect(r.res.status).toBe(404);
+      h.expect(h.code(r.res)).toBe('NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_B, r.ip)).toBe(0);
+      const own = await h.call('GET', '/api/warranty/claims/' + b.id, { token: b.token });
+      h.expect((own.res.body as { status: string }).status).toBe('open');
+    },
+  });
+}
+crossShopCase({
+  method: 'POST',
+  path: '/api/warranty/claims',
+  name: 'foreign sold line cannot open a claim',
+  async run(h) {
+    const b = await shopBClaim(h);
+    const a = await h.login(OWNER_A);
+    const r = await h.call('POST', '/api/warranty/claims', {
+      token: a.accessToken,
+      idempotencyKey: key('foreign-claim'),
+      body: { sale_line_id: b.line, issue: 'Broken item', condition: 'Used item' },
+    });
+    h.expect(r.res.status).toBe(404);
+    h.expect(h.code(r.res)).toBe('SALE_LINE_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, r.ip)).toBe(0);
+    const injected = await h.call('POST', '/api/warranty/claims', {
+      token: a.accessToken,
+      idempotencyKey: key('inject-claim'),
+      body: {
+        sale_line_id: b.line,
+        issue: 'Broken item',
+        condition: 'Used item',
+        organization_id: SHOP_B,
+      },
+    });
+    h.expect(injected.res.status).toBe(400);
+  },
+});
+
 // T02 ETA e-receipts (D67). The harness can't make a POS or a receipt in shop B, so these cover
 // the shop header, an injected shop key and an id that isn't the caller's; shop B's real device
 // and receipt are tried in src/eta/eta.integration.test.ts.

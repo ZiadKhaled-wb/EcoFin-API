@@ -193,7 +193,7 @@ describe('cross-shop route check (D19)', () => {
         'PUT /api/devices/:id/eta',
       ]),
     );
-    expect(keys).toHaveLength(176);
+    expect(keys).toHaveLength(184);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

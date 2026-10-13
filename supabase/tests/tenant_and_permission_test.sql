@@ -307,7 +307,7 @@ SELECT 'd1000000-0000-0000-0000-000000000001', emp, 'd2000000-0000-0000-0000-000
 -- A role (not OWNER) whose defaults lack p_key.
 CREATE FUNCTION t.role_without(p_key text) RETURNS public.employee_role LANGUAGE sql STABLE AS $$
     SELECT ru.role FROM t.role_user ru
-    WHERE NOT EXISTS (SELECT 1 FROM public.role_permissions rp WHERE rp.role = ru.role AND rp.permission_key = p_key)
+    WHERE NOT EXISTS (SELECT 1 FROM public.role_permissions rp WHERE rp.role = ru.role AND rp.permission_key = ANY(string_to_array(p_key,'|')))
     ORDER BY ru.role LIMIT 1
 $$;
 
@@ -542,6 +542,20 @@ INSERT INTO t.denial VALUES
  ('set_customer_status','customer_3_status','customer.edit',$$SELECT public.set_customer_status((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial customer'),'blocked','Denial test')$$),
  ('list_customers','customer_4_list','customer.create',$$SELECT public.list_customers()$$),
  ('get_customer','customer_5_get','customer.create',$$SELECT public.get_customer((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial customer'))$$);
+INSERT INTO t.denial VALUES
+ ('search_sales','zz_s07_1_history','sale.create|report.view',$$SELECT public.search_sales()$$),
+ ('get_sale_details','zz_s07_2_details','sale.create|report.view',$$SELECT public.get_sale_details((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'))$$),
+ ('void_sale','zz_s07_3_void','sale.void',$$SELECT public.void_sale((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'),'S07 denial test','denial-s07-void')$$);
+INSERT INTO t.denial VALUES
+ ('post_sale','zz_s12_0_sale','sale.create',$$SELECT public.post_sale(x.l,public.quote_sale(x.l)->>'total','denial-s12-sale') FROM (SELECT jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-PH'),'quantity',1,'unit_id',(SELECT id FROM public.units WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND serial='DENIAL-SN-1'))) l) x$$),
+ ('warranty_lookup','zz_s12_1_lookup','warranty.manage',$$SELECT public.warranty_lookup(NULL,NULL,(SELECT number FROM public.sales WHERE id=(SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale')))$$),
+ ('list_warranty_claims','zz_s12_2_list','warranty.manage',$$SELECT public.list_warranty_claims()$$),
+ ('open_warranty_claim','zz_s12_3_open','warranty.manage',$$SELECT public.open_warranty_claim((SELECT id FROM public.sale_lines WHERE sale_id=(SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale') LIMIT 1),(SELECT unit_id FROM public.sale_lines WHERE sale_id=(SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale') LIMIT 1),'Broken item','Used item','denial-s12-open')$$),
+ ('get_warranty_claim','zz_s12_4_get','warranty.manage',$$SELECT public.get_warranty_claim((SELECT id FROM public.warranty_claims WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-open'))$$),
+ ('move_warranty_claim','zz_s12_5_move','warranty.manage',$$SELECT public.move_warranty_claim((SELECT id FROM public.warranty_claims WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-open'),'in_repair','Manager decision')$$),
+ ('request_claim_refund','zz_s12_6_refund','warranty.manage',$$SELECT public.request_claim_refund((SELECT id FROM public.warranty_claims WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-open'))$$);
+
+
 -- T02: a POS of shop one, and a blocked receipt of one of its sales, for the device and retry cases
 -- (rows made as the database owner; ETA is off in shop one, so the sale gets no receipt of its own).
 -- list_devices takes device.manage or org.settings_manage: the role without the first has neither.
@@ -592,7 +606,7 @@ BEGIN
                              v_owner_err = 'SUPER_ADMIN_REQUIRED', v_owner_err);
         ELSE
             PERFORM t.expect(format('4.2 %s: the same call works for the owner (valid arguments)', d.case_name),
-                             v_owner_err = '', v_owner_err);
+                             v_owner_err = CASE WHEN d.fn='request_claim_refund' THEN 'CLAIM_REFUND_NEEDS_RETURN' ELSE '' END, v_owner_err);
         END IF;
     END LOOP;
     PERFORM t.as_user(NULL);

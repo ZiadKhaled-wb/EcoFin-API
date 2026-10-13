@@ -168,8 +168,9 @@ SELECT t.expect('sale: numbered SL in the shift''s branch, totals and tax snapsh
   AND jsonb_array_length(j->'lines')=2 AND j->'lines'->0->>'tax_rate'='14.00' AND j->'lines'->0->>'tax_amount'='61.40'
   AND j->'lines'->0->>'line_total'='500.00' AND j->'lines'->0->>'quantity'='2' AND j->'lines'->1->>'serial'='S1-IMEI-1'
   AND j->'lines'->1->>'tax_amount'='614.04' AND j->'lines'->0->>'warranty_until' IS NULL,j::text) FROM t.docs WHERE tag='s1';
-SELECT t.expect('sale: the phone carries its warranty date (12 months)',
-  (j->'lines'->1->>'warranty_until')::date=(t.today()+interval '12 months')::date,j->'lines'->1->>'warranty_until') FROM t.docs WHERE tag='s1';
+-- S12 approved inclusive end: this new sale is normalized by the insert trigger.
+SELECT t.expect('sale: the phone carries its inclusive warranty date (12 months)',
+  (j->'lines'->1->>'warranty_until')::date=(t.today()+interval '12 months'-interval '1 day')::date,j->'lines'->1->>'warranty_until') FROM t.docs WHERE tag='s1';
 SELECT t.expect('sale: one cash payment of the total into the shift''s drawer',
   jsonb_array_length(j->'payments')=1 AND j->'payments'->0->>'method'='cash' AND j->'payments'->0->>'amount'='5500.00'
   AND j->'payments'->0->>'cash_account_id'=t.id('drawer')::text AND j->'payments'->0->>'number' LIKE 'MAIN-PY-%',(j->'payments')::text) FROM t.docs WHERE tag='s1';
