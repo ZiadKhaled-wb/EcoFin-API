@@ -12,8 +12,9 @@ Evidence files are in `EcoFin-Web/test-results/int-4/` (not committed).
 
 ## Result
 
-**15 of 16 checks pass. Check g fails on one open story bug (S04, below). No glue bug was found in the
-application code**: every route, header, contract and job the flow uses was already wired. The glue
+**All 16 checks pass.** Check g first failed on story bug INT4-B1 (S04), which was then fixed on this
+branch (Web commit `3b10091`, "fix(S04): INT4-B1 print window"). No glue bug was found in the
+application code: every route, header, contract and job the flow uses was already wired. The glue
 changes were seed, test tooling and CI.
 
 | # | Check | Result | Evidence |
@@ -24,7 +25,7 @@ changes were seed, test tooling and CI.
 | d | Cash 950 (handed 1,000) + bank transfer 5,000 with reference; change; double-click Pay | **PASS** | `d-payment-split.png`, `d-sale-completed.png` (change 50.00); int4-verify d: 1 sale for the idempotency key |
 | e | One transaction: stock, unit, drawer, bank, VAT, number, audit | **PASS** | int4-verify e: stock −qty per line, unit sold, drawer +950, bank +5,000 (= total), `tax_total` 730.71 = Σ lines = T01 (14 % inside the price), number `MAIN-SL-26-000001` first in its sequence, audit `sale.created` |
 | f | ETA accepted; the fake recomputed the same UUID; sale 2 `previousUUID` = sale 1 UUID; count per UUID 1 | **PASS** | int4-verify f: both `accepted`, chained, each received once, 0 bad hashes, 0 chain breaks |
-| g | Receipt in Arabic: totals, discount, payments, serial, warranty, QR with the fiscal UUID; reprint shows "copy" | **FAIL** (bug INT4-B1) | `g-receipt-ar.png`, `g-receipt-ar-reprint.png`: Arabic preview with totals, both payments, change, serial, the UUID and the QR (int4-verify g: `qr_payload` contains the UUID). Server numbering right (`g-prints.json`: first `{print_no 1, copy false}`, reprint `{print_no 2, copy true}`), but `window.print()` is never called (`marks: []`), so the paper and its COPY mark can't be checked in the dev build |
+| g | Receipt in Arabic: totals, discount, payments, serial, warranty, QR with the fiscal UUID; reprint shows "copy" | **PASS** (after the INT4-B1 fix) | `g-receipt-ar.png`, `g-receipt-ar-reprint.png`: Arabic preview with totals, both payments, change, serial, the UUID and the QR (int4-verify g: `qr_payload` contains the UUID). `g-prints.json`: first print `{print_no 1, copy false}`, reprint `{print_no 2, copy true}`; the stubbed print window saw the paper with marks `[false, true]` (original, then COPY). Dev server, StrictMode on |
 | h | Fake rejects the next receipt on `itemCode`; monitor shows the reason; code fixed; Correct and resend → accepted with `referenceOldUUID` | **PASS** | `h-monitor-rejected.png` (reason + `itemData[0].itemCode`), `h-monitor-corrected.png`; int4-verify h; fake record: new receipt Valid with `referenceOldUuid` = the rejected UUID |
 | i | Product with no ETA code → blocked `ITEM_CODE`; diagnosis names the product; code set → Retry → accepted | **PASS** | `i-monitor-blocked.png` (Retry disabled until fixed), `i-monitor-accepted.png`; int4-verify i: accepted, a `BLOCKED:ITEM_CODE` event |
 | j | History by serial, then by number; shop A void after the UUID → "use a return"; shop B (ETA off) void → stock and cash back | **PASS** | `j-history-by-serial.png`, `j-void-refused-shop-a.png` (no Void button, "The ETA receipt has been issued. Use a return."), `j-void-a-response.json` (`409 VOID_FISCALIZED`), `j-void-shop-b.png` ("Sale voided", Voided); int4-verify j: stock net 0, cash net 0 |
@@ -35,7 +36,7 @@ changes were seed, test tooling and CI.
 | o | Reconciliation; `fiscal_day_summary` counts every receipt, `all_accepted` right | **PASS** | `db:reconcile: passed`; day summary for branch A: total 5, accepted 5, waiting 0, `all_accepted: true`; int4-verify o |
 | p | CI: API `check`, `db`, `integration` and Web `check`, `e2e` on pull requests, with the new spec | **PASS, with gaps** | see §p |
 
-`int4-verify.txt` (last run): 11 passed, 0 failed (c, d, e, f, g, h, i, j, k, m, o).
+`int4-verify.txt` (last run, after the fix): 11 passed, 0 failed (c, d, e, f, g, h, i, j, k, m, o).
 
 ### p · CI
 
@@ -51,7 +52,7 @@ changes were seed, test tooling and CI.
 - **Gaps:**
   1. The Web `e2e` job checks out **EcoFin-API `main`**: the INT-4 spec needs this branch's dev seed
      and `npm run fake-eta`, so **the API PR must merge first**; until then the Web e2e job fails on it.
-  2. INT4-g fails in CI until bug INT4-B1 is fixed (the CI e2e runs the dev server, StrictMode on).
+  2. (Resolved) INT4-g needed bug INT4-B1 fixed, because CI's e2e runs the dev server with StrictMode on: fixed in `3b10091`.
   3. Never run by CI: `npm run eta:preprod-smoke` (needs the shop's pre-production credentials: INT-6),
      and anything on a real printer, scanner or POS computer.
   4. CI uses `--workers` default; locally the full e2e suite was run with 2 workers.
@@ -70,8 +71,8 @@ after run), not a separate run on `main`.
 | Contracts | 317 / 317 | 317 / 317 |
 | `supabase/tests/*.sql` (fresh `db reset`) | 47 files, 3,102 / 0 | **47 files, 3,102 / 0** (with the new seed and before the smoke fix: 3,101 / 1, see glue fix 2) |
 | Proofs: ledger, numbering, stock-cash, reconcile | passed | passed |
-| Web `npm test` | 648 / 648 | **648 / 648** (78 files) |
-| Web e2e, 2 workers | 26 / 26 | **38 / 39**: the 26 existing pass, INT-4 12 / 13 (g fails: INT4-B1) |
+| Web `npm test` | 648 / 648 | **649 / 649** (78 files; +1 INT4-B1 StrictMode print test) |
+| Web e2e, 2 workers | 26 / 26 | **41 / 41** (after the INT4-B1 fix; before it: 38 / 39, g failing) |
 | typecheck / lint / format | green | green, both repos (Web lint: 1 old warning, 0 errors) |
 
 Notes on flakes seen and not counted as failures: Web `SamplePage.test.tsx` (ar) hit its 5 s timeout
@@ -81,7 +82,7 @@ suite on the same database (it assumes a fresh one, as CI gives it); 372 / 0 aft
 
 ## Glue fixes (this branch)
 
-No application code was changed in either repo. All fixes are seed, tests, tooling, CI or docs.
+The glue fixes are seed, tests, tooling, CI and docs only. The one application change is the S04 bug fix INT4-B1 (see Bugs), made in its own commit.
 
 | # | Commit | Story | What changed |
 |---|---|---|---|
@@ -92,21 +93,23 @@ No application code was changed in either repo. All fixes are seed, tests, tooli
 | 5 | `INT-4: cash sale end to end` (Web) | INT-4, T02 (CI) | `e2e/int4-cash-sale.spec.ts`; `.github/workflows/ci.yml` e2e job starts the fake ETA and sets `ETA_PREPROD_*`, `JOBS_POLL_SECONDS=5`, `E2E_API_DIR` |
 | 6 | API | docs | `docs/testing/ENVIRONMENT.md` (INT-4 section), `int-4/LOGINS.md`, this report, `STAGING_CHECKLIST.md`, TEST_PLAN rows |
 
-## Open bugs
+## Bugs
 
-| ID | Severity | Story | Where | Proposed Jira title |
-|---|---|---|---|---|
-| INT4-B1 | **Medium** | S04 (EC-71) | `EcoFin-Web/src/features/receipts/PrintReceipt.tsx:173-179` (`aliveRef` set `false` in an effect cleanup, never set back to `true`) and `:197` (`if (!aliveRef.current) return;` before `window.print()`) | "S04: Print logs the receipt print but never opens the print window under React StrictMode (aliveRef cleared by the dev effect re-run)" |
-| INT4-B2 | Low | T03 (EC-91) | `EcoFin-API/supabase/migrations/20261014090000_t03_eta_monitor.sql:223` (diagnosis builds `'name', q.name_ar`), shown by `EcoFin-Web/src/pages/tax/FiscalDrawer.tsx:67` | "T03: ETA monitor diagnosis shows the product's Arabic name in the English UI (no name_en fallback)" |
+| ID | Severity | Story | Where | Proposed Jira title | Status |
+|---|---|---|---|---|---|
+| INT4-B1 | **Medium** | S04 (EC-71) | `EcoFin-Web/src/features/receipts/PrintReceipt.tsx:173-179` (`aliveRef` set `false` in an effect cleanup, never set back to `true`) and `:197` (`if (!aliveRef.current) return;` before `window.print()`) | "S04: Print logs the receipt print but never opens the print window under React StrictMode (aliveRef cleared by the dev effect re-run)" | **Fixed** in EcoFin-Web `3b10091` ("fix(S04): INT4-B1 print window") |
+| INT4-B2 | Low | T03 (EC-91) | `EcoFin-API/supabase/migrations/20261014090000_t03_eta_monitor.sql:223` (diagnosis builds `'name', q.name_ar`), shown by `EcoFin-Web/src/pages/tax/FiscalDrawer.tsx:67` | "T03: ETA monitor diagnosis shows the product's Arabic name in the English UI (no name_en fallback)" | Open |
 
-INT4-B1 detail: in development React StrictMode mounts, unmounts and remounts every component once;
-the cleanup sets `aliveRef.current = false` and nothing sets it back. Every click on **Print** then
-records a print on the server (`POST /api/sales/:id/receipt-prints` → print number, audit
-`sale.receipt_printed`) and returns before `window.print()`: nothing is printed, the dialog stays
-open, and the next attempt is numbered as a **copy** although no original was ever printed. A
-production build does not re-run effects, so it is probably not affected, but that must be checked
-on staging (INT-6, step g). Not fixed here: it is inside S04's logic and touches printed fiscal
-documents. Fix suggestion for the S04 owner: set `aliveRef.current = true` in the effect body.
+INT4-B1 detail: in development React StrictMode mounts, unmounts and remounts every component once.
+The cleanup set `aliveRef.current = false` (a guard against the dialog closing while the print log is
+in flight) and nothing set it back. So every click on **Print** recorded a print on the server
+(`POST /api/sales/:id/receipt-prints`, audit `sale.receipt_printed`) and returned before
+`window.print()`: nothing was printed, the dialog stayed open, and the next attempt was numbered as a
+**copy**. It was an accidental guard bug, not printing disabled in dev on purpose: nothing in S04 checks
+the build mode. **Fix** (`3b10091`): the effect sets `aliveRef.current = true` on every mount. Unit test
+`Receipts.test.tsx` "prints under StrictMode too" fails before the fix (`window.print` called 0 times)
+and passes after. Check g re-run green in the full e2e suite. Production builds were not affected (no
+effect re-run); INT-6 step g still checks the real printer.
 
 ## Environment fixes
 
@@ -123,8 +126,6 @@ documents. Fix suggestion for the S04 owner: set `aliveRef.current = true` in th
 
 ## EC-133
 
-"Done when": the full flow passes locally (API + Web e2e): **all but g**; every suite green: **yes,
-except the INT-4 e2e check g**; the report lists every check with evidence: **yes**. Check g fails on an
-open story bug (INT4-B1), which the rules allow when the failing check is listed as an open bug.
-EC-133 can move to **In Review**, with INT4-B1 linked as a blocker for the staging print step (INT-6 g).
+"Done when": the full flow passes locally (API + Web e2e): **yes**; every suite green: **yes**; the
+report lists every check with evidence: **yes**. EC-133 can move to **In Review**.
 Merge order: **EcoFin-API first**, then EcoFin-Web (its CI uses API `main`).
