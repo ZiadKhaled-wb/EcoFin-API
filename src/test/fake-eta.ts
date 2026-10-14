@@ -35,12 +35,22 @@ export type SubmitFault =
 export interface StoredReceipt {
   uuid: string;
   previousUuid: string;
+  /** header.referenceOldUUID: the rejected receipt this one corrects, '' for a first submission. */
+  referenceOldUuid: string;
   receiptNumber: string;
   submissionUuid: string;
   status: 'Valid' | 'Invalid';
   reason: string | null;
+  error: InvalidError | null;
   /** The receipt exactly as it was received. */
   json: string;
+}
+
+/** The ETA's complaint about one property of a receipt. */
+export interface InvalidError {
+  message: string;
+  propertyPath?: string;
+  code?: string;
 }
 
 export interface FakeEta {
@@ -54,8 +64,8 @@ export interface FakeEta {
   chainBreaks: string[];
   calls: { token: number; submit: number; details: number; lookup: number };
   failNextSubmit(fault: SubmitFault, retryAfterSeconds?: number): void;
-  /** The next receipt taken is found Invalid with this reason. */
-  invalidNext(reason: string): void;
+  /** The next receipt taken is found Invalid with this reason (or this error on a property). */
+  invalidNext(reason: string | InvalidError): void;
   /** Submission details answer InProgress this many times first. */
   inProgressFor(polls: number): void;
   close(): Promise<void>;
@@ -105,7 +115,7 @@ export async function startFakeEta(credentials: FakeEtaCredentials): Promise<Fak
   const calls = { token: 0, submit: 0, details: 0, lookup: 0 };
   const tails = new Map<string, string>();
   let fault: { kind: SubmitFault; retryAfter: number } | undefined;
-  let invalidReason: string | undefined;
+  let invalidReason: InvalidError | undefined;
   let inProgress = 0;
   let submissions = 0;
   const TOKEN = 'fake-eta-access-token';
@@ -165,6 +175,7 @@ export async function startFakeEta(credentials: FakeEtaCredentials): Promise<Fak
       const header = field(receipt, 'header');
       const uuid = text(header['uuid']);
       const previousUuid = text(header['previousUUID']);
+      const referenceOldUuid = text(header['referenceOldUUID']);
       const receiptNumber = text(header['receiptNumber']);
       const serial = text(field(receipt, 'seller')['deviceSerialNumber']);
       received.set(uuid, (received.get(uuid) ?? 0) + 1);
@@ -185,17 +196,29 @@ export async function startFakeEta(credentials: FakeEtaCredentials): Promise<Fak
         accepted.push({ uuid, longId: `LONG-${receiptNumber}`, receiptNumber });
         continue;
       }
-      if ((tails.get(serial) ?? '') !== previousUuid) chainBreaks.push(receiptNumber);
-      tails.set(serial, uuid);
+      if (referenceOldUuid === '') {
+        if ((tails.get(serial) ?? '') !== previousUuid) chainBreaks.push(receiptNumber);
+        tails.set(serial, uuid);
+      } else {
+        // A correction keeps the previousUUID of the receipt it replaces, and takes that receipt's
+        // place at the end of the chain only when that receipt was the last one.
+        const old = receipts.get(referenceOldUuid);
+        if (old?.status !== 'Invalid' || old.previousUuid !== previousUuid) {
+          chainBreaks.push(receiptNumber);
+        }
+        if (tails.get(serial) === referenceOldUuid) tails.set(serial, uuid);
+      }
       const reason = invalidReason ?? null;
       invalidReason = undefined;
       receipts.set(uuid, {
         uuid,
         previousUuid,
+        referenceOldUuid,
         receiptNumber,
         submissionUuid,
         status: reason === null ? 'Valid' : 'Invalid',
-        reason,
+        reason: reason === null ? null : reason.message,
+        error: reason,
         json,
       });
       accepted.push({ uuid, longId: `LONG-${receiptNumber}`, receiptNumber });
@@ -247,7 +270,11 @@ export async function startFakeEta(credentials: FakeEtaCredentials): Promise<Fak
                 {
                   stepId: '20',
                   stepName: 'Step 04',
-                  error: { errorCode: 'CV307', error: r.reason },
+                  error: {
+                    code: r.error?.code ?? 'CV307',
+                    ...(r.error?.propertyPath ? { propertyPath: r.error.propertyPath } : {}),
+                    message: r.reason,
+                  },
                 },
               ],
       })),
@@ -284,7 +311,7 @@ export async function startFakeEta(credentials: FakeEtaCredentials): Promise<Fak
       fault = { kind, retryAfter: retryAfterSeconds };
     },
     invalidNext(reason) {
-      invalidReason = reason;
+      invalidReason = typeof reason === 'string' ? { message: reason } : reason;
     },
     inProgressFor(polls) {
       inProgress = polls;

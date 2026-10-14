@@ -35,6 +35,7 @@ import customersRoutes from './routes/customers.js';
 import cashAccountsRoutes from './routes/cashAccounts.js';
 import cashTransfersRoutes from './routes/cashTransfers.js';
 import etaRoutes from './routes/eta.js';
+import fiscalRoutes from './routes/fiscal.js';
 import devicesRoutes from './routes/devices.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { noClientOrg } from './middleware/noClientOrg.js';
@@ -98,6 +99,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/cash-accounts', cashAccountsRoutes);
   mountRouter(app, '/api/cash-transfers', cashTransfersRoutes);
   mountRouter(app, '/api/eta', etaRoutes);
+  mountRouter(app, '/api/fiscal', fiscalRoutes);
   mountRouter(app, '/api/devices', devicesRoutes);
   mountRouter(app, '/api/me', meRoutes);
   mountRouter(app, '/api/employees', employeesRoutes);

@@ -4,6 +4,7 @@
 //   eta.prepare  builds what is pending for a POS (prepare.ts)
 //   eta.submit   sends the prepared receipts of a POS that are due, oldest first, in batches
 //   eta.poll     reads the result of one submission: Valid -> accepted, Invalid -> rejected
+//   eta.correct  (T03) rebuilds a rejected receipt as a correction and stores it (decisions 3 to 5)
 // The database queues the follow-up job with each status change (public.eta_store_prepared and
 // public.eta_mark), so the handlers queue only the next poll.
 //
@@ -22,7 +23,11 @@ import type { Logger } from 'pino';
 import type { Job, JobHandler } from '../jobs/types';
 import { captureProblem } from '../utils/monitoring';
 import { EtaError, type EtaApi, type EtaSession } from './client';
+import { ReceiptBlockedError } from './build-receipt';
+import { buildCorrection, correctionNote, sameReceiptIgnoringChain } from './correct';
 import { prepareDevice, type PrepareDeps } from './prepare';
+import { qrPayload } from './qr';
+import { toJson } from './serialize';
 import { noSignature, type ReceiptSigner } from './signer';
 import type { CredentialsRow, SubmitRow } from './store';
 
@@ -126,7 +131,7 @@ export function batchesBySize(rows: readonly SubmitRow[], maxBytes: number): Sub
 
 export function etaJobHandlers(
   options: EtaJobOptions,
-): Record<'eta.prepare' | 'eta.submit' | 'eta.poll', JobHandler> {
+): Record<'eta.prepare' | 'eta.submit' | 'eta.poll' | 'eta.correct', JobHandler> {
   const { store, client } = options;
   const signer = options.signer ?? noSignature;
   const now = options.now ?? (() => new Date());
@@ -390,5 +395,74 @@ export function etaJobHandlers(
     );
   };
 
-  return { 'eta.prepare': prepare, 'eta.submit': submit, 'eta.poll': poll };
+  /**
+   * T03. The correction of one rejected receipt, queued by public.fiscal_request_correction. The
+   * receipt is rebuilt from the unchanged sale and the current master data, with the rejected
+   * receipt's previousUUID and referenceOldUUID = its UUID. When nothing but those header fields
+   * differs from the stored receipt the data was not fixed: nothing is stored, the status stays
+   * rejected and the reason is written on the row. A row that is no longer the rejected receipt the
+   * request saw (CORRECTION_CONFLICT) ends the job without an error.
+   */
+  const correct: JobHandler = async (job, log) => {
+    orgOf(job);
+    const fiscalId = text(job.payload, 'fiscal_id');
+    const expectedOld = text(job.payload, 'expected_old_uuid');
+    if (!fiscalId || !expectedOld) throw new Error('eta.correct needs a receipt and its UUID');
+
+    const loaded = await store.loadForCorrection(fiscalId);
+    if (!loaded || loaded.status !== 'rejected' || loaded.eta_uuid !== expectedOld || !loaded.row) {
+      log.info(
+        { fiscalId },
+        'eta.correct: the receipt is no longer the rejected one; nothing to do',
+      );
+      return;
+    }
+    const { row } = loaded;
+
+    let receipt;
+    try {
+      receipt = buildCorrection(row, loaded.previous_uuid, expectedOld);
+    } catch (err) {
+      if (!(err instanceof ReceiptBlockedError)) throw err;
+      await store.noteCorrection(
+        fiscalId,
+        expectedOld,
+        correctionNote(`CORRECTION_${err.code.replace(':', '_')}`, loaded.last_error),
+      );
+      log.warn({ fiscalId, code: err.code }, 'eta.correct: the data is still missing');
+      return;
+    }
+
+    const json = toJson(receipt);
+    if (loaded.stored_receipt_json && sameReceiptIgnoringChain(loaded.stored_receipt_json, json)) {
+      await store.noteCorrection(
+        fiscalId,
+        expectedOld,
+        correctionNote('CORRECTION_NOTHING_CHANGED', loaded.last_error),
+      );
+      log.info({ fiscalId }, 'eta.correct: nothing changed; nothing stored or sent');
+      return;
+    }
+
+    const outcome = await store.storeCorrection(
+      fiscalId,
+      expectedOld,
+      receipt.header.uuid,
+      json,
+      qrPayload({
+        portalUrl: options.hosts[row.environment].portalUrl,
+        uuid: receipt.header.uuid,
+        dateTimeIssued: receipt.header.dateTimeIssued,
+        totalAmount: receipt.totalAmount.text,
+        rin: receipt.seller.rin,
+      }),
+    );
+    if (outcome === 'conflict') {
+      log.info({ fiscalId }, 'eta.correct: the receipt changed meanwhile; nothing stored');
+      return;
+    }
+    log.info({ fiscalId }, 'eta.correct: stored');
+  };
+
+  return { 'eta.prepare': prepare, 'eta.submit': submit, 'eta.poll': poll, 'eta.correct': correct };
 }

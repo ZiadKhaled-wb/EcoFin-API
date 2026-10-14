@@ -339,6 +339,11 @@ See [S12 plan](plans/S12.md): dates/backfill, out-of-warranty decisions, serial 
 
 See [T02 plan](plans/T02.md). Covers the Done when: (2) a retried submission doesn't create a duplicate (an answer lost after the ETA took the submission, a 422 DuplicateSubmission and a 503 each end with the receipt received once by the fake ETA); (1) acceptance by the ETA pre-production system is `npm run eta:preprod-smoke`, **not run yet: it needs the shop's pre-production credentials** ([setup](../eta/SETUP.md)). And the D67 rules: a fiscal record with every consumer sale, the UUID chain per POS by compare-and-set, blocked receipts, secrets in Vault, the 20-hour alert, the environment guard.
 
+
+## T03 — ETA submission monitor and corrections (EC-91)
+
+See [T03 plan](plans/T03.md). Covers the Done when: (1) a rejected receipt shows the ETA's reason and, after the fix, is resubmitted as a corrected receipt (a new UUID with `referenceOldUUID`, the original `previousUUID`) and accepted by the fake ETA; (2) a blocked receipt becomes prepared after its data is fixed. And the rules: a rejected receipt is never plainly retried, a correction is a job, the POS head moves only when the rejected receipt was the newest, the event log is append-only, the diagnosis is computed live, deadlines (24 h, 96 h for a correction), bulk retry, the alert counts and the day-close summary.
+
 ## O03 — POS devices (EC-146)
 
 See [O03 plan](plans/O03.md). Covers the Done when: (1) a paired POS computer opens a shift and makes a sale whose `device_id` is set and whose ETA receipt is prepared, not `BLOCKED:NO_DEVICE` (O03-I, against a fake ETA; O03-S for the trigger); (2) a revoked device's next request is rejected with `DEVICE_REVOKED` (O03-I, O03-U for the middleware); (3) creating one device over the plan limit fails with `PLAN_LIMIT_REACHED` (O03-S on `starter`, O03-I). And the D69 rules: only hashes are stored, a hand-made `x-device-id` is no device, pairing is rate limited, another shop can do nothing with a device, its code or its token. The plan also lists the shared test helpers that now pair a device before they open a shift.

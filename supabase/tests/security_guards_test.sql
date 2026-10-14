@@ -104,7 +104,12 @@ INSERT INTO t.no_permission_ok VALUES
   ('get_cash_account', 'K01: read-only safe or bank; checks app.has_permission(cash.view) so an expired shop can still read'),
   ('list_cash_account_movements', 'K01: read-only ledger of a safe or bank with running balance; checks app.has_permission(cash.view)'),
   ('list_cash_transfers', 'K01: read-only cash transfers with a visible side; checks app.has_permission(cash.view) so an expired shop can still read'),
-  ('get_cash_transfer', 'K01: read-only cash transfer with a visible side; checks app.has_permission(cash.view)');
+  ('get_cash_transfer', 'K01: read-only cash transfer with a visible side; checks app.has_permission(cash.view)'),
+  ('fiscal_list', 'T03: read-only, checks fiscal.view (app.require_fiscal_view); branch-scoped; works in an expired shop'),
+  ('fiscal_details', 'T03: read-only, checks fiscal.view (app.require_fiscal_view); branch-scoped; no payload, no national ID'),
+  ('fiscal_diagnose', 'T03: read-only, checks fiscal.view (app.require_fiscal_view); branch-scoped; no national ID'),
+  ('fiscal_alert_summary', 'T03: read-only, checks fiscal.view (app.require_fiscal_view); counts of the caller''s branches'),
+  ('fiscal_day_summary', 'T03: read-only, checks fiscal.view (app.require_fiscal_view) and branch access; for the day close');
 
 -- ---------------------------------------------------------------- catalog helpers (plpgsql, so a
 -- privilege function never runs on rows of another kind or schema before the filter)

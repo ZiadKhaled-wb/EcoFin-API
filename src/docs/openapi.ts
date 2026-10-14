@@ -1874,6 +1874,96 @@ export const openApiSpec = {
                 responses: { 200: { description: 'FiscalRetryResult' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/fiscal': {
+            get: {
+                tags: ['ETA'],
+                summary: 'List ETA receipts with their situation and deadline (fiscal.view)',
+                description: 'T03 (EC-91). Filters branch_id, from, to (the sale date in the shop), situation (waiting, accepted, cancelled, blocked, send_failed, rejected or problem), q (sale number or UUID prefix), limit (up to 100), offset. Sorted overdue, due soon, problems, the rest; newest first inside each group. Only the caller branches. Schema: FiscalListQuery -> FiscalList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'FiscalList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/fiscal/summary': {
+            get: {
+                tags: ['ETA'],
+                summary: 'Counts for the alert badge (fiscal.view)',
+                description: 'T03. blocked, send_failed, rejected, due_soon, overdue and accepted_today for the caller branches. Schema: FiscalAlertSummary.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'FiscalAlertSummary' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/fiscal/day-summary': {
+            get: {
+                tags: ['ETA'],
+                summary: 'Receipts of one branch and business day, for the day close (fiscal.view)',
+                description: 'T03. Counts per situation and all_accepted. BRANCH_DENIED for a branch the caller does not work in. Schema: FiscalDaySummaryQuery -> FiscalDaySummary.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'FiscalDaySummary' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/fiscal/retry-many': {
+            post: {
+                tags: ['ETA'],
+                summary: 'Retry up to 200 receipts (fiscal.retry)',
+                description: 'T03. Blocked -> prepared again, send_failed -> retried, rejected -> a correction is queued. A receipt that is not eligible, not ready or not the caller shop is skipped with its reason. Schema: FiscalRetryManyBody -> FiscalRetryManyResult.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'FiscalRetryManyResult' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/fiscal/{id}': {
+            get: {
+                tags: ['ETA'],
+                summary: 'One receipt with its diagnosis and event timeline (fiscal.view)',
+                description: 'T03. The diagnosis is computed from the data as it is now (NO_DEVICE, ITEM_CODE, SELLER_DATA, BUYER_ID, BUYER_MISSING, ETA_REJECTED with the parsed ETA error) and says whether the receipt action can run now. Never the payload or a national ID. FISCAL_NOT_FOUND for another shop or a branch the caller does not work in. Schema: FiscalDetails.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'FiscalDetails' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/fiscal/{id}/retry': {
+            post: {
+                tags: ['ETA'],
+                summary: 'Retry a blocked or send_failed receipt (fiscal.retry)',
+                description: 'T03. The same function as POST /api/eta/submissions/{id}/retry. A rejected receipt is USE_CORRECTION (409). Schema: FiscalRetryResult.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'FiscalRetryResult' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/fiscal/{id}/correct': {
+            post: {
+                tags: ['ETA'],
+                summary: 'Correct and resend a rejected receipt (fiscal.retry)',
+                description: 'T03. Queues the eta.correct job (202). The worker rebuilds the receipt from the unchanged sale and the current master data with a new UUID, the same previousUUID and referenceOldUUID = the rejected UUID; when nothing changed it stores nothing and the receipt shows CORRECTION_NOTHING_CHANGED. NOT_REJECTED, CORRECTION_QUEUED (409). Schema: FiscalQueued.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 202: { description: 'FiscalQueued' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/fiscal/{id}/assign-device': {
+            post: {
+                tags: ['ETA'],
+                summary: 'Give a receipt without a POS a POS of its branch (fiscal.retry)',
+                description: 'T03. Only a BLOCKED:NO_DEVICE receipt (NOT_BLOCKED_NO_DEVICE, 409); the device must be active and in the same branch (DEVICE_INVALID_FOR_RECEIPT, 400). Only the fiscal row changes. Schema: FiscalAssignDeviceBody -> FiscalRetryResult.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'FiscalRetryResult' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/fiscal/{id}/check-now': {
+            post: {
+                tags: ['ETA'],
+                summary: 'Poll a submitted receipt now (fiscal.retry)',
+                description: 'T03. NOT_SUBMITTED (409) unless the receipt is submitted. Schema: FiscalQueued.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 202: { description: 'FiscalQueued' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/devices': {
             get: {
                 tags: ['ETA'],

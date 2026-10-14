@@ -419,6 +419,20 @@ Source: <https://sdk.invoicing.eta.gov.eg/receiptissuancefaq/#limitations-on-rec
 We alert (`eta.failed`, reason `deadline`) when a receipt is still pending 20 hours after issue,
 and keep retrying.
 
+## 13a. Corrections (T03)
+
+A receipt the ETA found Invalid (status `rejected`) is **never resent as it is**: the same bytes would be rejected again. It is corrected:
+
+1. The user fixes the data (a product's item code, the seller's or branch's data, the buyer) and asks for a correction. The request only queues an `eta.correct` job (dedupe key `eta.correct:<fiscal id>`); a second request while one is queued is `CORRECTION_QUEUED`.
+2. The worker loads the row and goes on only if it is still `rejected` with the same `eta_uuid` the request saw. It builds the receipt again with the same builder, from the **unchanged sale** and the **current** master data.
+3. The header carries the rejected receipt's `previousUUID` **unchanged**, `referenceOldUUID` = the rejected UUID, and a **new UUID** (the SDK rule, section 9). A correction of a correction names the latest rejected UUID and keeps the original `previousUUID`.
+4. **Nothing changed:** the rebuilt receipt and the stored one are parsed as JSON and compared ignoring `header.uuid`, `header.previousUUID` and `header.referenceOldUUID`. When they are equal the data was not fixed: nothing is stored or sent, the status stays `rejected` and `last_error` becomes `CORRECTION_NOTHING_CHANGED: <the ETA's error>`.
+5. **Storing** (`eta_store_correction`, one transaction): lock the row, require `status = 'rejected'` and `eta_uuid` = the expected old UUID (otherwise `CORRECTION_CONFLICT`: the job ends quietly); set the new UUID, `reference_old_uuid` = the old one, the new payload and QR, `status 'pending'`, `attempts 0`, no error; queue `eta.submit` for the POS. The submit job sends every `pending` row that has a UUID, in issue order, so a correction that is not the newest is sent too.
+6. **The POS chain head** (`devices.eta_last_uuid`): if it equals the rejected UUID (the rejected receipt was the newest of its POS) it becomes the new UUID, so the next sale chains to the correction. Otherwise it is left alone: later receipts already chain from it, and forking the chain is worse. **To verify in pre-production:** that the ETA accepts a correction that takes the head's place, and one that is sent after later receipts of the same POS.
+7. The rejected UUID is never lost: `fiscal_submissions.reference_old_uuid` and the append-only `fiscal_events` log (every status, UUID and error change of a receipt).
+
+Deadlines shown by the monitor (it never blocks on them): a first submission within 24 hours of the sale; a correction within 96 hours (section 13). A receipt past its deadline needs a Late Submission Request in the ETA portal (out of scope).
+
 ## 14. QR code
 
 Source: <https://sdk.invoicing.eta.gov.eg/receiptissuancefaq/#receipt-qr-code>
