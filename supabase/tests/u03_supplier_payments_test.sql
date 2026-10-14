@@ -91,11 +91,17 @@ SELECT t.expect('Done when: numbered SP, trimmed reference, its allocation, one 
         'invoice_number',(SELECT number FROM public.purchase_invoices WHERE id=t.id('a')),'amount','3000.00'))
   AND t.audits('supplier_payment.posted','p1')=1, p::text)
 FROM (SELECT public.get_supplier_payment(t.id('p1')) p) x;
+SELECT current_user AS test4_role \gset
+RESET ROLE;
+\ir helpers/test4_snapshot.sql
+SET ROLE :"test4_role";
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('Done when: the same key again -> the same payment, nothing moves',
   (public.post_supplier_payment(t.id('nile'),t.id('main'),t.id('safe'),'3000.00','u03-p1-key',NULL,
      jsonb_build_array(t.al('a','3000.00')))->>'id')::uuid=t.id('p1')
   AND t.cash('safe')=47000 AND t.owed('a')=8400 AND t.bal('nile')=14100 AND t.moves()=1
   AND (SELECT count(*) FROM public.supplier_payments)=1 AND t.audits('supplier_payment.posted','p1')=1);
+SELECT t.expect('TEST4 replay snapshot 1',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 
 -- ---------------------------------------------------------------- several invoices, oldest first
 INSERT INTO t.ids SELECT 'p2',(public.post_supplier_payment(t.id('nile'),t.id('main'),t.id('safe'),'10000.00','u03-p2-key')->>'id')::uuid;
@@ -170,8 +176,10 @@ SELECT t.expect('reversal: its own SP number, linked both ways, the reason, audi
   AND (SELECT count(*)=1 AND bool_and(severity='warning' AND reason='Paid the wrong supplier') FROM public.audit_log
        WHERE action='supplier_payment.reversed' AND entity_id=t.id('p1')), r::text)
 FROM (SELECT public.get_supplier_payment(t.id('r1')) r,public.get_supplier_payment(t.id('p1')) p) x;
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('reversal: the same key again -> the same reversal, nothing moves',
   (public.reverse_supplier_payment(t.id('p1'),'Paid the wrong supplier','u03-r1-key')->>'id')::uuid=t.id('r1') AND t.cash('safe')=39500);
+SELECT t.expect('TEST4 replay snapshot 2',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.error('reversal: again with a new key',format('SELECT public.reverse_supplier_payment(%L,%L,%L)',t.id('p1'),'Again please','u03-r1-again'),'PAYMENT_ALREADY_REVERSED');
 SELECT t.error('reversal: a reversal can''t be reversed',format('SELECT public.reverse_supplier_payment(%L,%L,%L)',t.id('r1'),'Undo the undo','u03-r1-undo'),'VALIDATION_FAILED');
 SELECT t.error('reversal: the key of another payment',format('SELECT public.reverse_supplier_payment(%L,%L,%L)',t.id('p2'),'Wrong key','u03-r1-key'),'IDEMPOTENCY_CONFLICT');

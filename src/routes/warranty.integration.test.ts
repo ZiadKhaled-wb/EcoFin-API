@@ -322,4 +322,64 @@ describe.skipIf(!RUN)('S12 sale core against local stack', () => {
     });
     expect(missing.status).toBe(400);
   });
+  it('TEST4: void and warranty claim on one sale have one winner (10 rounds)', async () => {
+    for (let round = 0; round < 10; round++) {
+      const created = await call(
+        'post',
+        '/api/units',
+        owner,
+        {
+          product_id: phone,
+          branch_id: branch,
+          cost: '3000.00',
+          serials: [`TEST4-WR-${STAMP}-${round}`],
+        },
+        key(`race-unit-${round}`),
+      );
+      expect(created.status, JSON.stringify(created.body)).toBe(201);
+      const unitId = String((created.body as { units: { id: string }[] }).units[0]!.id);
+      const sold = await call(
+        'post',
+        '/api/sales',
+        cashier,
+        { lines: [{ product_id: phone, quantity: 1, unit_id: unitId }], expected_total: '5000.00' },
+        key(`race-sale-${round}`),
+      );
+      expect(sold.status, JSON.stringify(sold.body)).toBe(201);
+      const sale = sold.body as { id: string; lines: { id: string }[] };
+      const responses = await Promise.all([
+        call(
+          'post',
+          `/api/sales/${sale.id}/void`,
+          owner,
+          { reason: 'TEST4 race' },
+          key(`race-void-${round}`),
+        ),
+        call(
+          'post',
+          '/api/warranty/claims',
+          cashier,
+          {
+            sale_line_id: sale.lines[0]!.id,
+            unit_id: unitId,
+            issue: 'TEST4 failed screen',
+            condition: 'Clean case',
+          },
+          key(`race-claim-${round}`),
+        ),
+      ]);
+      expect(
+        responses.filter((r) => r.status >= 200 && r.status < 300),
+        JSON.stringify(responses.map((r) => r.body)),
+      ).toHaveLength(1);
+      const returns = await service.from('sales_returns').select('id').eq('sale_id', sale.id);
+      const claims = await service
+        .from('warranty_claims')
+        .select('id')
+        .eq('sale_line_id', sale.lines[0]!.id);
+      expect(returns.error).toBeNull();
+      expect(claims.error).toBeNull();
+      expect((returns.data?.length ?? 0) + (claims.data?.length ?? 0)).toBe(1);
+    }
+  }, 60000);
 });

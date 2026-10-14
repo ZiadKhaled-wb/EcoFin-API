@@ -104,9 +104,15 @@ SELECT t.expect('opening: one opening movement from one opening_cash import job'
            AND j.kind='opening_cash' AND j.status='completed')
   AND (SELECT count(*) FROM public.import_jobs WHERE organization_id=t.org('a') AND kind='opening_cash')=1
   AND t.audits('cash_account.opening_balance','cash')=1);
+SELECT current_user AS test4_role \gset
+RESET ROLE;
+\ir helpers/test4_snapshot.sql
+SET ROLE :"test4_role";
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('opening: the same key changes nothing',
   public.post_cash_opening(t.id('cash'),'5000.00','Counted on day one','k01-open-1')->>'balance'='5000.00'
   AND t.moves('cash')=1 AND (SELECT count(*) FROM public.import_jobs WHERE organization_id=t.org('a') AND kind='opening_cash')=1);
+SELECT t.expect('TEST4 replay snapshot 1',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.error('opening: the key used for another account',format('SELECT public.post_cash_opening(%L,%L,%L,%L)',t.id('cib'),'1.00','Other','k01-open-1'),'VALIDATION_FAILED');
 SELECT t.error('opening: a second opening',format('SELECT public.post_cash_opening(%L,%L,%L,%L)',t.id('cash'),'10.00','Again','k01-open-2'),'CASH_ACCOUNT_HAS_MOVEMENTS');
 SELECT t.error('opening: amount 0',format('SELECT public.post_cash_opening(%L,%L,%L,%L)',t.id('cib'),'0','Zero','k01-open-3'),'VALIDATION_FAILED');
@@ -129,9 +135,11 @@ SELECT t.expect('transfer: numbered CX, note trimmed, audited once',
   x->>'number' LIKE '%-CX-%' AND x->>'note'='to the bank' AND x->>'amount'='1200.00' AND x->>'from_account_name'='الخزنة الرئيسية'
   AND x->>'to_account_name'='CIB' AND t.audits('cash_transfer.created','tr1')=1, x::text)
 FROM (SELECT public.get_cash_transfer(t.id('tr1')) x) y;
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('transfer: the same key returns the same transfer, nothing new',
   (public.create_cash_transfer(t.id('cash'),t.id('cib'),'1200.00',NULL,'k01-tr-1')->>'id')::uuid=t.id('tr1')
   AND t.bal('cash')=3800 AND (SELECT count(*) FROM public.cash_transfers WHERE organization_id=t.org('a'))=1);
+SELECT t.expect('TEST4 replay snapshot 2',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.error('transfer: more than the safe holds',format('SELECT public.create_cash_transfer(%L,%L,%L,NULL,%L)',t.id('cash'),t.id('cib'),'3800.01','k01-tr-2'),'INSUFFICIENT_FUNDS');
 SELECT t.expect('transfer: the refused one posted nothing',
   t.bal('cash')=3800 AND (SELECT count(*) FROM public.cash_transfers WHERE organization_id=t.org('a'))=1 AND t.moves('cash')=2);

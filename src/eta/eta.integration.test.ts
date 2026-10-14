@@ -516,6 +516,46 @@ describe.skipIf(!RUN)('T02 ETA e-receipts against local stack and a fake ETA', (
     expect(fake.received.get(row.eta_uuid ?? '')).toBe(1);
   });
 
+  it('TEST4: three outage receipts grow attempts, appear in monitor, recover in order and clear alerts', async () => {
+    const sales = [await sell(), await sell(), await sell()];
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      fake.failNextSubmit('unavailable');
+      await worker.tick();
+      let failedCount = 0;
+      for (const sale of sales) {
+        const row = await fiscalOf(sale.id);
+        expect(row.attempts).toBe(attempt);
+        expect(fake.received.has(row.eta_uuid ?? '')).toBe(false);
+        const monitor = await call(
+          'get',
+          `/api/fiscal?q=${encodeURIComponent(sale.number)}`,
+          owner,
+        );
+        expect(monitor.status, JSON.stringify(monitor.body)).toBe(200);
+        const situation = (monitor.body as { items: { situation: string }[] }).items[0]?.situation;
+        expect(['send_failed', 'waiting']).toContain(situation);
+        if (situation === 'send_failed') failedCount++;
+      }
+      const summary = await call('get', '/api/fiscal/summary', owner);
+      expect(summary.status).toBe(200);
+      expect(summary.body).toMatchObject({ send_failed: failedCount, blocked: 0, rejected: 0 });
+    }
+    await drain();
+    const rows = await Promise.all(sales.map((sale) => fiscalOf(sale.id)));
+    for (const row of rows) {
+      expect(row.status).toBe('accepted');
+      expect(fake.received.get(row.eta_uuid ?? '')).toBe(1);
+    }
+    expect(rows[1]?.previous_uuid).toBe(rows[0]?.eta_uuid);
+    expect(rows[2]?.previous_uuid).toBe(rows[1]?.eta_uuid);
+    const submitted = [...fake.receipts.keys()].filter((uuid) =>
+      rows.some((row) => row.eta_uuid === uuid),
+    );
+    expect(submitted).toEqual(rows.map((row) => row.eta_uuid));
+    const recovered = await call('get', '/api/fiscal/summary', owner);
+    expect(recovered.body).toMatchObject({ send_failed: 0, blocked: 0, rejected: 0 });
+  }, 60000);
+
   it('a receipt the ETA finds Invalid is rejected with its reason; the chain goes on from it', async () => {
     fake.invalidNext('ItemCode [EG-X] is not registered for this taxpayer');
     const bad = await sell();

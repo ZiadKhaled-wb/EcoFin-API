@@ -23,13 +23,52 @@ if (!runFile) {
   console.error('usage: node scripts/int4-verify.mjs <run.json>');
   process.exit(2);
 }
-const run = JSON.parse(readFileSync(runFile, 'utf8'));
+const run = runFile === '--sale' ? {} : JSON.parse(readFileSync(runFile, 'utf8'));
 const db = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY ?? '', {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 const adminUrl = process.env.FAKE_ETA_ADMIN_URL ?? 'http://127.0.0.1:4011';
 const fake = await (await fetch(`${adminUrl}/admin/state`)).json();
 const fakeReceipt = (uuid) => fake.receipts.find((r) => r.uuid === uuid);
+
+// TEST4 reuses INT-4's local database verifier for a standalone bilingual sale.
+if (runFile === '--sale') {
+  const id = process.argv[3];
+  const { data: sale, error } = await db.from('sales').select('*').eq('id', id).single();
+  if (error) throw error;
+  const read = async (table, column) => {
+    const result = await db.from(table).select('*').eq(column, id);
+    if (result.error) throw result.error;
+    return result.data;
+  };
+  const lines = await read('sale_lines', 'sale_id');
+  const allocations = await read('payment_allocations', 'sale_id');
+  const fiscal = (await read('fiscal_submissions', 'sale_id'))[0];
+  const cents = (value) =>
+    BigInt(
+      String(value)
+        .replace('.', '')
+        .padEnd(
+          String(value).includes('.')
+            ? String(value).replace('.', '').length + 2 - String(value).split('.')[1].length
+            : String(value).length + 2,
+          '0',
+        ),
+    );
+  const sum = (values) => values.reduce((total, value) => total + cents(value), 0n);
+  if (sum(lines.map((line) => line.line_total)) !== cents(sale.total))
+    throw new Error('sale header differs from line totals');
+  if (sum(lines.map((line) => line.tax_amount)) !== cents(sale.tax_total))
+    throw new Error('sale header differs from line taxes');
+  if (sum(allocations.map((row) => row.amount)) !== cents(sale.total))
+    throw new Error('payments differ from sale total');
+  if (!fiscal?.eta_uuid || !fiscal?.qr_payload) throw new Error('fiscal UUID/QR not prepared');
+  const receipt = fakeReceipt(fiscal.eta_uuid);
+  if (!receipt || receipt.status !== 'Valid' || fake.received[fiscal.eta_uuid] !== 1)
+    throw new Error('fake ETA has not accepted exactly once');
+  console.log(JSON.stringify({ sale, lines, allocations, fiscal }));
+  process.exit(0);
+}
 
 let failed = 0;
 const results = [];

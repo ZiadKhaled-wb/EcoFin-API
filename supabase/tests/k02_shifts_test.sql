@@ -117,9 +117,15 @@ SELECT t.expect('open: an open shift numbered SH with the float taken from the s
   AND t.audits('shift.opened','s1')=1, s::text)
 FROM (SELECT app.shift_json(t.org('a'),t.id('s1'),true) s) x;
 SET ROLE authenticated;
+SELECT current_user AS test4_role \gset
+RESET ROLE;
+\ir helpers/test4_snapshot.sql
+SET ROLE :"test4_role";
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('open: the same key again -> the same shift, nothing moves',
-  (t.open_shift(t.id('main'),'500.00','k02-open-1',t.id('safe'))->>'id')::uuid=t.id('s1')
+  (public.open_shift(t.id('main'),'500.00','k02-open-1',t.id('safe'))->>'id')::uuid=t.id('s1')
   AND t.cash('safe')=4500 AND (SELECT count(*) FROM public.shifts)=1);
+SELECT t.expect('TEST4 replay snapshot 1',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.error('open: one open shift per cashier',format('SELECT t.open_shift(%L,%L,%L)',t.id('main'),'0','k02-open-again'),'SHIFT_ALREADY_OPEN');
 SELECT t.expect('current: the cashier''s open shift',(public.get_current_shift()->>'id')::uuid=t.id('s1'));
 
@@ -139,9 +145,11 @@ SET ROLE authenticated;
 SELECT t.expect('pay-out: 200 dropped into the safe',
   public.move_shift_cash(t.id('s1'),'out','200.00',t.id('safe'),'  Too much cash in the till ','k02-out-1')->>'expected_cash'='550.00'
   AND t.cash('safe')=4700);
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('pay-out: the same key again -> nothing moves',
   public.move_shift_cash(t.id('s1'),'out','200.00',t.id('safe'),'Too much cash in the till','k02-out-1')->>'expected_cash'='550.00'
   AND t.cash('safe')=4700 AND t.audits('shift.cash_moved','s1')=1);
+SELECT t.expect('TEST4 replay snapshot 2',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.expect('pay-in: 100 of change from the safe',
   public.move_shift_cash(t.id('s1'),'in','100.00',t.id('safe'),'Change for the till','k02-in-1')->>'expected_cash'='650.00'
   AND t.cash('safe')=4600 AND t.drawer('s1')=650);

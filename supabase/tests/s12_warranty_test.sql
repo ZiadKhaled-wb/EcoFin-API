@@ -109,6 +109,7 @@ GRANT SELECT ON t.shops,t.ids,t.docs TO authenticated;
 GRANT INSERT ON t.results,t.ids,t.docs TO authenticated;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA t TO authenticated;
 
+\ir helpers/test4_snapshot.sql
 -- ---------------------------------------------------------------- setup: shop a (serials, two branches), shop b
 SELECT t.as_user('f0000000-0000-0000-0000-000000000001');
 INSERT INTO t.shops SELECT s,public.admin_provision_organization('S12 '||s,'s12-'||s,'retail_pro','Owner',s||'s12@example.com',NULL,'Main',h,now()+interval '1 day')
@@ -218,17 +219,19 @@ SELECT t.expect('lookup customer phone exact normalized',jsonb_array_length(publ
 SELECT t.expect('unknown serial empty',public.warranty_lookup('UNKNOWN')->'items'='[]'::jsonb);
 INSERT INTO t.docs SELECT 'claimA',public.open_warranty_claim(t.id('line'),t.unit('S12-IMEI-1'),'Screen failed','Scratched case','s12-claim-a');
 SELECT t.expect('open claim in warranty',NOT (t.doc('claimA')->>'out_of_warranty')::boolean);
+INSERT INTO t.docs SELECT 'test4-replay-before',t.snapshot(t.org('a'));
 SELECT t.expect('open same key replay',public.open_warranty_claim(t.id('line'),t.unit('S12-IMEI-1'),'Screen failed','Scratched case','s12-claim-a')=t.doc('claimA'));
-SELECT t.error('key conflict',format('SELECT public.open_warranty_claim(%L,%L,%L,%L,%L)',t.id('line'),t.unit('S12-IMEI-1'),'Other issue','Scratched case','s12-claim-a'),'IDEMPOTENCY_CONFLICT');
+SELECT t.expect('TEST4 warranty replay leaves all rows, balances and counters unchanged',t.snapshot(t.org('a'))=t.doc('test4-replay-before'));
+SELECT t.unchanged('key conflict',format('SELECT public.open_warranty_claim(%L,%L,%L,%L,%L)',t.id('line'),t.unit('S12-IMEI-1'),'Other issue','Scratched case','s12-claim-a'),'IDEMPOTENCY_CONFLICT');
 SELECT t.error('second active claim',format('SELECT public.open_warranty_claim(%L,%L,%L,%L,%L)',t.id('line'),t.unit('S12-IMEI-1'),'Failed twice','Scratched','s12-claim-dup'),'CLAIM_ALREADY_OPEN');
 SELECT t.error('wrong sold unit',format('SELECT public.open_warranty_claim(%L,%L,%L,%L,%L)',t.id('line'),t.unit('S12-TAB-1'),'Failed','Scratched','s12-claim-bad'),'CLAIM_UNIT_MISMATCH');
 SELECT t.error('serialized unit required',format('SELECT public.open_warranty_claim(%L,NULL,%L,%L,%L)',t.id('line'),'Failed','Scratched','s12-claim-null'),'CLAIM_UNIT_MISMATCH');
 SELECT t.error('bad issue',format('SELECT public.open_warranty_claim(%L,NULL,%L,%L,%L)',t.id('chairline'),'ab','Scratched','s12-issue-bad'),'VALIDATION_FAILED');
 SELECT t.error('open cannot close',format('SELECT public.move_warranty_claim(%L,''closed'',NULL)',(t.doc('claimA')->>'claim_id')::uuid),'CLAIM_BAD_TRANSITION');
-SELECT t.error('replacement note required',format('SELECT public.move_warranty_claim(%L,''replaced'',NULL,%L)',(t.doc('claimA')->>'claim_id')::uuid,t.unit('S12-IMEI-2')),'VALIDATION_FAILED');
-SELECT t.error('replacement wrong product',format('SELECT public.move_warranty_claim(%L,''replaced'',''Swap unit'',%L)',(t.doc('claimA')->>'claim_id')::uuid,t.unit('S12-TAB-1')),'REPLACEMENT_UNIT_INVALID');
-SELECT t.error('replacement wrong branch',format('SELECT public.move_warranty_claim(%L,''replaced'',''Swap unit'',%L)',(t.doc('claimA')->>'claim_id')::uuid,t.unit('S12-IMEI-9')),'REPLACEMENT_UNIT_INVALID');
-SELECT t.error('replacement unavailable',format('SELECT public.move_warranty_claim(%L,''replaced'',''Swap unit'',%L)',(t.doc('claimA')->>'claim_id')::uuid,t.unit('S12-IMEI-1')),'REPLACEMENT_UNIT_INVALID');
+SELECT t.unchanged('replacement note required',format('SELECT public.move_warranty_claim(%L,''replaced'',NULL,%L)',(t.doc('claimA')->>'claim_id')::uuid,t.unit('S12-IMEI-2')),'VALIDATION_FAILED');
+SELECT t.unchanged('replacement wrong product',format('SELECT public.move_warranty_claim(%L,''replaced'',''Swap unit'',%L)',(t.doc('claimA')->>'claim_id')::uuid,t.unit('S12-TAB-1')),'REPLACEMENT_UNIT_INVALID');
+SELECT t.unchanged('replacement wrong branch',format('SELECT public.move_warranty_claim(%L,''replaced'',''Swap unit'',%L)',(t.doc('claimA')->>'claim_id')::uuid,t.unit('S12-IMEI-9')),'REPLACEMENT_UNIT_INVALID');
+SELECT t.unchanged('replacement unavailable',format('SELECT public.move_warranty_claim(%L,''replaced'',''Swap unit'',%L)',(t.doc('claimA')->>'claim_id')::uuid,t.unit('S12-IMEI-1')),'REPLACEMENT_UNIT_INVALID');
 SELECT t.error('refund waits for returns',format('SELECT public.request_claim_refund(%L)',(t.doc('claimA')->>'claim_id')::uuid),'CLAIM_REFUND_NEEDS_RETURN');
 INSERT INTO t.docs SELECT 'repairA',public.move_warranty_claim((t.doc('claimA')->>'claim_id')::uuid,'in_repair','Sent to supplier');
 SELECT t.expect('customer unit in repair',t.unit_status('S12-IMEI-1')='in_repair');

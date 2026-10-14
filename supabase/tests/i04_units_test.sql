@@ -64,8 +64,14 @@ SELECT t.expect('one opening movement per unit, from the import job, at the unit
   (SELECT count(*)=3 AND bool_and(type='opening' AND source_type='import' AND quantity=1 AND unit_cost=7000.50)
    FROM public.stock_movements WHERE source_id=(:'r1'::jsonb->>'import_job_id')::uuid)
   AND (SELECT kind='opening_stock' AND status='completed' AND rows_ok=3 FROM public.import_jobs WHERE id=(:'r1'::jsonb->>'import_job_id')::uuid));
+SELECT current_user AS test4_role \gset
+RESET ROLE;
+\ir helpers/test4_snapshot.sql
+SET ROLE :"test4_role";
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('same key again: the same batch, nothing created twice',
   (t.reg('["OTHER-9"]','i04-register-1')->>'import_job_id')=(:'r1'::jsonb->>'import_job_id') AND t.level('phone','main')=3);
+SELECT t.expect('TEST4 changed-arguments replay snapshot',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.error('Done when: a serial already in the shop is rejected (any letter case)',$q$SELECT t.reg('["imei-001","IMEI-004"]','i04-register-2')$q$,'SERIAL_TAKEN');
 SELECT t.expect('the rejection names the serial, and nothing of the batch was created',
   t.detail($q$SELECT t.reg('["imei-001","IMEI-004"]','i04-register-2b')$q$)::jsonb->'serials'='["IMEI-001"]'::jsonb

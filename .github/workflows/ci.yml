@@ -61,6 +61,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: TEST4 known failures
+        if: always()
+        run: node scripts/test4-known-failures.mjs
+
   # F02: the baseline builds an empty database, a second run changes nothing, the seeded super
   # admin works, and every SQL test in supabase/tests passes (TEST-1: found by a glob).
   # Local Supabase only: this job never links to or pushes to a real project.
@@ -158,6 +162,10 @@ jobs:
         if: always()
         run: supabase stop --no-backup
 
+      - name: TEST4 known failures
+        if: always()
+        run: node scripts/test4-known-failures.mjs
+
   # TEST-1 (EC-128): the RUN_INTEGRATION=1 suites (auth, sessions, cross-shop, audit, files, ...)
   # on a fresh local stack. The tests start the app themselves, in-process (supertest), so no
   # separate API server is needed. Local demo keys printed by the CLI for this stack, not secrets.
@@ -206,3 +214,7 @@ jobs:
       - name: Stop database
         if: always()
         run: supabase stop --no-backup
+
+      - name: TEST4 known failures
+        if: always()
+        run: node scripts/test4-known-failures.mjs

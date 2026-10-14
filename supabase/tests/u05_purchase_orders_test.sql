@@ -83,9 +83,15 @@ SELECT t.expect('create: a draft numbered PO with its lines, audited once',
   AND o->'invoices'='[]'::jsonb AND o->>'supplier_name'='Nile Traders'
   AND t.audits('purchase_order.created','po1')=1, o::text)
 FROM (SELECT public.get_purchase_order(t.id('po1')) o) x;
+SELECT current_user AS test4_role \gset
+RESET ROLE;
+\ir helpers/test4_snapshot.sql
+SET ROLE :"test4_role";
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('create: the same key again -> the same order, one row, one audit',
   (public.create_purchase_order(t.id('nile'),t.id('main'),jsonb_build_array(t.l('tv',1,'1.00')),'u05-po-po1')->>'id')::uuid=t.id('po1')
   AND (SELECT count(*) FROM public.purchase_orders)=1 AND t.audits('purchase_order.created','po1')=1);
+SELECT t.expect('TEST4 replay snapshot 1',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.error('states: invoicing a draft order',format('SELECT public.create_invoice_from_po(%L,%L)',t.id('po1'),'u05-draft-inv'),'PO_NOT_SENT');
 SELECT t.expect('edit: a draft takes a date, notes and new lines; audited once',
   o->>'expected_date'=(current_date+7)::text AND o->>'notes'='Call before delivery'
@@ -114,9 +120,11 @@ SELECT t.expect('receive: a draft invoice of the order, at the expected costs, l
   AND (SELECT bool_and((x->>'po_line_id') IS NOT NULL) FROM jsonb_array_elements(i->'lines') x)
   AND (SELECT (after->>'po_id')::uuid FROM public.audit_log WHERE action='purchase_invoice.created' AND entity_id=t.id('inv1'))=t.id('po1'), i::text)
 FROM (SELECT public.get_purchase_invoice(t.id('inv1')) i) x;
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('receive: the same key again -> the same invoice',
   (public.create_invoice_from_po(t.id('po1'),'u05-inv-inv1')->>'id')::uuid=t.id('inv1')
   AND (SELECT count(*) FROM public.purchase_invoices WHERE po_id=t.id('po1'))=1);
+SELECT t.expect('TEST4 replay snapshot 2',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.expect('receive: a draft does not count as received; the order shows it on draft invoices',
   t.rem('po1','tv')=10 AND t.status('po1')='sent'
   AND (SELECT (x->>'on_draft_invoices')::int FROM jsonb_array_elements(public.get_purchase_order(t.id('po1'))->'lines') x WHERE x->>'sku'='U05-TV')=6);

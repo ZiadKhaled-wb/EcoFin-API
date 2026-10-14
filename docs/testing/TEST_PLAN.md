@@ -370,3 +370,6 @@ One flow, server and client together, against the fake ETA (`npm run fake-eta`):
 | INT-4 | INT4-n | POS, receipt, monitor, warranty in AR (RTL) and EN (LTR), no raw keys | e2e | both languages | open each page | `dir` right; no raw i18n key text; no missing-key console warnings | n-*-ar.png, n-*-en.png | passing |
 | INT-4 | INT4-o | Reconciliation; day summary counts every receipt, `all_accepted` right | script + API | end of run | db-reconcile; GET /api/fiscal/day-summary | reconcile passed; total = receipts, all_accepted true once none waits | int4-verify.txt | passing |
 | INT-4 | INT4-p | CI runs the suites on pull requests and includes the new spec | config read | n.a. | read both ci.yml | API check/db/integration and Web check/e2e on `pull_request`; Web e2e now starts the fake ETA | REPORT.md §p | passing with gaps (see report) |
+
+
+TEST-4 sales tests (EC-134): [coverage, CI jobs and known failures](plans/TEST-4.md).
