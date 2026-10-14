@@ -73,6 +73,17 @@ export type PendingRow = z.infer<typeof PendingRow>;
 
 const Pending = z.object({ last_uuid: nullableText, rows: z.array(PendingRow) });
 
+const CorrectionSourceRow = z.object({
+  status: z.string(),
+  eta_uuid: nullableText,
+  previous_uuid: z.string(),
+  last_error: nullableText,
+  stored_receipt_json: nullableText,
+  row: PendingRow.nullable(),
+});
+/** A rejected receipt with what its correction is built from. Holds a national ID: never log it. */
+export type CorrectionSource = z.infer<typeof CorrectionSourceRow>;
+
 const CredentialsRow = z.object({
   environment: EtaEnvironment,
   client_id: nullableText,
@@ -169,6 +180,18 @@ export interface EtaStore {
     payload: Record<string, unknown>,
     delaySeconds: number,
   ): Promise<void>;
+  /** null when the row is not found or is not a sale's receipt. */
+  loadForCorrection(fiscalId: string): Promise<CorrectionSource | null>;
+  /** 'conflict': the row is no longer the rejected receipt the request saw; nothing was stored. */
+  storeCorrection(
+    fiscalId: string,
+    expectedOldUuid: string,
+    newUuid: string,
+    receiptJson: string,
+    qr: string,
+  ): Promise<'stored' | 'conflict'>;
+  /** Why a correction was not stored; false when the row is no longer the rejected one. */
+  noteCorrection(fiscalId: string, expectedOldUuid: string, error: string): Promise<boolean>;
   /** null when the sale has no receipt (ETA off, or a B2B sale). */
   saleStatus(orgId: string, saleId: string): Promise<SaleReceipt | null>;
 }
@@ -286,6 +309,33 @@ export function supabaseEtaStore(db: SupabaseClient): EtaStore {
         p_payload: payload,
         p_delay_seconds: Math.max(0, Math.round(delaySeconds)),
       });
+    },
+
+    async loadForCorrection(fiscalId) {
+      const data = await call('eta_load_for_correction', { p_fiscal_id: fiscalId });
+      return data === null ? null : CorrectionSourceRow.parse(data);
+    },
+
+    async storeCorrection(fiscalId, expectedOldUuid, newUuid, receiptJson, qr) {
+      const { error } = await rpc('eta_store_correction', {
+        p_id: fiscalId,
+        p_expected_old_uuid: expectedOldUuid,
+        p_new_uuid: newUuid,
+        p_payload: { receipt_json: receiptJson },
+        p_qr: qr,
+      });
+      if (!error) return 'stored';
+      if (error.message.startsWith('CORRECTION_CONFLICT')) return 'conflict';
+      throw failure('eta_store_correction', error);
+    },
+
+    async noteCorrection(fiscalId, expectedOldUuid, error) {
+      const data = await call('eta_note_correction', {
+        p_id: fiscalId,
+        p_expected_old_uuid: expectedOldUuid,
+        p_error: error,
+      });
+      return z.boolean().parse(data);
     },
 
     async saleStatus(orgId, saleId) {

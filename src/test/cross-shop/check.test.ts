@@ -199,9 +199,18 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/devices/:id/active',
         'POST /api/devices/:id/pairing-code',
         'POST /api/devices/:id/unpair',
+        'GET /api/fiscal',
+        'GET /api/fiscal/summary',
+        'GET /api/fiscal/day-summary',
+        'GET /api/fiscal/:id',
+        'POST /api/fiscal/:id/retry',
+        'POST /api/fiscal/:id/correct',
+        'POST /api/fiscal/:id/assign-device',
+        'POST /api/fiscal/:id/check-now',
+        'POST /api/fiscal/retry-many',
       ]),
     );
-    expect(keys).toHaveLength(192);
+    expect(keys).toHaveLength(201);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

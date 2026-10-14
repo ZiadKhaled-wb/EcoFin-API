@@ -312,6 +312,18 @@ class FakeStore implements EtaStore {
     return Promise.resolve();
   }
 
+  loadForCorrection() {
+    return Promise.reject(new Error('not used by the T02 job tests'));
+  }
+
+  storeCorrection() {
+    return Promise.reject(new Error('not used by the T02 job tests'));
+  }
+
+  noteCorrection() {
+    return Promise.reject(new Error('not used by the T02 job tests'));
+  }
+
   saleStatus() {
     return Promise.resolve(null);
   }

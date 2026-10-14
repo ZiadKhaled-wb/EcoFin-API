@@ -620,6 +620,29 @@ INSERT INTO t.denial VALUES
  ('pair_device','dev_4_pair','shift.operate',$$SELECT public.pair_device(repeat('a',64),repeat('b',64))$$),
  ('unpair_device','dev_5_unpair','device.manage',$$SELECT public.unpair_device('d5000000-0000-0000-0000-0000000000e1')$$),
  ('set_device_active','dev_6_active','device.manage',$$SELECT public.set_device_active('d5000000-0000-0000-0000-0000000000e1',false,'TEST-1 denial')$$);
+-- T03: more receipts of those sales' shop: a rejected one, a submitted one and a blocked one without a POS.
+-- The fiscal trigger only fires on a shop with ETA on, so the rows are made by hand like the one above.
+INSERT INTO public.sales(id,organization_id,number,branch_id,kind,is_b2b,prices_include_vat,subtotal,total,business_date,idempotency_key) VALUES
+ ('d5000000-0000-0000-0000-0000000000f2','d1000000-0000-0000-0000-000000000001','DENIAL-ETA-2','d2000000-0000-0000-0000-000000000011','pos',false,true,100,100,current_date,'denial-eta-sale-2'),
+ ('d5000000-0000-0000-0000-0000000000f4','d1000000-0000-0000-0000-000000000001','DENIAL-ETA-3','d2000000-0000-0000-0000-000000000011','pos',false,true,100,100,current_date,'denial-eta-sale-3'),
+ ('d5000000-0000-0000-0000-0000000000f6','d1000000-0000-0000-0000-000000000001','DENIAL-ETA-4','d2000000-0000-0000-0000-000000000011','pos',false,true,100,100,current_date,'denial-eta-sale-4');
+INSERT INTO public.devices(id,organization_id,branch_id,name)
+  VALUES('d5000000-0000-0000-0000-0000000000e8','d1000000-0000-0000-0000-000000000001','d2000000-0000-0000-0000-000000000011','Denial POS assign');
+INSERT INTO public.fiscal_submissions(id,organization_id,branch_id,device_id,doc_type,sale_id,environment,internal_id,status,eta_uuid,eta_submission_uuid,last_error) VALUES
+ ('d5000000-0000-0000-0000-0000000000f3','d1000000-0000-0000-0000-000000000001','d2000000-0000-0000-0000-000000000011','d5000000-0000-0000-0000-0000000000e1','b2c_receipt','d5000000-0000-0000-0000-0000000000f2','preprod','DENIAL-ETA-2','rejected',repeat('a',64),NULL,'ETA_INVALID: TEST-1 denial'),
+ ('d5000000-0000-0000-0000-0000000000f5','d1000000-0000-0000-0000-000000000001','d2000000-0000-0000-0000-000000000011','d5000000-0000-0000-0000-0000000000e1','b2c_receipt','d5000000-0000-0000-0000-0000000000f4','preprod','DENIAL-ETA-3','submitted',repeat('b',64),'DENIAL-SUB',NULL),
+ ('d5000000-0000-0000-0000-0000000000f7','d1000000-0000-0000-0000-000000000001','d2000000-0000-0000-0000-000000000011',NULL,'b2c_receipt','d5000000-0000-0000-0000-0000000000f6','preprod','DENIAL-ETA-4','failed',NULL,NULL,'BLOCKED:NO_DEVICE: TEST-1 denial');
+-- T03: the ETA monitor. The reads take fiscal.view, the writes fiscal.retry (the role without the key is denied).
+INSERT INTO t.denial VALUES
+ ('fiscal_list','fis_1_list','fiscal.view',$$SELECT public.fiscal_list()$$),
+ ('fiscal_details','fis_2_details','fiscal.view',$$SELECT public.fiscal_details('d5000000-0000-0000-0000-0000000000e3')$$),
+ ('fiscal_diagnose','fis_3_diagnose','fiscal.view',$$SELECT public.fiscal_diagnose('d5000000-0000-0000-0000-0000000000e3')$$),
+ ('fiscal_alert_summary','fis_4_alert','fiscal.view',$$SELECT public.fiscal_alert_summary()$$),
+ ('fiscal_day_summary','fis_5_day','fiscal.view',$$SELECT public.fiscal_day_summary('d2000000-0000-0000-0000-000000000011',current_date)$$),
+ ('fiscal_request_correction','fis_6_correct','fiscal.retry',$$SELECT public.fiscal_request_correction('d5000000-0000-0000-0000-0000000000f3')$$),
+ ('fiscal_assign_device','fis_7_assign','fiscal.retry',$$SELECT public.fiscal_assign_device('d5000000-0000-0000-0000-0000000000f7','d5000000-0000-0000-0000-0000000000e8')$$),
+ ('fiscal_check_now','fis_8_check','fiscal.retry',$$SELECT public.fiscal_check_now('d5000000-0000-0000-0000-0000000000f5')$$),
+ ('fiscal_retry_many','fis_9_many','fiscal.retry',$$SELECT public.fiscal_retry_many(ARRAY['d5000000-0000-0000-0000-0000000000e3']::uuid[])$$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

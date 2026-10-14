@@ -322,15 +322,20 @@ function taxTotals(lines: readonly ReceiptItem[]): TaxTotal[] {
  * The receipt or return receipt of a stored document, with its UUID.
  * `previousUuid`: the UUID of the POS's previous receipt, "" for its first.
  * `referenceUuid`: a return's sale receipt.
+ * `referenceOldUuid`: the rejected receipt this one corrects (T03), "" for a first submission.
  */
 export function buildDocument(
   receiptType: typeof RECEIPT_TYPE_SALE | typeof RECEIPT_TYPE_RETURN,
   source: ReceiptSource,
   previousUuid: string,
   referenceUuid?: string,
+  referenceOldUuid = '',
 ): Receipt {
   if (previousUuid !== '' && !UUID_PATTERN.test(previousUuid)) {
     throw new RangeError('previousUuid must be a receipt UUID or empty');
+  }
+  if (referenceOldUuid !== '' && !UUID_PATTERN.test(referenceOldUuid)) {
+    throw new RangeError('referenceOldUuid must be a receipt UUID or empty');
   }
   if (!ISSUED_AT_PATTERN.test(source.sale.issued_at)) {
     throw new RangeError('issued_at must be UTC with whole seconds');
@@ -355,7 +360,7 @@ export function buildDocument(
       uuid: '',
       previousUUID: previousUuid,
       ...(referenceUuid === undefined ? {} : { referenceUUID: referenceUuid }),
-      referenceOldUUID: '',
+      referenceOldUUID: referenceOldUuid,
       currency: 'EGP',
       exchangeRate: dec('0'),
     },
@@ -380,6 +385,10 @@ export function buildDocument(
 }
 
 /** A sale's Receipt v1.2 (type `s`), with its UUID. */
-export function buildReceipt(source: ReceiptSource, previousUuid: string): Receipt {
-  return buildDocument(RECEIPT_TYPE_SALE, source, previousUuid);
+export function buildReceipt(
+  source: ReceiptSource,
+  previousUuid: string,
+  referenceOldUuid = '',
+): Receipt {
+  return buildDocument(RECEIPT_TYPE_SALE, source, previousUuid, undefined, referenceOldUuid);
 }

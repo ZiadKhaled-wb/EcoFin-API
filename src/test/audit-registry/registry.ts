@@ -138,4 +138,9 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/devices/:id/unpair': { action: 'device.unpaired' },
   'POST /api/devices/pair': { action: 'device.paired' },
   'POST /api/eta/submissions/:id/retry': { action: 'fiscal.retry_requested' },
+  'POST /api/fiscal/:id/retry': { action: 'fiscal.retry_requested' },
+  'POST /api/fiscal/:id/correct': { action: 'fiscal.correction_requested' },
+  'POST /api/fiscal/:id/assign-device': { action: 'fiscal.device_assigned' },
+  'POST /api/fiscal/:id/check-now': { action: 'fiscal.check_requested' },
+  'POST /api/fiscal/retry-many': { action: 'fiscal.retry_many' },
 };

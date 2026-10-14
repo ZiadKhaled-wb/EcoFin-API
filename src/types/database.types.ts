@@ -2498,6 +2498,50 @@ export type Database = {
           },
         ];
       };
+      fiscal_events: {
+        Row: {
+          actor_employee_id: string | null;
+          at: string;
+          eta_uuid: string | null;
+          fiscal_id: string;
+          id: number;
+          message: string | null;
+          new_status: Database['public']['Enums']['fiscal_status'];
+          old_status: Database['public']['Enums']['fiscal_status'] | null;
+          organization_id: string;
+        };
+        Insert: {
+          actor_employee_id?: string | null;
+          at?: string;
+          eta_uuid?: string | null;
+          fiscal_id: string;
+          id?: never;
+          message?: string | null;
+          new_status: Database['public']['Enums']['fiscal_status'];
+          old_status?: Database['public']['Enums']['fiscal_status'] | null;
+          organization_id: string;
+        };
+        Update: {
+          actor_employee_id?: string | null;
+          at?: string;
+          eta_uuid?: string | null;
+          fiscal_id?: string;
+          id?: never;
+          message?: string | null;
+          new_status?: Database['public']['Enums']['fiscal_status'];
+          old_status?: Database['public']['Enums']['fiscal_status'] | null;
+          organization_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'fiscal_events_fiscal_id_organization_id_fkey';
+            columns: ['fiscal_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'fiscal_submissions';
+            referencedColumns: ['id', 'organization_id'];
+          },
+        ];
+      };
       fiscal_submissions: {
         Row: {
           accepted_at: string | null;
@@ -2519,6 +2563,7 @@ export type Database = {
           payload: Json | null;
           previous_uuid: string | null;
           qr_payload: string | null;
+          reference_old_uuid: string | null;
           return_id: string | null;
           sale_id: string | null;
           status: Database['public']['Enums']['fiscal_status'];
@@ -2545,6 +2590,7 @@ export type Database = {
           payload?: Json | null;
           previous_uuid?: string | null;
           qr_payload?: string | null;
+          reference_old_uuid?: string | null;
           return_id?: string | null;
           sale_id?: string | null;
           status?: Database['public']['Enums']['fiscal_status'];
@@ -2571,6 +2617,7 @@ export type Database = {
           payload?: Json | null;
           previous_uuid?: string | null;
           qr_payload?: string | null;
+          reference_old_uuid?: string | null;
           return_id?: string | null;
           sale_id?: string | null;
           status?: Database['public']['Enums']['fiscal_status'];
@@ -8306,6 +8353,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      eta_load_for_correction: { Args: { p_fiscal_id: string }; Returns: Json };
       eta_load_pending_for_device: {
         Args: { p_branch_id?: string; p_device_id: string; p_limit?: number };
         Returns: Json;
@@ -8319,7 +8367,21 @@ export type Database = {
         };
         Returns: Database['public']['Enums']['fiscal_status'];
       };
+      eta_note_correction: {
+        Args: { p_error: string; p_expected_old_uuid: string; p_id: string };
+        Returns: boolean;
+      };
       eta_sale_status: { Args: { p_org: string; p_sale_id: string }; Returns: Json };
+      eta_store_correction: {
+        Args: {
+          p_expected_old_uuid: string;
+          p_id: string;
+          p_new_uuid: string;
+          p_payload: Json;
+          p_qr: string;
+        };
+        Returns: undefined;
+      };
       eta_store_prepared: {
         Args: {
           p_fiscal_id: string;
@@ -8346,6 +8408,26 @@ export type Database = {
         Returns: Json;
       };
       find_unit: { Args: { p_serial: string }; Returns: Json };
+      fiscal_alert_summary: { Args: Record<PropertyKey, never>; Returns: Json };
+      fiscal_assign_device: { Args: { p_device_id: string; p_id: string }; Returns: Json };
+      fiscal_check_now: { Args: { p_id: string }; Returns: Json };
+      fiscal_day_summary: { Args: { p_branch_id: string; p_business_date: string }; Returns: Json };
+      fiscal_details: { Args: { p_id: string }; Returns: Json };
+      fiscal_diagnose: { Args: { p_id: string }; Returns: Json };
+      fiscal_list: {
+        Args: {
+          p_branch_id?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_query?: string;
+          p_situation?: string;
+          p_to?: string;
+        };
+        Returns: Json;
+      };
+      fiscal_request_correction: { Args: { p_id: string }; Returns: Json };
+      fiscal_retry_many: { Args: { p_ids: string[] }; Returns: Json };
       get_cash_account: { Args: { p_id: string }; Returns: Json };
       get_cash_transfer: { Args: { p_id: string }; Returns: Json };
       get_current_shift: { Args: Record<PropertyKey, never>; Returns: Json };

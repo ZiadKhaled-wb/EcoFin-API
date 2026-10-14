@@ -3,6 +3,7 @@
 // search endpoint. Skipped unless RUN_INTEGRATION=1 (env: see src/routes/auth.integration.test.ts).
 // Throwaway employees (unique per run) are used where a route changes someone's data.
 import { createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -270,6 +271,63 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       return await run(id, owner.accessToken);
     } finally {
       await archiveDevice(id);
+    }
+  }
+  /**
+   * T03: a sale of the seeded shop (ETA off: it has no receipt of its own) with a receipt made by
+   * hand in the given state, and what is queued for it removed afterwards (the receipt, which is
+   * never deleted, is cancelled so it is never built or sent).
+   */
+  const fakeUuid = () => (randomUUID() + randomUUID()).replace(/-/g, '').slice(0, 64);
+  async function withFiscalRow<T>(
+    row: Record<string, unknown>,
+    run: (id: string, token: string) => Promise<T>,
+  ): Promise<T> {
+    const owner = await login('owner.one@ecotech.test');
+    await openShift(owner.accessToken);
+    const product = await newProduct(owner.accessToken);
+    const stocked = await send('post', '/api/stock/adjustments', {
+      token: owner.accessToken,
+      key: `f07-fiscal-stock-${STAMP}-${ipCounter}`,
+      body: { branch_id: BR1, reason: 'found', lines: [{ product_id: product, quantity: 1 }] },
+    });
+    expect(stocked.res.status, JSON.stringify(stocked.res.body)).toBe(201);
+    const lines = [{ product_id: product, quantity: 1 }];
+    const quote = await send('post', '/api/sales/quote', {
+      token: owner.accessToken,
+      body: { lines },
+    });
+    const sold = await send('post', '/api/sales', {
+      token: owner.accessToken,
+      key: `f07-fiscal-sale-${STAMP}-${ipCounter}`,
+      body: { lines, expected_total: (quote.res.body as { total: string }).total },
+    });
+    expect(sold.res.status, JSON.stringify(sold.res.body)).toBe(201);
+    const sale = sold.res.body as { id: string; number: string };
+    const made = await service
+      .from('fiscal_submissions')
+      .insert({
+        organization_id: SHOP_ONE,
+        branch_id: BR1,
+        doc_type: 'b2c_receipt',
+        sale_id: sale.id,
+        environment: 'preprod',
+        internal_id: sale.number,
+        ...row,
+      })
+      .select('id')
+      .single();
+    if (made.error) throw new Error(made.error.message);
+    const id = made.data.id;
+    try {
+      return await run(id, owner.accessToken);
+    } finally {
+      await service.from('jobs').delete().eq('organization_id', SHOP_ONE).like('job_type', 'eta.%');
+      const cancelled = await service
+        .from('fiscal_submissions')
+        .update({ status: 'cancelled' })
+        .eq('id', id);
+      if (cancelled.error) throw new Error(cancelled.error.message);
     }
   }
   /** K02: closes the caller's open shift, if any (one open shift per cashier). */
@@ -1303,6 +1361,52 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         if (cancelled.error) throw new Error(cancelled.error.message);
       }
     },
+    'POST /api/fiscal/:id/retry': () =>
+      withFiscalRow(
+        { status: 'failed', last_error: 'BLOCKED:NO_DEVICE: F07 audit driver' },
+        async (id, token) => ({
+          sent: await send('post', `/api/fiscal/${id}/retry`, { token }),
+          org: SHOP_ONE,
+        }),
+      ),
+    'POST /api/fiscal/:id/correct': () =>
+      withFiscalRow(
+        { status: 'rejected', eta_uuid: fakeUuid(), last_error: 'ETA_INVALID: F07 audit driver' },
+        async (id, token) => ({
+          sent: await send('post', `/api/fiscal/${id}/correct`, { token }),
+          org: SHOP_ONE,
+          status: 202,
+        }),
+      ),
+    'POST /api/fiscal/:id/assign-device': () =>
+      withFiscalRow(
+        { status: 'failed', last_error: 'BLOCKED:NO_DEVICE: F07 audit driver' },
+        (id, token) =>
+          withDevice({}, async (deviceId) => ({
+            sent: await send('post', `/api/fiscal/${id}/assign-device`, {
+              token,
+              body: { device_id: deviceId },
+            }),
+            org: SHOP_ONE,
+          })),
+      ),
+    'POST /api/fiscal/:id/check-now': () =>
+      withFiscalRow(
+        { status: 'submitted', eta_uuid: fakeUuid(), eta_submission_uuid: `F07SUB${STAMP}` },
+        async (id, token) => ({
+          sent: await send('post', `/api/fiscal/${id}/check-now`, { token }),
+          org: SHOP_ONE,
+          status: 202,
+        }),
+      ),
+    'POST /api/fiscal/retry-many': () =>
+      withFiscalRow(
+        { status: 'failed', last_error: 'BLOCKED:NO_DEVICE: F07 audit driver' },
+        async (id, token) => ({
+          sent: await send('post', '/api/fiscal/retry-many', { token, body: { ids: [id] } }),
+          org: SHOP_ONE,
+        }),
+      ),
     'PATCH /api/settings': async () => {
       const owner = await login('owner.one@ecotech.test');
       return {

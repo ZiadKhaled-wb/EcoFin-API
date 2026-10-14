@@ -3906,6 +3906,118 @@ crossShopCase({
   },
 });
 
+// T03: the ETA monitor. Another shop's header is refused (403); a receipt that isn't the caller shop's
+// (here an id that exists nowhere) is FISCAL_NOT_FOUND, and nothing is written for shop B.
+for (const [method, suffix, body] of [
+  ['GET', '', undefined],
+  ['POST', '/retry', undefined],
+  ['POST', '/correct', undefined],
+  ['POST', '/check-now', undefined],
+  ['POST', '/assign-device', { device_id: T02_UNKNOWN_ID }],
+] as const) {
+  crossShopCase({
+    method,
+    path: suffix === '' ? '/api/fiscal/:id' : `/api/fiscal/:id${suffix}`,
+    name: "a receipt that isn't the caller shop's is not found",
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const path = `/api/fiscal/${T02_UNKNOWN_ID}${suffix}`;
+      const foreign = await h.call(method, path, {
+        token: a.accessToken,
+        orgId: SHOP_B,
+        ...(body ? { body } : {}),
+      });
+      h.expect(foreign.res.status).toBe(403);
+      const unknown = await h.call(method, path, {
+        token: a.accessToken,
+        ...(body ? { body } : {}),
+      });
+      h.expect(unknown.res.status).toBe(404);
+      h.expect(h.code(unknown.res)).toBe('FISCAL_NOT_FOUND');
+      for (const call of [foreign, unknown]) {
+        h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+      }
+    },
+  });
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/fiscal',
+  name: 'the receipt list is the caller shop own',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/fiscal', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/fiscal', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const own = await h.call('GET', '/api/fiscal', { token: a.accessToken });
+    h.expect(own.res.status).toBe(200);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/fiscal/summary',
+  name: 'the alert counts are the caller shop own',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/fiscal/summary', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const own = await h.call('GET', '/api/fiscal/summary', { token: a.accessToken });
+    h.expect(own.res.status).toBe(200);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/fiscal/day-summary',
+  name: "shop B's branch has no day summary for the caller",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const query = `branch_id=${SHOP_B_BR1}&date=2026-10-12`;
+    const foreign = await h.call('GET', '/api/fiscal/day-summary', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      query,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const other = await h.call('GET', '/api/fiscal/day-summary', { token: a.accessToken, query });
+    h.expect(other.res.status).toBe(403);
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/fiscal/retry-many',
+  name: "another shop's receipts are skipped, never retried",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = { ids: [T02_UNKNOWN_ID] };
+    const foreign = await h.call('POST', '/api/fiscal/retry-many', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const own = await h.call('POST', '/api/fiscal/retry-many', { token: a.accessToken, body });
+    h.expect(own.res.status).toBe(200);
+    h.expect(own.res.body).toEqual({
+      done: 0,
+      skipped: [{ id: T02_UNKNOWN_ID, reason: 'FISCAL_NOT_FOUND' }],
+    });
+    for (const call of [foreign, own]) {
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+  },
+});
+
 crossShopCase({
   method: 'GET',
   path: '/api/devices',

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.40.0
+
+- T03 ETA monitor and corrections: FiscalSituation, FiscalSituationFilter, FiscalDeadlineState, FiscalAction, FiscalListQuery, FiscalListItem, FiscalList, FiscalAlertSummary, FiscalDaySummaryQuery, FiscalDaySummary, FiscalFix, FiscalSellerField, FiscalEtaError, FiscalProblem, FiscalDiagnosis, FiscalEvent, FiscalDetails, FiscalAssignDeviceBody, FiscalQueued, FiscalRetryManyBody, FiscalRetryManyResult, FISCAL_RETRY_MANY_MAX. Error codes USE_CORRECTION, NOT_REJECTED, CORRECTION_QUEUED, CORRECTION_CONFLICT, NOT_BLOCKED_NO_DEVICE, NOT_SUBMITTED (409), DEVICE_INVALID_FOR_RECEIPT (400).
+
 ## 0.39.0
 
 - O03 POS devices: DeviceCreateBody, DeviceCreated, DeviceUpdateBody, DeviceActiveBody (turning a device off needs a reason), DeviceActiveResult, DevicePairingCode (the code is answered once), DeviceUnpaired, DevicePairBody, DevicePaired (the device token is answered once), CurrentDevice, CurrentDeviceResponse, DEVICE_TOKEN_HEADER, PAIRING_CODE_ALPHABET, PAIRING_CODE_LENGTH, PAIRING_CODE_TTL_MINUTES, DEVICE_NAME_MAX. Device gains `paired`, `paired_at`, `last_seen_at`. Error codes DEVICE_REQUIRED, DEVICE_HAS_OPEN_SHIFT, DEVICE_NAME_TAKEN, DEVICE_BRANCH_MISMATCH, DEVICE_MISMATCH (409), DEVICE_REVOKED (403), PAIRING_CODE_INVALID (400).

@@ -408,15 +408,20 @@ SELECT t.error('retry: a receipt that is submitted is not retryable',format('SEL
 SELECT t.error('retry: nor an accepted one',format('SELECT public.retry_fiscal_submission(%L)',t.fid('s1')),'FISCAL_NOT_RETRYABLE');
 SELECT t.error('retry: an unknown id','SELECT public.retry_fiscal_submission(''00000000-0000-4000-8000-000000000000'')','FISCAL_NOT_FOUND');
 SELECT t.expect('retry: a blocked receipt goes back to pending',public.retry_fiscal_submission(t.fid('nodev'))=jsonb_build_object('id',t.fid('nodev'),'status','pending'));
-SELECT t.expect('retry: a rejected receipt goes back to pending with its UUID',public.retry_fiscal_submission(t.fid('s2'))->>'status'='pending');
+-- T03: a rejected receipt is never resent as it is; it is corrected (t03_eta_monitor_test.sql).
+SELECT t.error('retry: a rejected receipt is refused with USE_CORRECTION',format('SELECT public.retry_fiscal_submission(%L)',t.fid('s2')),'USE_CORRECTION');
 RESET ROLE;
+SELECT t.expect('retry: the refused rejected receipt is unchanged',
+  (SELECT f.status='rejected' AND f.eta_uuid=t.u('2') AND f.attempts=1 FROM t.fiscal('s2') f));
+-- The rest of this file goes on with s2 pending with its UUID, as a send that failed leaves it.
+UPDATE public.fiscal_submissions SET status='pending', next_retry_at=now() WHERE id=t.fid('s2');
 SELECT t.expect('retry: no UUID -> eta.prepare is queued again (by branch); with a UUID -> eta.submit; both due now',
   (SELECT f.status='pending' AND f.eta_uuid IS NULL AND f.next_retry_at<=now() FROM t.fiscal('nodev') f)
   AND (SELECT f.status='pending' AND f.eta_uuid=t.u('2') AND f.next_retry_at<=now() AND f.attempts=1 FROM t.fiscal('s2') f)
   AND EXISTS(SELECT 1 FROM public.jobs j WHERE j.job_type='eta.prepare' AND j.dedupe_key='eta.prepare:'||t.id('second')::text AND j.status='queued')
   AND EXISTS(SELECT 1 FROM public.jobs j WHERE j.job_type='eta.submit' AND j.dedupe_key='eta.submit:'||t.id('pos1')::text AND j.status='queued' AND j.run_at<=now()));
-SELECT t.expect('retry: one audit row each, with the status it left',
-  (SELECT count(*)=2 AND bool_and(a.after->>'status'='pending' AND a.before->>'status' IN ('failed','rejected') AND a.entity_type='fiscal_submission')
+SELECT t.expect('retry: one audit row for the retried receipt, with the status it left (none for the refused rejected one)',
+  (SELECT count(*)=1 AND bool_and(a.after->>'status'='pending' AND a.before->>'status'='failed' AND a.entity_type='fiscal_submission')
    FROM public.audit_log a WHERE a.organization_id=t.org('a') AND a.action='fiscal.retry_requested'));
 SELECT t.expect('claim: the retried receipt is sent as it is (same UUID, same text), flagged as sent before',
   (SELECT jsonb_array_length(j)=1 AND j->0->>'uuid'=t.u('2') AND j->0->>'receipt_json'='{"n":2}' AND (j->0->>'was_sent')::boolean
@@ -454,7 +459,9 @@ SELECT t.expect('environment: with nothing pending or submitted the switch to pr
 RESET ROLE;
 SELECT t.expect('environment: each POS starts a new chain in prod (no prod receipt yet)',t.tail('pos1') IS NULL);
 SET ROLE authenticated;
-SELECT t.error('retry: a receipt made for preprod is never sent to prod',format('SELECT public.retry_fiscal_submission(%L)',t.fid('s2')),'ETA_ENV_MISMATCH');
+-- T03: the preprod receipt retried here is the blocked one (a rejected receipt is corrected, never retried).
+SELECT t.error('retry: a receipt made for preprod is never sent to prod',format('SELECT public.retry_fiscal_submission(%L)',t.fid('nodev')),'ETA_ENV_MISMATCH');
+SELECT t.error('retry: a rejected preprod receipt is refused with USE_CORRECTION in prod too',format('SELECT public.retry_fiscal_submission(%L)',t.fid('s2')),'USE_CORRECTION');
 SELECT t.sell('s4');
 RESET ROLE;
 SELECT t.expect('environment: a sale made now belongs to prod',(SELECT f.environment='prod' AND f.status='pending' FROM t.fiscal('s4') f));
