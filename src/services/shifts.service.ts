@@ -5,6 +5,7 @@ import {
   ShiftVaultList,
   type ShiftCashBody,
   type ShiftCloseBody,
+  type ShiftForceCloseBody,
   type ShiftListQuery,
   type ShiftOpenBody,
 } from '@ziadkhaled-wb/contracts';
@@ -92,6 +93,21 @@ export async function moveShiftCash(
     p_vault_id: body.vault_id,
     p_note: body.note,
     p_idempotency_key: idempotencyKey,
+  });
+  if (error) fail(error);
+  return Shift.parse(data);
+}
+
+/** EC-147: permission/branch checks and the complete close transaction live in SQL. */
+export async function forceCloseShift(
+  ctx: RequestContext,
+  id: string,
+  body: ShiftForceCloseBody,
+): Promise<Shift> {
+  const { data, error } = await ctx.db.rpc('force_close_shift', {
+    p_shift_id: id,
+    p_counted_cash: body.counted_cash,
+    p_reason: body.reason,
   });
   if (error) fail(error);
   return Shift.parse(data);

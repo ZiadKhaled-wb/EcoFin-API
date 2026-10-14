@@ -107,6 +107,7 @@ INSERT INTO public.employee_branches(organization_id,employee_id,branch_id)
   SELECT t.org('a'),e.id,t.id('main') FROM public.employees e WHERE e.auth_user_id='a9020000-0000-0000-8000-000000000003';
 
 SELECT t.as_user('a9020000-0000-0000-8000-000000000001',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a9020000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.ids VALUES('tv',public.create_product('{"name_ar":"تلفزيون","name_en":"TV","sku":"T2-TV","cash_price":"1140","eta_item_code":"EG-674859545-TV","eta_item_type":"EGS"}'));
 SELECT public.post_stock_adjustment(t.id('main'),'found',NULL,t.lines(jsonb_build_object('product_id',t.id('tv'),'quantity',40)),'t02-found');
@@ -259,6 +260,7 @@ SELECT t.expect('secrets: a new secret replaces the old one under the same vault
 
 -- ---------------------------------------------------------------- 4. permissions
 SELECT t.as_user('a9020000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a9020000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('permissions: set_eta_settings without org.settings_manage','SELECT public.set_eta_settings(''preprod'',''x'',NULL,NULL,false)','PERMISSION_DENIED');
 SELECT t.error('permissions: get_eta_settings without org.settings_manage','SELECT public.get_eta_settings()','PERMISSION_DENIED');
@@ -267,6 +269,7 @@ SELECT t.error('permissions: list_devices with neither device.manage nor org.set
 SELECT t.error('permissions: retry_fiscal_submission without fiscal.retry',format('SELECT public.retry_fiscal_submission(%L)',t.fid('s1')),'PERMISSION_DENIED');
 RESET ROLE;
 SELECT t.as_user('a9020000-0000-0000-8000-000000000002',t.org('b'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('b') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a9020000-0000-0000-8000-000000000002') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('permissions: shop B''s owner can''t retry shop A''s receipt',format('SELECT public.retry_fiscal_submission(%L)',t.fid('s1')),'FISCAL_NOT_FOUND');
 SELECT t.error('permissions: shop B''s owner can''t register shop A''s device',format('SELECT public.set_device_eta(%L,''S'',''os'',''1'',NULL,''pending'')',t.id('pos1')),'DEVICE_NOT_FOUND');
@@ -274,6 +277,7 @@ SELECT t.expect('permissions: shop B''s owner sees only shop B''s device and no 
   (SELECT jsonb_array_length(public.list_devices())=1) AND (SELECT count(*)=0 FROM public.fiscal_submissions));
 RESET ROLE;
 SELECT t.as_user('a9020000-0000-0000-8000-000000000001',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a9020000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 
 -- ---------------------------------------------------------------- the worker's view of what is pending
 SELECT t.expect('load: the pending receipts of the POS, oldest first, with the chain tail and everything a receipt needs',

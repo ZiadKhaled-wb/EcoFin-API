@@ -71,6 +71,7 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/shifts': { action: 'shift.opened' },
   'POST /api/shifts/:id/cash': { action: 'shift.cash_moved' },
   'POST /api/shifts/:id/close': { action: 'shift.closed' },
+  'POST /api/shifts/:id/force-close': { action: 'shift.force_closed' },
   'POST /api/stock/adjustments': { action: 'stock_adjustment.posted' },
   'POST /api/stock/movements/export': { action: 'stock_movements.exported' },
   'PUT /api/stock/min-levels/:id': { action: 'stock.min_level_set' },

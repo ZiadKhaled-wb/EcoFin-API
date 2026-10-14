@@ -138,6 +138,7 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA t TO authenticated;
 
 -- Shop a: products (one with an ETA item code, one without), stock, ETA on, branch data, one open shift on POS 1.
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.ids VALUES('tv',public.create_product('{"name_ar":"تلفزيون","name_en":"TV","sku":"T3-TV","cash_price":"1140","eta_item_code":"EG-674859545-TV","eta_item_type":"EGS"}'));
 INSERT INTO t.ids VALUES('nocode',public.create_product('{"name_ar":"مروحة","name_en":"Fan","sku":"T3-FAN","cash_price":"1140"}'));
@@ -156,10 +157,12 @@ INSERT INTO t.ids SELECT CASE name WHEN 'POS S' THEN 'poss' ELSE 'possoff' END,i
 UPDATE public.devices SET eta_status='active',eta_serial='POS-S1' WHERE id=t.id('poss');
 -- Shops b and c: ETA on, branch data.
 SELECT t.owner_b();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('b') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000002') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT public.set_eta_settings('preprod','client-b','secret-b-1','4753',true);
 RESET ROLE;
 SELECT t.owner_c();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('c') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT public.update_branch(t.id('cmain'),'Main','1 St','Giza','Giza',NULL,'0',
   (SELECT default_cash_account_id FROM public.branches WHERE id=t.id('cmain')),'1');
@@ -171,6 +174,7 @@ RESET ROLE;
 -- Real sales (the owner's shift on POS 1) and sales made as the database owner, each pushed to its state
 -- by T02's functions; a state no function makes is forced.
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.sell('r_ok');          -- accepted
 SELECT t.sell('r_nc','nocode'); -- blocked: no item code
@@ -198,6 +202,7 @@ SELECT t.expect('situations: one row per situation, each classified right',
   AND t.sit('r_nc')='blocked' AND t.sit('snd')='send_failed' AND t.sit('r_rej')='rejected',
   concat_ws(',',t.sit('w'),t.sit('sub'),t.sit('r_ok'),t.sit('can'),t.sit('r_nc'),t.sit('snd'),t.sit('r_rej')));
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('situations: the list says the same, with the branch, the device and a short error',
   (SELECT count(*)=3 AND bool_and(i->>'branch_name'='Main' AND i->>'device_name'='POS 1' AND length(coalesce(i->>'short_error',''))<=120)
@@ -222,6 +227,7 @@ SELECT t.mksale('a','dlc95','main','pos1',1140,interval '95 hours');
 SELECT t.mksale('a','dlc97','main','pos1',1140,interval '97 hours');
 UPDATE public.fiscal_submissions SET reference_old_uuid=t.u('e') WHERE id IN (t.fid('dlc25'),t.fid('dlc95'),t.fid('dlc97'));
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('deadline: a first submission: ok at 19 h, due soon at 21 h and 23 h (under 4 h left), overdue at 25 h',
   t.dg('dl19')->>'deadline_state'='ok' AND t.dg('dl21')->>'deadline_state'='due_soon'
@@ -242,6 +248,7 @@ SELECT t.mksale('a','rjold','main','pos1',1140,interval '97 hours');
 SELECT t.prep('rjold','6','5');
 SELECT t.reject('rjold','ETA_INVALID: old');
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('deadline: a rejected receipt 97 h after issue is overdue',t.dg('rjold')->>'deadline_state'='overdue');
 SELECT t.expect('sort: every overdue row comes before every due-soon row, and those before the rest',
@@ -256,6 +263,7 @@ RESET ROLE;
 
 -- ---------------------------------------------------------------- 3. decision 1: no plain retry of a rejected receipt
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('retry: a rejected receipt is USE_CORRECTION',format('SELECT public.retry_fiscal_submission(%L)',t.fid('r_rej')),'USE_CORRECTION');
 SELECT t.expect('retry: a blocked receipt still goes back to pending (prepare queued)',
@@ -273,6 +281,7 @@ UPDATE public.fiscal_submissions SET status='failed',last_error='ETA_UNREACHABLE
 
 -- ---------------------------------------------------------------- 4. request a correction
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('request: a receipt that is not rejected is NOT_REJECTED',format('SELECT public.fiscal_request_correction(%L)',t.fid('w')),'NOT_REJECTED');
 SELECT t.error('request: nor a blocked one',format('SELECT public.fiscal_request_correction(%L)',t.fid('r_nc')),'NOT_REJECTED');
@@ -285,6 +294,7 @@ SELECT t.expect('request: exactly one job, keyed by the row, carrying the UUID t
      AND j.payload->>'expected_old_uuid'=t.u('6') AND j.status='queued') FROM public.jobs j WHERE j.job_type='eta.correct' AND j.organization_id=t.org('a'))
   AND t.audits('a','fiscal.correction_requested')=1);
 SELECT t.cashier();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000004') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('request: without fiscal.retry -> PERMISSION_DENIED',format('SELECT public.fiscal_request_correction(%L)',t.fid('r_rej')),'PERMISSION_DENIED');
 SELECT t.error('request: nor can that user assign a device',format('SELECT public.fiscal_assign_device(%L,%L)',t.fid('r_nc'),t.id('pos1')),'PERMISSION_DENIED');
@@ -298,6 +308,7 @@ SELECT t.error('request: ... day summary',format('SELECT public.fiscal_day_summa
 SELECT t.error('request: nor check now',format('SELECT public.fiscal_check_now(%L)',t.fid('sub')),'PERMISSION_DENIED');
 RESET ROLE;
 SELECT t.owner_b();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('b') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000002') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('request: another shop''s row -> FISCAL_NOT_FOUND',format('SELECT public.fiscal_request_correction(%L)',t.fid('r_rej')),'FISCAL_NOT_FOUND');
 SELECT t.error('request: ... details',format('SELECT public.fiscal_details(%L)',t.fid('r_rej')),'FISCAL_NOT_FOUND');
@@ -397,11 +408,13 @@ SELECT t.expect('events: nothing in the log is a payload (no column of that name
   NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='fiscal_events' AND column_name='payload')
   AND NOT EXISTS(SELECT 1 FROM public.fiscal_events e WHERE row_to_json(e)::text LIKE '%receipt_json%'));
 SELECT t.cashier();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000004') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('events: a user without fiscal.view sees no events',(SELECT count(*) FROM public.fiscal_events)=0);
 SELECT t.state('events: and can''t write one','INSERT INTO public.fiscal_events(organization_id,fiscal_id,new_status) SELECT organization_id,id,status FROM public.fiscal_submissions LIMIT 1','42501');
 RESET ROLE;
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('events: a user with fiscal.view reads their own shop''s events, in the details oldest first',
   (SELECT count(*)>0 FROM public.fiscal_events)
@@ -415,6 +428,7 @@ SELECT t.expect('events: the details show every UUID the corrected receipt ever 
   AND public.fiscal_details(t.fid('o1'))::text NOT LIKE '%receipt_json%');
 RESET ROLE;
 SELECT t.owner_b();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('b') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000002') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('events: another shop sees none of them',(SELECT count(*) FROM public.fiscal_events)=0);
 RESET ROLE;
@@ -425,6 +439,7 @@ SELECT t.block('nodev','BLOCKED:NO_DEVICE');
 SELECT t.mksale('a','nodev2','second',NULL,1140);
 SELECT t.block('nodev2','BLOCKED:NO_DEVICE');
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('assign: a blocked NO_DEVICE row is diagnosed as NO_DEVICE with the assign-device action, ready',
   t.has(t.dg('nodev'),'NO_DEVICE') AND t.dg('nodev')->>'action'='assign_device' AND (t.dg('nodev')->>'ready')::boolean);
@@ -454,6 +469,7 @@ SELECT t.expect('assign: T02''s prepare loader takes the device from the fiscal 
 
 -- ---------------------------------------------------------------- 8. diagnosis
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('diagnosis: ITEM_CODE lists the product without a code, with its id and name, and the product page as the fix; not ready',
   (SELECT p->>'fix'='product' AND p->'products'->0->>'product_id'=t.id('nocode')::text AND p->'products'->0->>'name'='مروحة'
@@ -462,6 +478,7 @@ SELECT t.expect('diagnosis: ITEM_CODE lists the product without a code, with its
 RESET ROLE;
 UPDATE public.products SET eta_item_code='EG-674859545-FAN',eta_item_type='EGS' WHERE id=t.id('nocode');
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('diagnosis: after the product is fixed ITEM_CODE is gone and the receipt is ready to retry',
   NOT t.has(t.dg('r_nc'),'ITEM_CODE') AND (t.dg('r_nc')->>'ready')::boolean);
@@ -469,6 +486,7 @@ RESET ROLE;
 UPDATE public.products SET eta_item_code=NULL WHERE id=t.id('nocode');
 SELECT t.expect('diagnosis: ... and back when the code is removed again (computed live)',t.has(t.dg('r_nc'),'ITEM_CODE'));
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('diagnosis: ETA_REJECTED carries the ETA''s error text for a rejected receipt; nothing else is wrong with it',
   (SELECT p->>'last_error' LIKE 'ETA_INVALID: CV307 itemData[0].itemCode%' FROM jsonb_array_elements(t.dg('r_rej')->'problems') p WHERE p->>'code'='ETA_REJECTED')
@@ -478,6 +496,7 @@ RESET ROLE;
 SELECT t.mksale('a','sel','second','poss',1140);
 SELECT t.block('sel','BLOCKED:SELLER_DATA');
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('diagnosis: SELLER_DATA names the missing fields and the page that fixes them (the branch)',
   (SELECT p->>'fix'='branch' AND p->>'branch_id'=t.id('second')::text
@@ -492,6 +511,7 @@ SELECT t.expect('diagnosis: after the branch is fixed SELLER_DATA is gone and th
 RESET ROLE;
 UPDATE public.eta_settings SET activity_code=NULL WHERE organization_id=t.org('a');
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('diagnosis: a missing activity code points at the ETA settings',
   (SELECT p->>'fix'='eta_settings' AND p->'fields'->0->>'field'='activity_code' FROM jsonb_array_elements(t.dg('sel')->'problems') p WHERE p->>'code'='SELLER_DATA'));
@@ -505,6 +525,7 @@ SELECT t.mksale('a','small','main','pos1',149999.99);
 SELECT t.block('big','BLOCKED:BUYER_ID');
 SELECT t.block('big2','BLOCKED:BUYER_ID');
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('diagnosis: BUYER_ID: 150,000 and a customer without a national ID -> the customer page, with customer_id; not ready',
   (SELECT p->>'fix'='customer' AND p->>'customer_id'='a9031000-0000-0000-8000-0000000000c1' FROM jsonb_array_elements(t.dg('big')->'problems') p WHERE p->>'code'='BUYER_ID')
@@ -515,6 +536,7 @@ SELECT t.expect('diagnosis: BUYER_MISSING: no customer at 150,000 is not fixable
 RESET ROLE;
 UPDATE public.customers SET national_id='29001010100015' WHERE id='a9031000-0000-0000-8000-0000000000c1';
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('diagnosis: after the national ID is set BUYER_ID is gone and the receipt is ready',
   NOT t.has(t.dg('big'),'BUYER_ID') AND (t.dg('big')->>'ready')::boolean);
@@ -524,6 +546,7 @@ SELECT t.expect('diagnosis: no national ID in any answer (diagnosis, details, li
 RESET ROLE;
 UPDATE public.customers SET national_id=NULL,is_business=true,tax_registration_no='674859545' WHERE id='a9031000-0000-0000-8000-0000000000c1';
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('diagnosis: a business buyer with the shop''s own tax number is BUYER_ID too',t.has(t.dg('big'),'BUYER_ID'));
 RESET ROLE;
@@ -533,6 +556,7 @@ SELECT t.expect('diagnosis: under 150,000 a missing buyer is no problem (the row
 SELECT t.mksale('a','offdev','main','posoff',1140);
 SELECT t.block('offdev','BLOCKED:NO_DEVICE');
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('diagnosis: a POS that is not active with the ETA is NO_DEVICE too (fix: the device), not ready',
   (SELECT p->>'fix'='device' AND p->>'reason'='not_active' FROM jsonb_array_elements(t.dg('offdev')->'problems') p WHERE p->>'code'='NO_DEVICE')
@@ -555,11 +579,13 @@ SELECT t.expect('check now: one eta.poll job keyed by the submission, run now',
 -- ---------------------------------------------------------------- 9. retry many
 SELECT t.mksale('b','bone','bmain','bpos',1140);
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 -- r_nc: fix the product first.
 RESET ROLE;
 UPDATE public.products SET eta_item_code='EG-674859545-FAN',eta_item_type='EGS' WHERE id=t.id('nocode');
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 CREATE TEMP TABLE rm AS SELECT public.fiscal_retry_many(ARRAY[t.fid('r_nc'),t.fid('snd'),t.fid('r_rej'),t.fid('big2'),t.fid('r_ok'),t.fid('rjold'),
         t.fid('bone'),t.fid('r_nc')]) j;
@@ -579,6 +605,7 @@ SELECT t.expect('retry many: blocked -> pending (prepare), send_failed -> pendin
   AND EXISTS(SELECT 1 FROM public.jobs j WHERE j.job_type='eta.correct' AND j.dedupe_key='eta.correct:'||t.fid('r_rej')::text AND j.status='queued')
   AND t.audits('a','fiscal.retry_many')=1);
 SELECT t.owner_a();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('a') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('retry many: 201 ids are refused',
   format('SELECT public.fiscal_retry_many((SELECT array_agg(%L::uuid) FROM generate_series(1,201)))',t.fid('r_ok')),'VALIDATION_FAILED');
@@ -608,6 +635,7 @@ SELECT public.eta_mark(t.fid('c_acc'),'submitted','{"eta_submission_uuid":"SUBC"
 SELECT public.eta_mark(t.fid('c_acc'),'accepted');
 UPDATE public.fiscal_submissions SET status='cancelled' WHERE id=t.fid('c_can');
 SELECT t.owner_c();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('c') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('list: the order is overdue, due soon, problems newest first, then the rest',
   (SELECT string_agg(i->>'sale_number',',' ORDER BY ord) FROM jsonb_array_elements(public.fiscal_list(NULL,NULL,NULL,NULL,NULL,100)) WITH ORDINALITY x(i,ord))
@@ -631,6 +659,7 @@ SELECT t.expect('summary: the alert counts of the whole shop',
   public.fiscal_alert_summary()::text);
 RESET ROLE;
 SELECT t.acct_c();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('c') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000006') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('summary: a user of the main branch only counts what they can see (the blocked row of the second branch is not theirs)',
   public.fiscal_alert_summary()=jsonb_build_object('blocked',1,'send_failed',1,'rejected',1,'due_soon',1,'overdue',1,'accepted_today',1),
@@ -655,6 +684,7 @@ SELECT public.eta_mark(t.fid('y2'),'submitted','{"eta_submission_uuid":"SUBY"}')
 SELECT public.eta_mark(t.fid('y2'),'accepted');
 UPDATE public.fiscal_submissions SET status='cancelled' WHERE id=t.fid('y3');
 SELECT t.owner_c();
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id WHERE s.organization_id=t.org('c') AND s.status='open' AND s.device_id IS NOT NULL ORDER BY (e.auth_user_id::text='a9031000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('day summary: counts per situation for the branch and day; today is not all accepted',
   public.fiscal_day_summary(t.id('cmain'),current_date)->>'total'='7'

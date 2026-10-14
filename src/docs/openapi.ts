@@ -2036,7 +2036,7 @@ export const openApiSpec = {
             post: {
                 tags: ['Devices'],
                 summary: 'Unpair a POS device (device.manage)',
-                description: 'O03 (D69). The token of the device and any unused pairing code stop working: its computer answers DEVICE_REVOKED from the next request. A shift open on the device stays open and can be closed. Audited as device.unpaired. Schema: DeviceUnpaired.',
+                description: 'O03 (D69). The token of the device and any unused pairing code stop working: its computer answers DEVICE_REVOKED from the next request. A shift open on the device stays open; a manager closes it with force-close (cash.adjust). Audited as device.unpaired. Schema: DeviceUnpaired.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
                 responses: { 200: { description: 'DeviceUnpaired' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
@@ -2127,6 +2127,16 @@ export const openApiSpec = {
                     { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
                 ],
                 responses: { 200: { description: 'Shift' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/shifts/{id}/force-close': {
+            post: {
+                tags: ['Cash'],
+                summary: 'Force-close a shift (cash.adjust)',
+                description: 'EC-147. Body: counted_cash (nonnegative decimal string), reason (3–500 characters). Branch access is required. Device state is ignored; counted cash returns to the branch default safe. Uses the shared K02 close transaction, audited as shift.force_closed (warning). Repeating a closed shift changes nothing. Schema: ShiftForceCloseBody → Shift.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { '200': { description: 'Closed shift' }, '400': { description: 'Invalid count or missing reason' }, '403': { description: 'Permission or branch denied' }, '404': { description: 'Shift not found' } },
             },
         },
         '/api/shifts/{id}/close': {

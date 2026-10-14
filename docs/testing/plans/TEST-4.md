@@ -32,7 +32,7 @@ Tests and tooling only; application code and dependency versions are unchanged. 
 | TEST4-16 | other shop account | SQL | supabase/tests/sales_atomicity_test.sql | validated locally |
 | TEST4-17 | other branch account | SQL | supabase/tests/sales_atomicity_test.sql | validated locally |
 | TEST4-18 | line 2 serial already sold | SQL | supabase/tests/sales_atomicity_test.sql | validated locally |
-| TEST4-19 | TEST4-B1 revoked direct device still accepted (known failure) | SQL | supabase/tests/sales_atomicity_test.sql | validated locally (known failure) |
+| TEST4-19 | TEST4-B1 revoked direct device rejected (fixed by EC-147) | SQL | supabase/tests/sales_atomicity_test.sql | validated locally; EC-147 rejection and snapshot pass |
 | TEST4-20 | void fails at final audit insert | SQL | supabase/tests/sales_atomicity_test.sql | validated locally |
 | TEST4-21 | replacement fails at final audit insert | SQL | supabase/tests/sales_atomicity_test.sql | validated locally |
 | TEST4-22 | shift closed after cart built | SQL | supabase/tests/sales_atomicity_test.sql | validated locally |
@@ -107,7 +107,7 @@ Web CI checks out API main. While API PR #75 is unmerged and main lacks the TEST
 
 | ID | Test | Problem | Proposed Jira title |
 |---|---|---|---|
-| TEST4-B1 | supabase/tests/sales_atomicity_test.sql:46, revoked direct device | Authenticated post_sale accepts a revoked pairing token when called directly; API device middleware cannot protect this path. The known-bug block rolls the successful sale back and raises if behavior changes. | Reject revoked POS devices in direct sale RPC calls |
+No remaining known failures. TEST4-B1 was fixed by EC-147: the direct sale returns DEVICE_REVOKED with an identical snapshot.
 
 ## Full local CI results
 
@@ -122,7 +122,7 @@ API full local CI passed on 14 October 2026: check, db and integration. All 50 S
 | Web unit | 649 tests / 78 files | 649 tests / 78 files |
 | Web e2e | 41 tests / 10 files | 43 passed / 11 files, two workers |
 
-Before counts are derived from the unchanged baseline plus added-test deltas. The original after counts came from full runs; following the unauthorized-price correction, only the affected SQL and sales integration files were rerun, and the aggregate SQL count includes that assertion delta. Unit/integration skips in the default unit job are enabled by RUN_INTEGRATION=1 in the separate job. SQL retains only the revoked-device known-bug block (TEST4-B1). Unauthorized client prices are intentionally rejected; TEST4-06 and TEST4-34 are ordinary rejection tests with unchanged-state assertions, not known failures. Web typecheck, lint, format and build passed. All 649 unit tests passed with two workers; the default local run had worker-startup timeouts, so CI now uses the same bounded worker count. All 43 browser tests passed on a fresh local stack in 3.9 minutes; the two new complete language sales took 12.9 and 11.2 seconds in their targeted validation. INT-4 verification passed 11 database/fake-ETA checks, and all ledgers reconciled. No browser test is skipped or marked as an expected failure.
+Before counts are derived from the unchanged baseline plus added-test deltas. The original after counts came from full runs; following the unauthorized-price correction, only the affected SQL and sales integration files were rerun, and the aggregate SQL count includes that assertion delta. Unit/integration skips in the default unit job are enabled by RUN_INTEGRATION=1 in the separate job. EC-147 subsequently converted TEST4-B1 into a passing rejection and snapshot test. Unauthorized client prices are intentionally rejected; TEST4-06 and TEST4-34 are ordinary rejection tests with unchanged-state assertions, not known failures. Web typecheck, lint, format and build passed. All 649 unit tests passed with two workers; the default local run had worker-startup timeouts, so CI now uses the same bounded worker count. All 43 browser tests passed on a fresh local stack in 3.9 minutes; the two new complete language sales took 12.9 and 11.2 seconds in their targeted validation. INT-4 verification passed 11 database/fake-ETA checks, and all ledgers reconciled. No browser test is skipped or marked as an expected failure.
 
 ## Changed API files
 
@@ -165,4 +165,4 @@ API PR: https://github.com/ZiadKhaled-wb/EcoFin-API/pull/75. Branch: test/test-4
 
 ## Unauthorized client price correction
 
-TEST4-06 asserts PRICE_OVERRIDE_DENIED and an identical complete SQL snapshot. TEST4-34 asserts HTTP 403 PRICE_OVERRIDE_DENIED, identical rows across 15 sales/ledger/counter/cache/unit tables, and no sale for the request key. Both are ordinary passing rejection tests. Only TEST4-B1 remains a known failure. Targeted validation: sales_atomicity_test.sql, 34 assertions; sales.integration.test.ts, 3 tests; typecheck and lint.
+TEST4-06 asserts PRICE_OVERRIDE_DENIED and an identical complete SQL snapshot. TEST4-34 asserts HTTP 403 PRICE_OVERRIDE_DENIED, identical rows across 15 sales/ledger/counter/cache/unit tables, and no sale for the request key. Both are ordinary passing rejection tests. EC-147 subsequently fixed TEST4-B1; no known-failure markers remain. Targeted validation: sales_atomicity_test.sql, 34 assertions; sales.integration.test.ts, 3 tests; typecheck and lint.

@@ -43,20 +43,10 @@ GRANT SELECT ON t.device_before TO authenticated;
 UPDATE public.devices SET token_hash=NULL WHERE id=(SELECT id FROM t.device_before);
 SET ROLE authenticated;
 
--- BUG TEST4-B1: a direct authenticated post_sale accepts a revoked device after quote.
--- KNOWN BUG: must fail visibly if the vulnerability is fixed; successful writes are rolled back.
-DO $$
-DECLARE before jsonb := t.snapshot(t.org('a')); result jsonb;
-BEGIN
-  BEGIN
-    result := public.post_sale(t.lines(t.items('chair',1),t.items('sofa',1),t.items('third',1)),'680.00','test4-revoked-known-bug');
-    IF result->>'id' IS NULL OR t.snapshot(t.org('a'))=before THEN RAISE EXCEPTION 'unexpected result'; END IF;
-    RAISE EXCEPTION 'TEST4_EXPECTED_BUG';
-  EXCEPTION WHEN others THEN
-    IF SQLERRM<>'TEST4_EXPECTED_BUG' THEN RAISE EXCEPTION 'TEST4-B1 changed behavior: %',SQLERRM; END IF;
-  END;
-  PERFORM t.expect('TEST4-B1 revoked direct device still accepted (known failure)',t.snapshot(t.org('a'))=before);
-END $$;
+-- TEST4-B1 / EC-147: revocation refuses the direct DB sale without changing any state.
+SELECT t.unchanged('TEST4-B1 revoked direct device rejected',
+  t.sell(t.lines(t.items('chair',1),t.items('sofa',1),t.items('third',1)),'680.00',NULL,NULL,'test4-revoked-device'),
+  'DEVICE_REVOKED');
 RESET ROLE;
 UPDATE public.devices SET token_hash=(SELECT token_hash FROM t.device_before) WHERE id=(SELECT id FROM t.device_before);
 SET ROLE authenticated;
@@ -71,6 +61,7 @@ END $$;
 CREATE TRIGGER test4_fail_late BEFORE INSERT ON public.audit_log FOR EACH ROW EXECUTE FUNCTION t.fail_late();
 SELECT t.as_user('a7050000-0000-0000-8000-000000000001',t.org('a'));
 SET ROLE authenticated;
+SELECT t.pos(t.id('main'),(SELECT id FROM t.device_before));
 SELECT t.unchanged('void fails at final audit insert',format('SELECT public.void_sale(%L,%L,%L)',t.doc('serialsale')->>'id','TEST4 void','test4-late-void'),'TEST4_LATE_FAILURE');
 INSERT INTO t.docs SELECT 'claim',public.open_warranty_claim((t.doc('serialsale')->'lines'->0->>'id')::uuid,t.id('unit'),'Failed screen','Clean case','test4-late-claim');
 SELECT t.unchanged('replacement fails at final audit insert',format('SELECT public.move_warranty_claim(%L,%L,%L,%L)',t.doc('claim')->>'claim_id','replaced','TEST4 replacement',t.id('otherunit')),'TEST4_LATE_FAILURE');

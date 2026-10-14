@@ -176,6 +176,7 @@ SELECT t.expect('setup: 10 chairs and 3 phones in main, costs 100 and 3 000',
 
 -- ---------------------------------------------------------------- no shift, then a shift
 SELECT t.as_user('a7040000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s WHERE s.id=t.id('shift') AND s.status='open';
 SET ROLE authenticated;
 SELECT t.error('no open shift: no sale',t.sell(t.lines(t.chairs(1)),'250.00'),'SHIFT_REQUIRED');
 SELECT t.error('no open shift: no quote',format('SELECT public.quote_sale(%L)',t.lines(t.chairs(1))),'SHIFT_REQUIRED');
@@ -233,6 +234,7 @@ SELECT t.expect('footprint after one sale',t.footprint()='1/2/2/1/1/1/4/1',t.foo
 
 -- ---------------------------------------------------------------- Done when: a double submit makes one sale
 SELECT t.as_user('a7040000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s WHERE s.id=t.id('shift') AND s.status='open';
 SET ROLE authenticated;
 SELECT t.expect('Done when: the same key again answers the same sale',
   (public.post_sale(t.lines(t.chairs(2),t.phone('S1-IMEI-1')),'5500.00','s01-sale-0001')->>'id')=t.id('s1')::text);
@@ -256,6 +258,7 @@ RESET ROLE;
 UPDATE public.products SET cash_price=250 WHERE id=t.id('chair');
 -- A manager may override: sold at 200, listed in a warning audit row.
 SELECT t.as_user('a7040000-0000-0000-8000-000000000007',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s WHERE s.id=t.id('shift_mgr') AND s.status='open';
 SET ROLE authenticated;
 INSERT INTO t.ids SELECT 'shift_mgr',(t.open_shift(t.id('main'),'0','s01-shift-manager')->>'id')::uuid;
 SELECT t.expect('the manager''s quote shows the override',
@@ -272,6 +275,7 @@ SELECT t.expect('override: sold at 200.00 with the tax of 200.00, audited as a w
 -- ---------------------------------------------------------------- VAT added on top of the price
 UPDATE public.org_settings SET prices_include_vat=false WHERE organization_id=t.org('a');
 SELECT t.as_user('a7040000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s WHERE s.id=t.id('shift') AND s.status='open';
 SET ROLE authenticated;
 INSERT INTO t.docs SELECT 's4',public.post_sale(t.lines(t.chairs(1),t.phone('S1-IMEI-2')),'5985.00','s01-sale-0004','a7040000-0000-0000-8000-0000000000c1');
 SELECT t.expect('VAT on top: subtotal 5 250.00 + tax 735.00 = 5 985.00, snapshot on the sale; the customer is named',
@@ -281,6 +285,7 @@ SELECT t.expect('VAT on top: subtotal 5 250.00 + tax 735.00 = 5 985.00, snapshot
 RESET ROLE;
 UPDATE public.org_settings SET prices_include_vat=true WHERE organization_id=t.org('a');
 SELECT t.as_user('a7040000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s WHERE s.id=t.id('shift') AND s.status='open';
 SET ROLE authenticated;
 SELECT t.expect('an old sale keeps its own VAT mode after the setting changes',
   (public.get_sale((t.doc('s4')->>'id')::uuid)->>'total')='5985.00' AND (public.get_sale((t.doc('s4')->>'id')::uuid)->>'prices_include_vat')='false');
@@ -350,6 +355,7 @@ SELECT t.error('who: an ACCOUNTANT can''t sell',t.sell(t.lines(t.phone('S1-IMEI-
 SELECT t.expect('who: an ACCOUNTANT reads the cashier''s and the manager''s sales',
   (public.get_sale(t.id('s1'))->>'total')='5500.00' AND (public.get_sale(t.id('s3'))->>'total')='200.00');
 SELECT t.as_user('a7040000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s WHERE s.id=t.id('shift') AND s.status='open';
 SELECT t.expect('who: the cashier reads their own sale',(public.get_sale(t.id('s1'))->>'number')=(t.doc('s1')->>'number'));
 SELECT t.error('who: ...and not the manager''s',format('SELECT public.get_sale(%L)',t.id('s3')),'SALE_NOT_FOUND');
 SELECT t.error('an unknown sale',format('SELECT public.get_sale(%L)',gen_random_uuid()),'SALE_NOT_FOUND');
@@ -366,6 +372,7 @@ SELECT t.error('no direct writes to payments',format('INSERT INTO public.payment
 RESET ROLE;
 UPDATE public.organizations SET subscription_start=current_date-60,subscription_end=current_date-30 WHERE id=t.org('a');
 SELECT t.as_user('a7040000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s WHERE s.id=t.id('shift') AND s.status='open';
 SET ROLE authenticated;
 SELECT t.expect('expired shop: a quote and a sale still read',
   (public.quote_sale(t.lines(t.phone('S1-IMEI-3')))->>'total')='5000.00' AND (public.get_sale(t.id('s1'))->>'total')='5500.00');
@@ -374,6 +381,7 @@ RESET ROLE;
 UPDATE public.organizations SET subscription_end=current_date+30 WHERE id=t.org('a');
 -- The cashier closes the shift with what the drawer holds: no more sales on it.
 SELECT t.as_user('a7040000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s WHERE s.id=t.id('shift') AND s.status='open';
 SET ROLE authenticated;
 SELECT t.expect('the shift expects every sale of the cashier: 5 500 + 250 + 5 985 + 1 250',t.expected('shift')='12985.00',t.expected('shift'));
 SELECT public.close_shift(t.id('shift'),'{"200":64,"100":1,"50":1,"20":1,"10":1,"5":1}',t.id('safe'));
@@ -383,6 +391,7 @@ RESET ROLE;
 INSERT INTO public.day_closes(organization_id,branch_id,business_date,closed_by)
 SELECT t.org('a'),t.id('main'),app.org_today(t.org('a')),t.id('mgr');
 SELECT t.as_user('a7040000-0000-0000-8000-000000000007',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s WHERE s.id=t.id('shift_mgr') AND s.status='open';
 SET ROLE authenticated;
 SELECT t.error('closed day: no sale',t.sell(t.lines(t.phone('S1-IMEI-3')),'5000.00'),'DAY_CLOSED');
 RESET ROLE;

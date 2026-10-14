@@ -501,13 +501,13 @@ describe.skipIf(!RUN)('O03 POS devices against local stack and a fake ETA', () =
     expect(done.status).toBe('accepted');
     expect(fake.received.get(done.eta_uuid ?? '')).toBe(1);
 
-    // A sale from a computer that sends no token still belongs to the shift's device.
+    // A valid shift token proves the device; a hand-made device id remains ignored.
     const plain = await call(
       'post',
       '/api/sales',
       cashier,
       { lines: [{ product_id: tv, quantity: 1 }], expected_total: '1140.00' },
-      { key: `o03-it-sale-2-${STAMP}`, deviceId: pos2 },
+      { key: `o03-it-sale-2-${STAMP}`, pos: token, deviceId: pos2 },
     );
     expect(plain.status, JSON.stringify(plain.body)).toBe(201);
     const second = await service

@@ -2775,7 +2775,7 @@ async function openShiftOf(h: CrossShopHarness, email: string, branchId: string)
   );
   const current = await h.call('GET', '/api/shifts/current', { token: who.accessToken });
   const existing = (current.res.body as { shift: { id: string } | null }).shift;
-  if (existing) return { id: existing.id, token: who.accessToken };
+  if (existing) return { id: existing.id, token: who.accessToken, deviceToken: pos.token };
   const opened = await h.call('POST', '/api/shifts', {
     token: who.accessToken,
     idempotencyKey: shiftKey(),
@@ -2783,11 +2783,19 @@ async function openShiftOf(h: CrossShopHarness, email: string, branchId: string)
     body: { branch_id: branchId, opening_float: '0' },
   });
   h.expect(opened.res.status, JSON.stringify(opened.res.body)).toBe(201);
-  return { id: (opened.res.body as { id: string }).id, token: who.accessToken };
+  return {
+    id: (opened.res.body as { id: string }).id,
+    token: who.accessToken,
+    deviceToken: pos.token,
+  };
 }
-async function closeShiftOf(h: CrossShopHarness, shift: { id: string; token: string }) {
+async function closeShiftOf(
+  h: CrossShopHarness,
+  shift: { id: string; token: string; deviceToken: string },
+) {
   const closed = await h.call('POST', `/api/shifts/${shift.id}/close`, {
     token: shift.token,
+    deviceToken: shift.deviceToken,
     body: { counts: {} },
   });
   h.expect(closed.res.status, JSON.stringify(closed.res.body)).toBe(200);
@@ -2950,6 +2958,7 @@ crossShopCase({
     const send = (id: string, orgId?: string) =>
       h.call('POST', `/api/shifts/${id}/cash`, {
         token: mine.token,
+        deviceToken: mine.deviceToken,
         idempotencyKey: shiftKey(),
         body,
         ...(orgId ? { orgId } : {}),
@@ -3278,10 +3287,15 @@ async function shopBSale(h: CrossShopHarness) {
   h.expect(stocked.res.status, JSON.stringify(stocked.res.body)).toBe(201);
   const shift = await openShiftOf(h, OWNER_B, SHOP_B_BR1);
   const lines = [{ product_id: product.id, quantity: 1 }];
-  const quote = await h.call('POST', '/api/sales/quote', { token: shift.token, body: { lines } });
+  const quote = await h.call('POST', '/api/sales/quote', {
+    token: shift.token,
+    deviceToken: shift.deviceToken,
+    body: { lines },
+  });
   h.expect(quote.res.status, JSON.stringify(quote.res.body)).toBe(200);
   const sold = await h.call('POST', '/api/sales', {
     token: shift.token,
+    deviceToken: shift.deviceToken,
     idempotencyKey: saleKey(),
     body: { lines, expected_total: (quote.res.body as { total: string }).total },
   });
@@ -3289,9 +3303,13 @@ async function shopBSale(h: CrossShopHarness) {
   return { id: (sold.res.body as { id: string }).id, shift };
 }
 /** Shop B's shift holds the sale's cash: closed with nothing counted and a reason. */
-async function closeShiftShort(h: CrossShopHarness, shift: { id: string; token: string }) {
+async function closeShiftShort(
+  h: CrossShopHarness,
+  shift: { id: string; token: string; deviceToken: string },
+) {
   const closed = await h.call('POST', `/api/shifts/${shift.id}/close`, {
     token: shift.token,
+    deviceToken: shift.deviceToken,
     body: { counts: {}, difference_reason: 'Cross-shop case' },
   });
   h.expect(closed.res.status, JSON.stringify(closed.res.body)).toBe(200);
@@ -3306,17 +3324,20 @@ crossShopCase({
     const lines = [{ product_id: theirs.id, quantity: 1 }];
     const foreign = await h.call('POST', '/api/sales/quote', {
       token: mine.token,
+      deviceToken: mine.deviceToken,
       orgId: SHOP_B,
       body: { lines },
     });
     h.expect(foreign.res.status).toBe(403);
     const injected = await h.call('POST', '/api/sales/quote', {
       token: mine.token,
+      deviceToken: mine.deviceToken,
       body: { lines, organization_id: SHOP_B },
     });
     h.expect(injected.res.status).toBe(400);
     const product = await h.call('POST', '/api/sales/quote', {
       token: mine.token,
+      deviceToken: mine.deviceToken,
       body: { lines },
     });
     h.expect(product.res.status).toBe(404);
@@ -3335,6 +3356,7 @@ crossShopCase({
     const send = (sent: object, orgId?: string) =>
       h.call('POST', '/api/sales', {
         token: mine.token,
+        deviceToken: mine.deviceToken,
         idempotencyKey: saleKey(),
         body: sent,
         ...(orgId ? { orgId } : {}),
@@ -3373,6 +3395,7 @@ crossShopCase({
     const ownLines = [{ product_id: ownId, quantity: 1 }];
     const quote = await h.call('POST', '/api/sales/quote', {
       token: mine.token,
+      deviceToken: mine.deviceToken,
       body: { lines: ownLines },
     });
     h.expect(quote.res.status, JSON.stringify(quote.res.body)).toBe(200);
@@ -3413,6 +3436,7 @@ crossShopCase({
     const mine = await openShiftOf(h, CASHIER_A_EMAIL, SHOP_A_BR1);
     const foreign = await h.call('GET', '/api/sales/payment-accounts', {
       token: mine.token,
+      deviceToken: mine.deviceToken,
       orgId: SHOP_B,
     });
     h.expect(foreign.res.status).toBe(403);
@@ -3663,11 +3687,13 @@ crossShopCase({
     // Its own shop prints the original, then a copy, and the details count both.
     const first = await h.call('POST', '/api/sales/' + b.id + '/receipt-prints', {
       token: b.shift.token,
+      deviceToken: b.shift.deviceToken,
     });
     h.expect(first.res.status, JSON.stringify(first.res.body)).toBe(201);
     h.expect(first.res.body).toEqual({ print_no: 1, copy: false });
     const second = await h.call('POST', '/api/sales/' + b.id + '/receipt-prints', {
       token: b.shift.token,
+      deviceToken: b.shift.deviceToken,
     });
     h.expect(second.res.body).toEqual({ print_no: 2, copy: true });
     const detail = await h.call('GET', '/api/sales/' + b.id, { token: b.shift.token });
@@ -3684,6 +3710,7 @@ async function shopBClaim(h: CrossShopHarness) {
   const line = (detail.res.body as { lines: { id: string }[]; number: string }).lines[0]!.id;
   const claim = await h.call('POST', '/api/warranty/claims', {
     token: sale.shift.token,
+    deviceToken: sale.shift.deviceToken,
     idempotencyKey: key('warranty'),
     body: { sale_line_id: line, issue: 'Broken item', condition: 'Used item' },
   });
@@ -3694,6 +3721,7 @@ async function shopBClaim(h: CrossShopHarness) {
     line,
     number: (detail.res.body as { number: string }).number,
     token: sale.shift.token,
+    deviceToken: sale.shift.deviceToken,
   };
 }
 crossShopCase({
@@ -4289,5 +4317,31 @@ crossShopCase({
     });
     h.expect(own.res.status).toBe(200);
     h.expect(own.res.body).toMatchObject({ device: { id: mine.id, branch_id: SHOP_A_BR1 } });
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/shifts/:id/force-close',
+  name: 'force close refuses another shop and leaves its shift unchanged',
+  async run(h) {
+    const theirs = await openShiftOf(h, OWNER_B, SHOP_B_BR1);
+    const a = await h.login(OWNER_A);
+    const before = await h.call('GET', `/api/shifts/${theirs.id}`, { token: theirs.token });
+    const denied = await h.call('POST', `/api/shifts/${theirs.id}/force-close`, {
+      token: a.accessToken,
+      body: { counted_cash: '0', reason: 'Lost POS' },
+    });
+    h.expect(denied.res.status).toBe(404);
+    h.expect(h.code(denied.res)).toBe('SHIFT_NOT_FOUND');
+    const after = await h.call('GET', `/api/shifts/${theirs.id}`, { token: theirs.token });
+    h.expect(after.res.body).toEqual(before.res.body);
+    h.expect(await h.auditRowsFrom(SHOP_B, denied.ip)).toBe(0);
+    const injected = await h.call('POST', `/api/shifts/${theirs.id}/force-close`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: { counted_cash: '0', reason: 'Lost POS' },
+    });
+    h.expect(injected.res.status).toBe(403);
   },
 });
