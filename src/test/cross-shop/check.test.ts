@@ -166,6 +166,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/shifts',
         'POST /api/shifts/:id/cash',
         'POST /api/shifts/:id/close',
+        'POST /api/shifts/:id/force-close',
         'GET /api/expense-categories',
         'POST /api/expense-categories',
         'PATCH /api/expense-categories/:id',
@@ -210,7 +211,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/fiscal/retry-many',
       ]),
     );
-    expect(keys).toHaveLength(201);
+    expect(keys).toHaveLength(202);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   ShiftCashBody,
   ShiftCloseBody,
+  ShiftForceCloseBody,
   ShiftIdParams,
   ShiftListQuery,
   ShiftOpenBody,
@@ -71,5 +72,13 @@ router.post(
   requirePermission('shift.operate'),
   validate({ params: ShiftIdParams, body: ShiftCloseBody }),
   asyncHandler(controller.close),
+);
+router.post(
+  '/:id/force-close',
+  authenticate,
+  loadRequestContext,
+  requirePermission('cash.adjust'),
+  validate({ params: ShiftIdParams, body: ShiftForceCloseBody }),
+  asyncHandler(controller.forceClose),
 );
 export default router;

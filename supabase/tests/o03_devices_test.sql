@@ -388,12 +388,12 @@ INSERT INTO t.ids VALUES('tv',public.create_product('{"name_ar":"تلفزيون"
 SELECT public.post_stock_adjustment(t.id('main'),'found',NULL,jsonb_build_array(jsonb_build_object('product_id',t.id('tv'),'quantity',10)),'o03-found');
 SELECT public.set_eta_settings('preprod','client-r','secret-r-1','4753',true);
 RESET ROLE;
--- The cashier sells from a request that names no device at all, then from one that names another.
-SELECT t.cashier();
+-- EC-147: successful sale fixtures carry the valid token of their shift device.
+SELECT t.cashier(t.id('r1')::text);
 SET ROLE authenticated;
 INSERT INTO t.ids SELECT 'sale1',(public.post_sale(jsonb_build_array(jsonb_build_object('product_id',t.id('tv'),'quantity',1)),'1140.00','o03-sale-1')->>'id')::uuid;
 RESET ROLE;
-SELECT t.cashier(t.id('r2')::text);
+SELECT t.cashier(t.id('r1')::text);
 SET ROLE authenticated;
 INSERT INTO t.ids SELECT 'sale2',(public.post_sale(jsonb_build_array(jsonb_build_object('product_id',t.id('tv'),'quantity',1)),'1140.00','o03-sale-2')->>'id')::uuid;
 RESET ROLE;
@@ -421,13 +421,13 @@ RESET ROLE;
 SELECT t.expect('unpair: no token, no code, still an active device',
   (SELECT d.token_hash IS NULL AND d.paired_at IS NULL AND d.paired_by IS NULL AND d.pairing_code_hash IS NULL AND d.is_active FROM t.dev('r2') d)
   AND t.audits('r','device.unpaired')=1);
-SELECT t.cashier(t.id('r2')::text);
+SELECT t.cashier(t.id('r1')::text);
 SET ROLE authenticated;
 INSERT INTO t.ids VALUES('sale3',(public.post_sale(jsonb_build_array(jsonb_build_object('product_id',t.id('tv'),'quantity',1)),'1140.00','o03-sale-3')->>'id')::uuid);
 RESET ROLE;
 SELECT t.expect('unpair: the open shift of another device goes on selling on its own device',(SELECT s.device_id=t.id('r1') FROM public.sales s WHERE s.id=t.id('sale3')));
 -- The cashier closes; now the device can be turned off, which unpairs it.
-SELECT t.cashier();
+SELECT t.cashier(t.id('r1')::text);
 SET ROLE authenticated;
 SELECT public.close_shift(t.id('shift'),'{}'::jsonb,NULL,'O03 test');
 RESET ROLE;

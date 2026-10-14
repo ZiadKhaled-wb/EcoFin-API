@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.40.1
+
+- EC-147: ShiftForceCloseBody and optional device_revoked state on shift answers. DEVICE_REVOKED remains 403; DEVICE_MISMATCH remains 409.
+
 ## 0.40.0
 
 - T03 ETA monitor and corrections: FiscalSituation, FiscalSituationFilter, FiscalDeadlineState, FiscalAction, FiscalListQuery, FiscalListItem, FiscalList, FiscalAlertSummary, FiscalDaySummaryQuery, FiscalDaySummary, FiscalFix, FiscalSellerField, FiscalEtaError, FiscalProblem, FiscalDiagnosis, FiscalEvent, FiscalDetails, FiscalAssignDeviceBody, FiscalQueued, FiscalRetryManyBody, FiscalRetryManyResult, FISCAL_RETRY_MANY_MAX. Error codes USE_CORRECTION, NOT_REJECTED, CORRECTION_QUEUED, CORRECTION_CONFLICT, NOT_BLOCKED_NO_DEVICE, NOT_SUBMITTED (409), DEVICE_INVALID_FOR_RECEIPT (400).

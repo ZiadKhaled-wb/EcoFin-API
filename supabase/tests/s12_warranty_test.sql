@@ -125,6 +125,7 @@ INSERT INTO t.ids SELECT 'safe',default_cash_account_id FROM public.branches WHE
 INSERT INTO t.ids SELECT 'main_b',id FROM public.branches WHERE organization_id=t.org('b') AND is_main;
 UPDATE public.org_settings SET prices_include_vat=true WHERE organization_id=t.org('a');
 SELECT t.as_user('a7120000-0000-0000-8000-000000000001',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.ids VALUES('second',public.create_branch('Second','S2',NULL,NULL,NULL,NULL,NULL));
 INSERT INTO t.ids SELECT 'nile',(public.create_supplier('{"name":"Nile Traders"}')->>'id')::uuid;
@@ -162,6 +163,7 @@ UPDATE public.customers SET archived_at=now() WHERE id='a7120000-0000-0000-8000-
 INSERT INTO t.ids VALUES('mona','a7120000-0000-0000-8000-0000000000c1'),('gone','a7120000-0000-0000-8000-0000000000c2'),('buyer_b','a7120000-0000-0000-8000-0000000000c3');
 -- Shop b: a product and a unit of its own.
 SELECT t.as_user('a7120000-0000-0000-8000-000000000002',t.org('b'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('b') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000002') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.ids VALUES('chair_b',public.create_product('{"name_ar":"كرسي ب","sku":"S12B-CH","cash_price":"250"}'));
 RESET ROLE;
@@ -171,11 +173,13 @@ SELECT t.expect('setup: 10 chairs and 3 phones in main, costs 100 and 3 000',
 
 
 SELECT t.as_user('a7120000-0000-0000-8000-000000000001',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.ids SELECT 'bank',(public.create_cash_account('S12 Bank','bank',NULL)->>'id')::uuid;
 RESET ROLE;
 UPDATE public.customers SET phones=ARRAY['01012345678'] WHERE id=t.id('mona');
 SELECT t.as_user('a7120000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.ids SELECT 'shift',(t.open_shift(t.id('main'),'0','s12-shift')->>'id')::uuid;
 INSERT INTO t.ids SELECT 'drawer',drawer_account_id FROM public.shifts WHERE id=t.id('shift');
@@ -210,6 +214,7 @@ UPDATE public.sale_lines SET warranty_until='2027-10-11' WHERE id=t.id('line');
 ALTER TABLE public.sale_lines ENABLE TRIGGER trg_sale_lines_append_only;
 CREATE TABLE t.sale_before AS SELECT to_jsonb(s) j FROM public.sales s WHERE id=t.id('sale');
 SELECT t.as_user('a7120000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('lookup exactly one key','SELECT public.warranty_lookup()','LOOKUP_ONE_KEY');
 SELECT t.error('lookup refuses multiple keys','SELECT public.warranty_lookup(''A'',''010'',NULL)','LOOKUP_ONE_KEY');
@@ -270,6 +275,7 @@ SELECT t.error('cashier cannot move expired claim',format('SELECT public.move_wa
 SELECT public.move_warranty_claim((t.doc('non2')->>'claim_id')::uuid,'rejected','Not covered');
 RESET ROLE;
 SELECT t.as_user('a7120000-0000-0000-8000-000000000007',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000007') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT public.move_warranty_claim((t.doc('non1')->>'claim_id')::uuid,'replaced','Manager replacement');
 SELECT t.expect('nonserial replacement reduces sellable',t.level('chair')=7);
@@ -280,26 +286,31 @@ ALTER TABLE public.sale_lines DISABLE TRIGGER trg_sale_lines_append_only;
 UPDATE public.sale_lines SET warranty_until=t.today()-1 WHERE id=t.id('line');
 ALTER TABLE public.sale_lines ENABLE TRIGGER trg_sale_lines_append_only;
 SELECT t.as_user('a7120000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.docs SELECT 'expired',public.open_warranty_claim(t.id('line'),t.unit('S12-IMEI-3'),'Expired speaker','Clean case','s12-expired-claim');
 SELECT t.expect('yesterday date flagged',(t.doc('expired')->>'out_of_warranty')::boolean);
 SELECT t.error('expired cashier cannot progress',format('SELECT public.move_warranty_claim(%L,''in_repair'',''Repair'')',(t.doc('expired')->>'claim_id')::uuid),'OUT_OF_WARRANTY_NEEDS_MANAGER');
 RESET ROLE;
 SELECT t.as_user('a7120000-0000-0000-8000-000000000007',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000007') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT public.move_warranty_claim((t.doc('expired')->>'claim_id')::uuid,'in_repair','Manager approved');
 RESET ROLE;
 SELECT t.as_user('a7120000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT public.move_warranty_claim((t.doc('expired')->>'claim_id')::uuid,'rejected','Not repairable');
 RESET ROLE;
 SELECT t.as_user('a7120000-0000-0000-8000-000000000001',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.ids SELECT 'secondshift',(t.open_shift(t.id('second'),'0','s12-second-shift')->>'id')::uuid;
 INSERT INTO t.docs SELECT 'secondsale',public.post_sale(t.lines(t.phone('S12-IMEI-9')),'5000.00','s12-second-sale');
 INSERT INTO t.docs SELECT 'secondclaim',public.open_warranty_claim((t.doc('secondsale')->'lines'->0->>'id')::uuid,t.unit('S12-IMEI-9'),'Screen failed','Scratched case','s12-second-claim');
 RESET ROLE;
 SELECT t.as_user('a7120000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('inaccessible branch serial lookup empty',public.warranty_lookup('S12-IMEI-9')->'items'='[]'::jsonb);
 SELECT t.error('inaccessible claim detail not found',format('SELECT public.get_warranty_claim(%L)',(t.doc('secondclaim')->>'claim_id')::uuid),'NOT_FOUND');
@@ -308,6 +319,7 @@ SELECT t.error('inaccessible branch list refused',format('SELECT public.list_war
 SELECT t.error('inaccessible claim photo refused',format('SELECT public.register_file(%L,%L,%L,%L,4,NULL,''other'',''warranty_claim'',%L)',gen_random_uuid(),t.org('a')::text||'/other/branch.png','branch.png','image/png',(t.doc('secondclaim')->>'claim_id')::uuid),'BRANCH_DENIED');
 RESET ROLE;
 SELECT t.as_user('a7120000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT public.register_file(gen_random_uuid(),t.org('a')::text||'/other/photo-'||n||'.png','photo.png','image/png',4,NULL,'other','warranty_claim',(t.doc('claimA')->>'claim_id')::uuid) FROM generate_series(2,5) n;
 SELECT t.expect('five claim photos are allowed',jsonb_array_length(public.get_warranty_claim((t.doc('claimA')->>'claim_id')::uuid)->'files')=5);
@@ -320,6 +332,7 @@ SELECT t.expect('sales immutable across claims',(SELECT to_jsonb(s)=j FROM publi
 SELECT t.expect('resolution includes received condition and original end',(SELECT resolution LIKE 'Received: Scratched case%' AND resolution LIKE '%Warranty until: 2027-10-11%' FROM public.warranty_claims WHERE id=(t.doc('claimA')->>'claim_id')::uuid));
 SELECT t.expect('all moves audited with notes',(SELECT count(*)=3 AND bool_and(after ? 'note') FROM public.audit_log WHERE entity_id=(t.doc('claimC')->>'claim_id')::uuid AND action='warranty_claim.moved'));
 SELECT t.as_user('a7120000-0000-0000-8000-000000000002',t.org('b'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('b') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000002') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('other shop serial lookup empty',public.warranty_lookup('S12-IMEI-1')->'items'='[]'::jsonb);
 SELECT t.expect('other shop claims empty',public.list_warranty_claims()->'items'='[]'::jsonb);
@@ -329,6 +342,7 @@ SELECT t.error('other shop claim move not found',format('SELECT public.move_warr
 SELECT t.error('other shop photo refused',format('SELECT public.register_file(%L,%L,%L,%L,4,NULL,''other'',''warranty_claim'',%L)','a7120000-0000-4000-8000-0000000000f2',t.org('b')::text||'/other/foreign.png','foreign.png','image/png',(t.doc('claimA')->>'claim_id')::uuid),'NOT_FOUND');
 RESET ROLE;
 SELECT t.as_user('a7120000-0000-0000-8000-000000000006',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7120000-0000-0000-8000-000000000006') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('warehouse lookup denied','SELECT public.warranty_lookup(''S12-IMEI-1'')','PERMISSION_DENIED');
 SELECT t.error('warehouse open denied',format('SELECT public.open_warranty_claim(%L,NULL,%L,%L,%L)',t.id('chairline'),'Broken','Scratched','s12-denied-open'),'PERMISSION_DENIED');

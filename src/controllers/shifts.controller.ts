@@ -3,6 +3,7 @@ import {
   IdempotencyKeyHeader,
   ShiftCashBody,
   ShiftCloseBody,
+  ShiftForceCloseBody,
   ShiftIdParams,
   ShiftListQuery,
   ShiftOpenBody,
@@ -32,6 +33,11 @@ export async function open(req: Request, res: Response) {
 export async function cash(req: Request, res: Response) {
   const key = keyOf(req);
   res.json(await service.moveShiftCash(getCtx(req), id(req), ShiftCashBody.parse(req.body), key));
+}
+export async function forceClose(req: Request, res: Response) {
+  res.json(
+    await service.forceCloseShift(getCtx(req), id(req), ShiftForceCloseBody.parse(req.body)),
+  );
 }
 export async function close(req: Request, res: Response) {
   res.json(await service.closeShift(getCtx(req), id(req), ShiftCloseBody.parse(req.body)));

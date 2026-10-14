@@ -7271,6 +7271,7 @@ export type Database = {
           issue: string;
           number: string;
           organization_id: string;
+          out_of_warranty: boolean;
           replacement_unit_id: string | null;
           resolution: string | null;
           sale_line_id: string;
@@ -7290,6 +7291,7 @@ export type Database = {
           issue: string;
           number: string;
           organization_id: string;
+          out_of_warranty?: boolean;
           replacement_unit_id?: string | null;
           resolution?: string | null;
           sale_line_id: string;
@@ -7309,6 +7311,7 @@ export type Database = {
           issue?: string;
           number?: string;
           organization_id?: string;
+          out_of_warranty?: boolean;
           replacement_unit_id?: string | null;
           resolution?: string | null;
           sale_line_id?: string;
@@ -8093,42 +8096,6 @@ export type Database = {
       };
     };
     Functions: {
-      warranty_lookup: {
-        Args: { p_phone?: string; p_sale_number?: string; p_serial?: string };
-        Returns: Json;
-      };
-      get_warranty_claim: { Args: { p_claim_id: string }; Returns: Json };
-      list_warranty_claims: {
-        Args: {
-          p_branch_id?: string;
-          p_limit?: number;
-          p_offset?: number;
-          p_out_of_warranty?: boolean;
-          p_status?: Database['public']['Enums']['claim_status'];
-        };
-        Returns: Json;
-      };
-      open_warranty_claim: {
-        Args: {
-          p_condition: string;
-          p_idempotency_key: string;
-          p_issue: string;
-          p_sale_line_id: string;
-          p_unit_id: string | null;
-        };
-        Returns: Json;
-      };
-      move_warranty_claim: {
-        Args: {
-          p_claim_id: string;
-          p_note: string | null;
-          p_replacement_unit_id?: string | null;
-          p_to: Database['public']['Enums']['claim_status'];
-        };
-        Returns: Json;
-      };
-      request_claim_refund: { Args: { p_claim_id: string }; Returns: undefined };
-
       accept_invite: { Args: { p_auth_user_id: string; p_token_hash: string }; Returns: Json };
       admin_change_plan: {
         Args: { p_organization_id: string; p_plan_key: string; p_reason: string };
@@ -8428,6 +8395,10 @@ export type Database = {
       };
       fiscal_request_correction: { Args: { p_id: string }; Returns: Json };
       fiscal_retry_many: { Args: { p_ids: string[] }; Returns: Json };
+      force_close_shift: {
+        Args: { p_counted_cash: string; p_reason: string; p_shift_id: string };
+        Returns: Json;
+      };
       get_cash_account: { Args: { p_id: string }; Returns: Json };
       get_cash_transfer: { Args: { p_id: string }; Returns: Json };
       get_current_shift: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -8461,6 +8432,7 @@ export type Database = {
       get_supplier: { Args: { p_id: string }; Returns: Json };
       get_supplier_payment: { Args: { p_id: string }; Returns: Json };
       get_unit: { Args: { p_id: string }; Returns: Json };
+      get_warranty_claim: { Args: { p_claim_id: string }; Returns: Json };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
       jobs_claim: {
         Args: { p_limit?: number; p_types: string[]; p_worker: string };
@@ -8695,6 +8667,16 @@ export type Database = {
       };
       list_tax_classes: { Args: Record<PropertyKey, never>; Returns: Json };
       list_transfer_destinations: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_warranty_claims: {
+        Args: {
+          p_branch_id?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_out_of_warranty?: boolean;
+          p_status?: Database['public']['Enums']['claim_status'];
+        };
+        Returns: Json;
+      };
       lookup_product: { Args: { p_code: string }; Returns: Json };
       low_stock_summary: { Args: { p_limit?: number }; Returns: Json };
       move_shift_cash: {
@@ -8705,6 +8687,15 @@ export type Database = {
           p_note: string;
           p_shift_id: string;
           p_vault_id: string;
+        };
+        Returns: Json;
+      };
+      move_warranty_claim: {
+        Args: {
+          p_claim_id: string;
+          p_note: string | null;
+          p_replacement_unit_id?: string | null;
+          p_to: Database['public']['Enums']['claim_status'];
         };
         Returns: Json;
       };
@@ -8732,6 +8723,16 @@ export type Database = {
           p_idempotency_key: string;
           p_opening_float: string;
           p_vault_id?: string;
+        };
+        Returns: Json;
+      };
+      open_warranty_claim: {
+        Args: {
+          p_condition: string;
+          p_idempotency_key: string;
+          p_issue: string;
+          p_sale_line_id: string;
+          p_unit_id: string | null;
         };
         Returns: Json;
       };
@@ -8810,6 +8811,7 @@ export type Database = {
         Returns: Json;
       };
       receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
+      record_sale_receipt_print: { Args: { p_sale_id: string }; Returns: Json };
       register_file: {
         Args: {
           p_entity_id: string | null;
@@ -8838,6 +8840,7 @@ export type Database = {
       reject_purchase_invoice: { Args: { p_id: string; p_reason: string }; Returns: Json };
       rename_cash_account: { Args: { p_id: string; p_name: string }; Returns: Json };
       rename_expense_category: { Args: { p_id: string; p_name: string }; Returns: Json };
+      request_claim_refund: { Args: { p_claim_id: string }; Returns: undefined };
       request_discount_approval: {
         Args: { p_branch_id: string; p_lines: Json; p_reason: string; p_sale_discount: Json };
         Returns: Json;
@@ -9038,9 +9041,12 @@ export type Database = {
       };
       update_supplier: { Args: { p_changes: Json; p_id: string }; Returns: Json };
       update_tax_class: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
-      record_sale_receipt_print: { Args: { p_sale_id: string }; Returns: Json };
       void_sale: {
         Args: { p_idempotency_key: string; p_reason: string; p_sale_id: string };
+        Returns: Json;
+      };
+      warranty_lookup: {
+        Args: { p_phone?: string; p_sale_number?: string; p_serial?: string };
         Returns: Json;
       };
     };

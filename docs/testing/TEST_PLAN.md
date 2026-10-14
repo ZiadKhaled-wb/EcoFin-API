@@ -373,3 +373,5 @@ One flow, server and client together, against the fake ETA (`npm run fake-eta`):
 
 
 TEST-4 sales tests (EC-134): [coverage, CI jobs and known failures](plans/TEST-4.md).
+
+- [EC-147: revoked shift device](plans/EC-147.md) — device checks and manager force-close; local verification in progress.

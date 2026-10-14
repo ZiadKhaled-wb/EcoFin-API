@@ -60,7 +60,11 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     if (opts.token) r = r.set('Authorization', `Bearer ${opts.token}`);
     if (opts.orgId) r = r.set('x-org-id', opts.orgId);
     if (opts.key) r = r.set('Idempotency-Key', opts.key);
-    if (opts.pos) r = r.set(DEVICE_TOKEN_HEADER, opts.pos);
+    const shiftWrite =
+      method === 'post' &&
+      /^\/api\/(?:sales(?:$|\/[^/]+\/void$)|shifts\/[^/]+\/(?:cash|close)$)/.test(path);
+    const deviceToken = opts.pos ?? (shiftWrite ? pos : undefined);
+    if (deviceToken) r = r.set(DEVICE_TOKEN_HEADER, deviceToken);
     const res = opts.body ? await r.send(opts.body) : await r;
     return { res, ip, requestId };
   }
@@ -854,6 +858,17 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         sent: await send('post', `/api/shifts/${id}/close`, {
           token: owner.accessToken,
           body: { counts: {}, difference_reason: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/shifts/:id/force-close': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await openShift(owner.accessToken);
+      return {
+        sent: await send('post', `/api/shifts/${id}/force-close`, {
+          token: owner.accessToken,
+          body: { counted_cash: '0', reason: 'F07 force-close audit driver' },
         }),
         org: SHOP_ONE,
       };

@@ -52,6 +52,8 @@ EcoTech Pro: multi-tenant SaaS POS with in-house installments for Egyptian furni
 
 ## Non-negotiable rules
 
+Any POS write on an open shift (sale, return, cash move, collection at the counter) calls `app.require_shift_device(shift_id)`; only `force_close_shift` skips it.
+
 Branch-scoped writes call `app.require_branch_access`; it also rejects inactive branches. Branch lists for any screen come from `GET /api/branches`.
 
 Module-gated features call `app.require_module('<key>')` in SQL or `requireModule` in the API; plan limits are enforced by triggers, so don't re-check them.

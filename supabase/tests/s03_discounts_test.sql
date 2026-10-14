@@ -157,6 +157,7 @@ SELECT public.accept_invite(repeat('v',64),'a7060000-0000-0000-8000-000000000002
 INSERT INTO t.ids SELECT 'main',id FROM public.branches WHERE organization_id=t.org('a') AND is_main;
 UPDATE public.org_settings SET prices_include_vat=true,discount_caps='{"CASHIER":5,"BRANCH_MANAGER":15}' WHERE organization_id=t.org('a');
 SELECT t.as_user('a7060000-0000-0000-8000-000000000001',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.ids VALUES('second',public.create_branch('Second','S2',NULL,NULL,NULL,NULL,NULL));
 INSERT INTO t.ids VALUES('tv',public.create_product('{"name_ar":"تلفزيون","name_en":"TV","sku":"S3-TV","cash_price":"1140"}'));
@@ -194,6 +195,7 @@ DO $$ DECLARE r record; BEGIN
     RESET ROLE;
   END LOOP; END $$;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000002',t.org('b'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('b') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000002') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SELECT t.expect('setup: 60 TVs at main, caps CASHIER 5 / BRANCH_MANAGER 15, c3 has the override, the manager has discount.above_cap by default',
   t.level('tv')=60 AND (SELECT discount_caps='{"CASHIER":5,"BRANCH_MANAGER":15}'::jsonb FROM public.org_settings WHERE organization_id=t.org('a'))
   AND (SELECT EXISTS(SELECT 1 FROM public.role_permissions WHERE role='BRANCH_MANAGER' AND permission_key='discount.above_cap')
@@ -204,6 +206,7 @@ INSERT INTO t.mark SELECT 'start',t.footprint();
 
 -- ---------------------------------------------------------------- tax is correct: prices include VAT
 SELECT t.as_user('a7060000-0000-0000-8000-000000000005',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000005') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('quote: a 10 % line discount on 1 140.00 (VAT included): discount 114.00, tax 126.00, total 1 026.00; nothing written',
   (SELECT q->>'discount_total'='114.00' AND q->>'tax_total'='126.00' AND q->>'total'='1026.00' AND q->>'subtotal'='1140.00'
@@ -234,6 +237,7 @@ SELECT t.expect('audit: sale.created carries the discount and its reason',
 -- ---------------------------------------------------------------- tax is correct: prices exclude VAT
 UPDATE public.org_settings SET prices_include_vat=false WHERE organization_id=t.org('a');
 SELECT t.as_user('a7060000-0000-0000-8000-000000000005',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000005') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.docs SELECT 'exc',public.post_sale(t.lines(t.dl('ex',1,t.pct('10'))),'1026.00','s03-exc-0001',NULL,NULL,NULL,'Loyal customer');
 INSERT INTO t.ids SELECT 'exc',(t.doc('exc')->>'id')::uuid;
@@ -251,6 +255,7 @@ UPDATE public.org_settings SET prices_include_vat=true WHERE organization_id=t.o
 
 -- ---------------------------------------------------------------- a sale discount over three lines
 SELECT t.as_user('a7060000-0000-0000-8000-000000000005',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000005') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.docs SELECT 'spread',public.post_sale(t.lines(t.items('p100',1),t.items('p200',1),t.items('p300',1)),'550.00','s03-spread',NULL,NULL,t.amt('50.00'),'Closing offer');
 INSERT INTO t.ids SELECT 'spread',(t.doc('spread')->>'id')::uuid;
@@ -266,6 +271,7 @@ SELECT t.expect('sale discount: the lines add up to the header (discount, tax, t
 
 -- ---------------------------------------------------------------- caps
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('cap: a cashier at exactly 5 % is fine',
   (public.post_sale(t.lines(t.dl('tv',1,t.pct('5'))),'1083.00','s03-cap-5',NULL,NULL,NULL,'Regular customer')->>'discount_total')='57.00');
@@ -286,22 +292,26 @@ RESET ROLE;
 -- A role missing from discount_caps has a cap of 0.
 UPDATE public.org_settings SET discount_caps='{"BRANCH_MANAGER":15}' WHERE organization_id=t.org('a');
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error_detail('cap: a role missing from discount_caps (cap 0) is refused at 1 %',
   t.sell(t.lines(t.dl('tv',1,t.pct('1'))),'1128.60','Regular customer'),'DISCOUNT_ABOVE_CAP','{"line_no":1,"cap_pct":"0.00","effective_pct":"1.00"}');
 RESET ROLE;
 UPDATE public.org_settings SET discount_caps='{"CASHIER":5,"BRANCH_MANAGER":15}' WHERE organization_id=t.org('a');
 SELECT t.as_user('a7060000-0000-0000-8000-000000000005',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000005') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('cap: a manager at 15 % is fine (171.00)',(public.post_sale(t.lines(t.dl('tv',1,t.pct('15'))),'969.00','s03-mgr-15',NULL,NULL,NULL,'Fair offer')->>'discount_total')='171.00');
 SELECT t.expect('cap: a manager above 15 % has discount.above_cap by default, so 20 % goes through',
   (public.post_sale(t.lines(t.dl('tv',1,t.pct('20'))),'912.00','s03-mgr-20',NULL,NULL,NULL,'Fair offer')->>'discount_total')='228.00');
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000001',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000001') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('cap: the owner has no cap (40 %)',(public.post_sale(t.lines(t.dl('tv',1,t.pct('40'))),'684.00','s03-owner-40',NULL,NULL,NULL,'Owner decision')->>'discount_total')='456.00');
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000007',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000007') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('cap: a cashier with a discount.above_cap override may go above it (30 %)',
   (public.post_sale(t.lines(t.dl('tv',1,t.pct('30'))),'798.00','s03-c3-30',NULL,NULL,NULL,'Special customer')->>'discount_total')='342.00');
@@ -311,6 +321,7 @@ RESET ROLE;
 
 -- ---------------------------------------------------------------- approval flow
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('approval: a request within the cap is not needed',
   format('SELECT public.request_discount_approval(%L,%L,NULL,%L)',t.id('main'),t.lines(t.dl('tv',1,t.pct('4'))),'Regular customer'),'APPROVAL_NOT_NEEDED');
@@ -333,11 +344,13 @@ RESET ROLE;
 -- The requester gets the permission later: still not allowed to decide their own request.
 INSERT INTO public.employee_permission_overrides(organization_id,employee_id,permission_key,granted) VALUES(t.org('a'),t.id('c1'),'discount.above_cap',true);
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('approval: the requester deciding their own request',format('SELECT public.decide_discount_approval(%L,true,NULL)',t.id('ap1')),'APPROVAL_SELF');
 RESET ROLE;
 DELETE FROM public.employee_permission_overrides WHERE employee_id=t.id('c1');
 SELECT t.as_user('a7060000-0000-0000-8000-000000000006',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000006') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('approval: the pending list shows the request to a manager with access to its branch',
   (SELECT jsonb_array_length(j->'items')=1 AND j->'items'->0->>'id'=t.id('ap1')::text AND j->'items'->0->>'requested_by_name'='S03 Cashier'
@@ -346,6 +359,7 @@ SELECT t.expect('approval: the pending list shows the request to a manager with 
 SELECT t.error('approval: an invalid status filter',$$SELECT public.list_discount_approvals('open')$$,'VALIDATION_FAILED');
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000005',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000005') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('approval: the manager approves with a note',public.decide_discount_approval(t.id('ap1'),true,'Fine')->>'status'='approved');
 SELECT t.error('approval: deciding twice',format('SELECT public.decide_discount_approval(%L,false,NULL)',t.id('ap1')),'APPROVAL_NOT_PENDING');
@@ -359,12 +373,14 @@ SELECT t.expect('audit: approval.requested and approval.decided are written',
 INSERT INTO t.mark SELECT 'ap1',t.footprint();
 -- Another cashier can't use it.
 SELECT t.as_user('a7060000-0000-0000-8000-000000000004',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000004') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('approval: another cashier using it',t.sell(t.lines(t.dl('tv',1,t.pct('8'))),'1048.80','Regular customer',NULL,'ap1'),'APPROVAL_INVALID');
 SELECT t.error('approval: another cashier can''t read it',format('SELECT public.get_discount_approval(%L)',t.id('ap1')),'APPROVAL_NOT_FOUND');
 SELECT t.error('approval: another cashier can''t cancel it',format('SELECT public.cancel_discount_approval(%L)',t.id('ap1')),'APPROVAL_NOT_FOUND');
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('approval: a different cart (9 %)',t.sell(t.lines(t.dl('tv',1,t.pct('9'))),'1037.40','Regular customer',NULL,'ap1'),'APPROVAL_INVALID');
 SELECT t.error('approval: a different cart (two TVs at 8 %)',t.sell(t.lines(t.dl('tv',2,t.pct('8'))),'2097.60','Regular customer',NULL,'ap1'),'APPROVAL_INVALID');
@@ -373,6 +389,7 @@ SELECT t.error('approval: an approval id of nothing',format('SELECT public.post_
 RESET ROLE;
 SELECT t.expect('approval: every refusal left nothing behind',t.footprint()=(SELECT f FROM t.mark WHERE tag='ap1'),t.footprint());
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.docs SELECT 'apsale',public.post_sale(t.lines(t.dl('tv',1,t.pct('8'))),'1048.80','s03-ap-sale',NULL,NULL,NULL,'Regular customer, 8 % agreed',t.id('ap1'));
 INSERT INTO t.ids SELECT 'apsale',(t.doc('apsale')->>'id')::uuid;
@@ -395,14 +412,17 @@ END $$;
 
 -- Idempotency: the same key with an approval gives the same sale and spends the approval once.
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.ids SELECT 'ap2',(public.request_discount_approval(t.id('main'),t.lines(t.dl('tv',1,t.pct('7'))),NULL,'Regular customer')->>'approval_id')::uuid;
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000005',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000005') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT public.decide_discount_approval(t.id('ap2'),true,NULL);
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.docs SELECT 'idem1',public.post_sale(t.lines(t.dl('tv',1,t.pct('7'))),'1060.20','s03-idem',NULL,NULL,NULL,'Regular customer',t.id('ap2'));
 INSERT INTO t.docs SELECT 'idem2',public.post_sale(t.lines(t.dl('tv',1,t.pct('7'))),'1060.20','s03-idem',NULL,NULL,NULL,'Regular customer',t.id('ap2'));
@@ -414,10 +434,12 @@ SELECT t.expect('idempotent: one sale more, the approval spent once on that sale
 
 -- 16 minutes after the decision the approval has expired.
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.ids SELECT 'ap3',(public.request_discount_approval(t.id('main'),t.lines(t.dl('tv',1,t.pct('6'))),NULL,'Regular customer')->>'approval_id')::uuid;
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000005',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000005') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT public.decide_discount_approval(t.id('ap3'),true,NULL);
 RESET ROLE;
@@ -425,6 +447,7 @@ ALTER TABLE public.approvals DISABLE TRIGGER trg_approvals_final;
 UPDATE public.approvals SET decided_at=now()-interval '16 minutes' WHERE id=t.id('ap3');
 ALTER TABLE public.approvals ENABLE TRIGGER trg_approvals_final;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('approval: decided 16 minutes ago',t.sell(t.lines(t.dl('tv',1,t.pct('6'))),'1071.60','Regular customer',NULL,'ap3'),'APPROVAL_INVALID');
 RESET ROLE;
@@ -432,6 +455,7 @@ ALTER TABLE public.approvals DISABLE TRIGGER trg_approvals_final;
 UPDATE public.approvals SET decided_at=now()-interval '14 minutes' WHERE id=t.id('ap3');
 ALTER TABLE public.approvals ENABLE TRIGGER trg_approvals_final;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('approval: decided 14 minutes ago is still good',(public.post_sale(t.lines(t.dl('tv',1,t.pct('6'))),'1071.60','s03-ap3-0001',NULL,NULL,NULL,'Regular customer',t.id('ap3'))->>'total')='1071.60');
 
@@ -440,6 +464,7 @@ INSERT INTO t.ids SELECT 'ap4',(public.request_discount_approval(t.id('second'),
 INSERT INTO t.ids SELECT 'ap5',(public.request_discount_approval(t.id('second'),t.lines(t.dl('tv',1,t.pct('9'))),NULL,'Regular customer')->>'approval_id')::uuid;
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000005',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000005') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('list: the manager with both branches sees the two requests of the second branch ',
   (SELECT jsonb_array_length(j->'items')=2 AND (SELECT array_agg(i->>'id' ORDER BY i->>'id') FROM jsonb_array_elements(j->'items') i)=(SELECT array_agg(x::text ORDER BY x::text) FROM unnest(ARRAY[t.id('ap4'),t.id('ap5')]) x) AND j->'items'->0->>'branch_name'='Second'
@@ -449,12 +474,14 @@ SELECT t.expect('list: a decided request leaves the pending list and shows under
   (SELECT jsonb_array_length(public.list_discount_approvals('pending')->'items')=1 AND jsonb_array_length(public.list_discount_approvals('approved')->'items')=4));
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000006',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000006') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('list: the manager of the main branch only does not see the second branch''s request',
   (SELECT jsonb_array_length(j->'items')=0 FROM (SELECT public.list_discount_approvals('pending') j) x));
 SELECT t.error('decide: nor can they decide it',format('SELECT public.decide_discount_approval(%L,true,NULL)',t.id('ap5')),'BRANCH_DENIED');
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('approval: approved for another branch',t.sell(t.lines(t.dl('tv',1,t.pct('8'))),'1048.80','Regular customer',NULL,'ap4'),'APPROVAL_INVALID');
 SELECT t.expect('cancel: the requester takes a pending request back',public.cancel_discount_approval(t.id('ap5'))->>'status'='cancelled');
@@ -463,27 +490,33 @@ SELECT t.error('cancel: a cancelled approval is not usable',t.sell(t.lines(t.dl(
 RESET ROLE;
 -- A rejected approval does not sell.
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.ids SELECT 'ap6',(public.request_discount_approval(t.id('main'),t.lines(t.dl('tv',1,t.pct('9'))),NULL,'Regular customer')->>'approval_id')::uuid;
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000005',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000005') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.expect('approval: a manager can reject',public.decide_discount_approval(t.id('ap6'),false,'Too much')->>'status'='rejected');
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('approval: a rejected approval can not be used',t.sell(t.lines(t.dl('tv',1,t.pct('9'))),'1037.40','Regular customer',NULL,'ap6'),'APPROVAL_INVALID');
 RESET ROLE;
 -- A sale discount asked as a request (the fingerprint covers it).
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 INSERT INTO t.ids SELECT 'ap7',(public.request_discount_approval(t.id('main'),t.lines(t.items('p100',1),t.items('p200',1)),t.pct('8'),'Two items, 8 % off')->>'approval_id')::uuid;
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000005',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000005') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT public.decide_discount_approval(t.id('ap7'),true,NULL);
 RESET ROLE;
 SELECT t.as_user('a7060000-0000-0000-8000-000000000003',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000003') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('approval: the sale discount is part of the cart (7 % instead of 8 %)',t.sell(t.lines(t.items('p100',1),t.items('p200',1)),'279.00','Two items, 8 % off',t.pct('7'),'ap7'),'APPROVAL_INVALID');
 SELECT t.expect('approval: the same cart with its 8 % sale discount sells (total 276.00)',
@@ -492,6 +525,7 @@ RESET ROLE;
 
 -- ---------------------------------------------------------------- another shop
 SELECT t.as_user('a7060000-0000-0000-8000-000000000002',t.org('b'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('b') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000002') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error('cross-shop: shop b''s owner deciding shop a''s approval',format('SELECT public.decide_discount_approval(%L,true,NULL)',t.id('ap5')),'APPROVAL_NOT_FOUND');
 SELECT t.error('cross-shop: nor reading it',format('SELECT public.get_discount_approval(%L)',t.id('ap5')),'APPROVAL_NOT_FOUND');
@@ -500,6 +534,7 @@ RESET ROLE;
 
 -- ---------------------------------------------------------------- with S02: split payments on the discounted total
 SELECT t.as_user('a7060000-0000-0000-8000-000000000005',t.org('a'));
+SELECT t.pos(s.branch_id,s.device_id) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=t.org('a') AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text='a7060000-0000-0000-8000-000000000005') DESC,s.opened_at DESC,s.id DESC LIMIT 1;
 SET ROLE authenticated;
 SELECT t.error_detail('S02: paying the undiscounted amount fails (1 140.00 for a total of 1 083.00)',
   t.sell(t.lines(t.dl('tv',1,t.pct('5'))),'1083.00','Regular customer',NULL,NULL,NULL,t.lines(t.pcash('600.00'),t.pbank('540.00','nbe','TRX-0'))),

@@ -82,7 +82,7 @@ $$;
 CREATE FUNCTION t.as_user(p_sub text, p_org text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$
     SELECT set_config('request.jwt.claim.sub', COALESCE(p_sub, ''), false),
            set_config('request.headers',
-                      CASE WHEN p_org IS NULL THEN '{}' ELSE json_build_object('x-org-id', p_org)::text END,
+                      CASE WHEN p_org IS NULL THEN '{}' ELSE (jsonb_build_object('x-org-id',p_org) || COALESCE((SELECT jsonb_build_object('x-device-id',d.id,'x-device-token-hash',d.token_hash) FROM public.shifts s JOIN public.employees e ON e.id=s.employee_id JOIN public.devices d ON d.id=s.device_id WHERE s.organization_id=p_org::uuid AND s.status='open' AND d.is_active AND d.archived_at IS NULL AND d.token_hash IS NOT NULL ORDER BY (e.auth_user_id::text=p_sub) DESC,s.opened_at DESC,s.id DESC LIMIT 1),'{}'::jsonb))::text END,
                       false);
 $$;
 
@@ -643,6 +643,8 @@ INSERT INTO t.denial VALUES
  ('fiscal_assign_device','fis_7_assign','fiscal.retry',$$SELECT public.fiscal_assign_device('d5000000-0000-0000-0000-0000000000f7','d5000000-0000-0000-0000-0000000000e8')$$),
  ('fiscal_check_now','fis_8_check','fiscal.retry',$$SELECT public.fiscal_check_now('d5000000-0000-0000-0000-0000000000f5')$$),
  ('fiscal_retry_many','fis_9_many','fiscal.retry',$$SELECT public.fiscal_retry_many(ARRAY['d5000000-0000-0000-0000-0000000000e3']::uuid[])$$);
+-- EC-147: register the new RPC without changing the completeness/denial assertions.
+INSERT INTO t.denial VALUES ('force_close_shift','shift_4_force_close','cash.adjust',$q$SELECT public.force_close_shift((SELECT id FROM public.shifts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-shift-1'),'5.00','Lost POS')$q$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

@@ -69,6 +69,15 @@ export const ShiftCloseBody = z
   .strict();
 export type ShiftCloseBody = z.infer<typeof ShiftCloseBody>;
 
+/** EC-147: managers close a lost POS shift without its device token. */
+export const ShiftForceCloseBody = z
+  .object({
+    counted_cash: z.string().regex(/^\d{1,16}(\.\d{1,2})?$/),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict();
+export type ShiftForceCloseBody = z.infer<typeof ShiftForceCloseBody>;
+
 export const ShiftIdParams = z.object({ id: Uuid }).strict();
 export type ShiftIdParams = z.infer<typeof ShiftIdParams>;
 
@@ -92,6 +101,8 @@ const shiftHeader = {
   branch_id: Uuid,
   device_id: Uuid.nullable(),
   device_name: z.string().nullable(),
+  /** EC-147: current inactive/archived/unpaired state, without exposing a token hash. */
+  device_revoked: z.boolean().optional(),
   employee_id: Uuid,
   employee_name: z.string(),
   drawer_account_id: Uuid,

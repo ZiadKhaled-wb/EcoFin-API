@@ -490,3 +490,5 @@ S07: void = a full reversal in sales_returns (kind void); same day, open shift, 
 
 ### D70. T03 ETA monitor: corrections run as a job and keep `previousUUID`; the POS head moves only if the rejected receipt was the newest (EC-91, task decisions 14 Oct)
 - A rejected receipt is never plainly retried (`USE_CORRECTION`); a correction is the `eta.correct` job (new UUID, same `previousUUID`, `referenceOldUUID` = the rejected UUID), the device chain head moves only when the rejected receipt was the newest of its POS (to verify in pre-production), and the fiscal event log is append-only and never holds the payload. Details: `docs/eta/ERECEIPT_SPEC.md` section 13a.
+
+EC-147: POS writes recheck the shift device on every call; only force_close_shift (cash.adjust) skips it. Trusted service-role jobs without auth.uid() are exempt. A NULL current_device_id returns DEVICE_REVOKED; a different valid device returns DEVICE_MISMATCH.
