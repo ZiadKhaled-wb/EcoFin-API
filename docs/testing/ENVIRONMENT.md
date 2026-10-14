@@ -105,3 +105,36 @@ RUN_E2E=1 npx playwright test         # 21/21 on 5 Oct
 ### Workaround used when no `NPM_TOKEN` was available (local only, nothing committed)
 Build the same contracts version from its release tag and install it without saving:
 `git archive contracts-v0.4.0 packages/contracts` into a scratch folder, `tsc -p tsconfig.build.json` there (copy `zod`, `big.js`, `@types/node`, `@types/big.js` in as real copies, not links), `npm pack`, then in EcoFin-Web `npm install --no-save <tgz>`. `package.json` and the lockfile stay untouched. Replace with a normal `npm ci` once a token is set.
+
+## INT-4 update (14 Oct 2026)
+
+Docker 29.1.3, Supabase CLI 2.119.0 (through `npx`), Node with the network fix above. `db reset` twice: both clean (the dev seed now also makes `int4-shop-a` and `int4-shop-b`, see `int-4/LOGINS.md`).
+
+### The fake ETA as a process (test tooling)
+`npm run fake-eta` starts T02's fake ETA (`src/test/fake-eta.ts`) through `src/test/fake-eta-server.ts`. It is test tooling only: the app never imports it and `npm run build` never bundles it. Both ports bind to **127.0.0.1**:
+
+| Port | Env var | What |
+| --- | --- | --- |
+| 4010 | `FAKE_ETA_PORT` | the ETA side: token, submissions, details, receipt lookup |
+| 4011 | `FAKE_ETA_ADMIN_PORT` | controls: `POST /admin/invalid-next` `{message, code?, propertyPath?}`, `POST /admin/fail-next` `{fault: accept-then-drop \| unavailable \| duplicate, retryAfter?}` (accept-then-drop is the "time out", duplicate is the 422), `POST /admin/in-progress` `{polls}`, `GET /admin/state` (count per UUID, receipts, chain breaks, bad hashes) |
+
+It accepts the seed's fake client (`int4-fake-client`) and two POS devices (`INT4-POS-1`, `INT4-POS-2`). Its POS chain lives in memory: **restart it before each INT-4 run**.
+
+### Local env for the INT-4 run
+Put the API env in `EcoFin-API/.env.local` (git-ignored, never committed), then load it into the shell. `dotenv` reads only `.env`, so `.env.local` must be loaded by hand:
+```bash
+export NODE_OPTIONS=--no-network-family-autoselection
+# .env.local: NODE_ENV=development PORT=3001 SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_ANON_KEY=<local>
+#   SUPABASE_SERVICE_ROLE_KEY=<local> FRONTEND_URL=http://localhost:5173 MAILPIT_URL=http://127.0.0.1:54324
+#   JOBS_ENABLED=true JOBS_POLL_SECONDS=5
+#   ETA_PREPROD_ID_URL=http://127.0.0.1:4010 ETA_PREPROD_API_URL=http://127.0.0.1:4010
+#   ETA_PREPROD_PORTAL_URL=https://portal.fake-eta.test
+set -a; . ./.env.local; set +a
+npm run fake-eta &                 # fake ETA on :4010, controls on :4011
+npx tsx src/server.ts &            # API on :3001; its job worker runs in the same process (JOBS_ENABLED)
+cd ../EcoFin-Web && VITE_API_URL= VITE_DEV_API_TARGET=http://localhost:3001 \
+  VITE_SUPABASE_URL=http://127.0.0.1:54321 VITE_SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY VITE_SENTRY_DSN= \
+  npx vite --port 5173 --strictPort &
+RUN_E2E=1 E2E_BASE_URL=http://localhost:5173 npx playwright test e2e/int4-cash-sale.spec.ts
+```
+`JOBS_POLL_SECONDS=5` (the minimum) keeps the ETA checks within the spec's timeouts. The spec writes screenshots and `run.json` (ids only) to `EcoFin-Web/test-results/int-4/` (git-ignored) and runs `scripts/int4-verify.mjs` and `scripts/db-reconcile.mjs` at the end.
