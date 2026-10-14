@@ -19,7 +19,7 @@ Tests and tooling only; application code and dependency versions are unchanged. 
 | TEST4-03 | sale different arguments returns original unchanged | SQL | supabase/tests/sales_idempotency_test.sql | validated locally |
 | TEST4-04 | shift repeats same id | SQL | supabase/tests/sales_idempotency_test.sql | validated locally |
 | TEST4-05 | repeat sale and shift take no rows, balances or document counters | SQL | supabase/tests/sales_idempotency_test.sql | validated locally |
-| TEST4-06 | TEST4-B2 client price rejected rather than ignored (known failure) | SQL | supabase/tests/sales_atomicity_test.sql | validated locally (known failure) |
+| TEST4-06 | Unauthorized client price returns PRICE_OVERRIDE_DENIED with an identical snapshot | SQL | supabase/tests/sales_atomicity_test.sql: unauthorized client price rejected | passing |
 | TEST4-07 | line 3 out of stock | SQL | supabase/tests/sales_atomicity_test.sql | validated locally |
 | TEST4-08 | underpaid three-line sale | SQL | supabase/tests/sales_atomicity_test.sql | validated locally |
 | TEST4-09 | store credit above balance | SQL | supabase/tests/sales_atomicity_test.sql | validated locally |
@@ -47,7 +47,7 @@ Tests and tooling only; application code and dependency versions are unchanged. 
 | TEST4-31 | all store credit equals ledgers | SQL | supabase/tests/sales_money_properties_test.sql | validated locally |
 | TEST4-32 | 5000 seeded ETA snapshots obey every arithmetic and exact-byte UUID rule | unit | src/eta/build-receipt.property.test.ts | passing in full local CI |
 | TEST4-33 | five concurrent requests and last unit on two devices (10 rounds) | integration | src/routes/sales.integration.test.ts | passing in full local CI |
-| TEST4-34 | TEST4-B2: unprivileged client price is ignored by the API (expected failure) | integration | src/routes/sales.integration.test.ts | passing in full local CI |
+| TEST4-34 | Unauthorized client price returns HTTP 403 PRICE_OVERRIDE_DENIED, an identical snapshot and no sale | integration | src/routes/sales.integration.test.ts: unauthorized client price is rejected without creating a sale | passing |
 | TEST4-35 | one approval cannot authorize two concurrent sales (10 rounds) | integration | src/routes/discounts.integration.test.ts | passing in full local CI |
 | TEST4-36 | server refuses 5.01% and stacked discounts before writing; other cashier/cart cannot use approval | integration | src/routes/discounts.integration.test.ts | passing in full local CI |
 | TEST4-37 | void and warranty claim on one sale have one winner (10 rounds) | integration | src/routes/warranty.integration.test.ts | passing in full local CI |
@@ -107,8 +107,7 @@ Web CI checks out API main. While API PR #75 is unmerged and main lacks the TEST
 
 | ID | Test | Problem | Proposed Jira title |
 |---|---|---|---|
-| TEST4-B1 | supabase/tests/sales_atomicity_test.sql:55, revoked direct device | Authenticated post_sale accepts a revoked pairing token when called directly; API device middleware cannot protect this path. The known-bug block rolls the successful sale back and raises if behavior changes. | Reject revoked POS devices in direct sale RPC calls |
-| TEST4-B2 | supabase/tests/sales_atomicity_test.sql:20; src/routes/sales.integration.test.ts:541, ignored client price | An unprivileged client unit_price is rejected with PRICE_OVERRIDE_DENIED, while TEST-4 requires it to be ignored in favor of the server price. Existing S01 rejection tests remain intact; the new requested behavior is an expected failure. | Ignore unauthorized client unit prices when posting sales |
+| TEST4-B1 | supabase/tests/sales_atomicity_test.sql:46, revoked direct device | Authenticated post_sale accepts a revoked pairing token when called directly; API device middleware cannot protect this path. The known-bug block rolls the successful sale back and raises if behavior changes. | Reject revoked POS devices in direct sale RPC calls |
 
 ## Full local CI results
 
@@ -117,13 +116,13 @@ API full local CI passed on 14 October 2026: check, db and integration. All 50 S
 | Suite | Before TEST-4 | After TEST-4 |
 |---|---|---|
 | API unit (default npm test) | 903 passed / 459 integration-skipped; 106 files total | 904 passed / 465 integration-skipped; 107 files total |
-| API full RUN_INTEGRATION=1 | 1362 passed / 106 files | 1368 passed + 1 expected failure / 107 files |
+| API full RUN_INTEGRATION=1 | 1362 passed / 106 files | 1369 tests / 107 files (prior full run: 1368 passed + one expected failure; corrected sale suite: 3 passed, no expected failures) |
 | Contracts | 317 tests / 32 files | 317 tests / 32 files |
-| SQL | 3103 assertions / 47 files | 3973 assertions / 50 files |
+| SQL | 3103 assertions / 47 files | 3974 assertions / 50 files (full prior run plus corrected SQL assertion delta) |
 | Web unit | 649 tests / 78 files | 649 tests / 78 files |
 | Web e2e | 41 tests / 10 files | 43 passed / 11 files, two workers |
 
-Before counts are derived from the unchanged baseline plus added-test deltas; the after counts are observed full runs. Unit/integration skips in the default unit job are enabled by RUN_INTEGRATION=1 in the separate job. SQL includes the two explicitly checked known-bug blocks; the API expected failure is TEST4-B2. Web typecheck, lint, format and build passed. All 649 unit tests passed with two workers; the default local run had worker-startup timeouts, so CI now uses the same bounded worker count. All 43 browser tests passed on a fresh local stack in 3.9 minutes; the two new complete language sales took 12.9 and 11.2 seconds in their targeted validation. INT-4 verification passed 11 database/fake-ETA checks, and all ledgers reconciled. No browser test is skipped or marked as an expected failure.
+Before counts are derived from the unchanged baseline plus added-test deltas. The original after counts came from full runs; following the unauthorized-price correction, only the affected SQL and sales integration files were rerun, and the aggregate SQL count includes that assertion delta. Unit/integration skips in the default unit job are enabled by RUN_INTEGRATION=1 in the separate job. SQL retains only the revoked-device known-bug block (TEST4-B1). Unauthorized client prices are intentionally rejected; TEST4-06 and TEST4-34 are ordinary rejection tests with unchanged-state assertions, not known failures. Web typecheck, lint, format and build passed. All 649 unit tests passed with two workers; the default local run had worker-startup timeouts, so CI now uses the same bounded worker count. All 43 browser tests passed on a fresh local stack in 3.9 minutes; the two new complete language sales took 12.9 and 11.2 seconds in their targeted validation. INT-4 verification passed 11 database/fake-ETA checks, and all ledgers reconciled. No browser test is skipped or marked as an expected failure.
 
 ## Changed API files
 
@@ -163,3 +162,7 @@ Before counts are derived from the unchanged baseline plus added-test deltas; th
 ## Delivery
 
 API PR: https://github.com/ZiadKhaled-wb/EcoFin-API/pull/75. Branch: test/test-4-sales in both repositories. API is pushed; Web is committed locally and remains unpushed. The existing API CLAUDE.md modification belongs to the user and was excluded from every commit.
+
+## Unauthorized client price correction
+
+TEST4-06 asserts PRICE_OVERRIDE_DENIED and an identical complete SQL snapshot. TEST4-34 asserts HTTP 403 PRICE_OVERRIDE_DENIED, identical rows across 15 sales/ledger/counter/cache/unit tables, and no sale for the request key. Both are ordinary passing rejection tests. Only TEST4-B1 remains a known failure. Targeted validation: sales_atomicity_test.sql, 34 assertions; sales.integration.test.ts, 3 tests; typecheck and lint.

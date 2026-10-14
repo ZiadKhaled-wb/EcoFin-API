@@ -538,16 +538,48 @@ describe.skipIf(!RUN)('S01 sale core against local stack', () => {
       expect(sales.data).toHaveLength(1);
     }
   }, 60000);
-  // BUG TEST4-B2: API rejects a client price instead of ignoring it and using the server price.
-  it.fails('TEST4-B2: unprivileged client price is ignored by the API', async () => {
+  it('TEST4: unauthorized client price is rejected without creating a sale', async () => {
+    const snapshot = async () =>
+      Promise.all(
+        [
+          'sales',
+          'sale_lines',
+          'payments',
+          'payment_allocations',
+          'stock_movements',
+          'cash_movements',
+          'store_credit_movements',
+          'fiscal_submissions',
+          'audit_log',
+          'approvals',
+          'document_counters',
+          'stock_levels',
+          'cash_balances',
+          'store_credit_balances',
+          'units',
+        ].map(async (table) => {
+          const result = await service.from(table).select('*').eq('organization_id', org);
+          expect(result.error, table).toBeNull();
+          return { table, rows: (result.data ?? []).map((row) => JSON.stringify(row)).sort() };
+        }),
+      );
+    const before = await snapshot();
     const response = await call(
       'post',
       '/api/sales',
       cashier,
       { lines: [{ product_id: chair, quantity: 1, unit_price: '1.00' }], expected_total: '250.00' },
-      key('ignored-client-price'),
+      key('rejected-client-price'),
     );
-    expect(response.status, JSON.stringify(response.body)).toBe(201);
-    expect(Sale.parse(response.body).lines[0]?.unit_price).toBe('250.00');
+    expect(response.status, JSON.stringify(response.body)).toBe(403);
+    expect(code(response)).toBe('PRICE_OVERRIDE_DENIED');
+    expect(await snapshot()).toEqual(before);
+    const sales = await service
+      .from('sales')
+      .select('id')
+      .eq('organization_id', org)
+      .eq('idempotency_key', key('rejected-client-price'));
+    expect(sales.error).toBeNull();
+    expect(sales.data).toEqual([]);
   });
 });

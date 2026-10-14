@@ -17,19 +17,10 @@ SELECT t.as_user('a7050000-0000-0000-8000-000000000003',t.org('a'));
 SET ROLE authenticated;
 INSERT INTO t.ids SELECT 'shift',(t.open_shift(t.id('main'),'0','test4-shift')->>'id')::uuid;
 
--- BUG TEST4-B2: a cashier's client unit_price is rejected instead of ignored in favor of the server price.
--- KNOWN BUG: the desired server-priced sale must succeed when this is fixed.
-DO $$
-DECLARE before jsonb := t.snapshot(t.org('a'));
-BEGIN
-  BEGIN
-    PERFORM public.post_sale(t.lines(t.items('chair',1)||'{"unit_price":"1.00"}'::jsonb),'100.00','test4-price-ignore');
-    RAISE EXCEPTION 'TEST4_B2_FIXED';
-  EXCEPTION WHEN others THEN
-    IF split_part(SQLERRM,':',1)<>'PRICE_OVERRIDE_DENIED' THEN RAISE EXCEPTION 'TEST4-B2 changed behavior: %',SQLERRM; END IF;
-  END;
-  PERFORM t.expect('TEST4-B2 client price rejected rather than ignored (known failure)',t.snapshot(t.org('a'))=before);
-END $$;
+-- TEST4-06: unauthorized client prices are rejected without changing any sale state.
+SELECT t.unchanged('unauthorized client price rejected',
+  t.sell(t.lines(t.items('chair',1)||'{"unit_price":"1.00"}'::jsonb),'100.00',NULL,NULL,'test4-price-rejected'),
+  'PRICE_OVERRIDE_DENIED');
 
 SELECT t.unchanged('line 3 out of stock',t.sell(t.lines(t.items('chair',1),t.items('sofa',1),t.items('third',11)),'2680.00'),'OUT_OF_STOCK');
 SELECT t.unchanged('underpaid three-line sale',t.sell(t.lines(t.items('chair',1),t.items('sofa',1),t.items('third',1)),'680.00',t.lines(t.pcash('679.99'))),'PAYMENT_TOTAL_MISMATCH');
