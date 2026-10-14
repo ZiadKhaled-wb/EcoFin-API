@@ -45,16 +45,16 @@ Tests and tooling only; application code and dependency versions are unchanged. 
 | TEST4-29 | all stock equals ledgers | SQL | supabase/tests/sales_money_properties_test.sql | validated locally |
 | TEST4-30 | all cash equals ledgers | SQL | supabase/tests/sales_money_properties_test.sql | validated locally |
 | TEST4-31 | all store credit equals ledgers | SQL | supabase/tests/sales_money_properties_test.sql | validated locally |
-| TEST4-32 | 5000 seeded ETA snapshots obey every arithmetic and exact-byte UUID rule | unit | src/eta/build-receipt.property.test.ts | API CI passed; Web e2e pending |
-| TEST4-33 | five concurrent requests and last unit on two devices (10 rounds) | integration | src/routes/sales.integration.test.ts | API CI passed; Web e2e pending |
-| TEST4-34 | TEST4-B2: unprivileged client price is ignored by the API (expected failure) | integration | src/routes/sales.integration.test.ts | API CI passed; Web e2e pending |
-| TEST4-35 | one approval cannot authorize two concurrent sales (10 rounds) | integration | src/routes/discounts.integration.test.ts | API CI passed; Web e2e pending |
-| TEST4-36 | server refuses 5.01% and stacked discounts before writing; other cashier/cart cannot use approval | integration | src/routes/discounts.integration.test.ts | API CI passed; Web e2e pending |
-| TEST4-37 | void and warranty claim on one sale have one winner (10 rounds) | integration | src/routes/warranty.integration.test.ts | API CI passed; Web e2e pending |
-| TEST4-38 | three outage receipts grow attempts, appear in monitor, recover in order and clear alerts | integration | src/eta/eta.integration.test.ts | API CI passed; Web e2e pending |
-| TEST4-39 | two corrections at once give one 202, one 409 and one new UUID (10 rounds) | integration | src/eta/t03.integration.test.ts | API CI passed; Web e2e pending |
-| TEST4-40 | full POS sale and prepared QR receipt in ar | e2e | e2e/sale-languages.spec.ts | API CI passed; Web e2e pending |
-| TEST4-41 | full POS sale and prepared QR receipt in en | e2e | e2e/sale-languages.spec.ts | API CI passed; Web e2e pending |
+| TEST4-32 | 5000 seeded ETA snapshots obey every arithmetic and exact-byte UUID rule | unit | src/eta/build-receipt.property.test.ts | passing in full local CI |
+| TEST4-33 | five concurrent requests and last unit on two devices (10 rounds) | integration | src/routes/sales.integration.test.ts | passing in full local CI |
+| TEST4-34 | TEST4-B2: unprivileged client price is ignored by the API (expected failure) | integration | src/routes/sales.integration.test.ts | passing in full local CI |
+| TEST4-35 | one approval cannot authorize two concurrent sales (10 rounds) | integration | src/routes/discounts.integration.test.ts | passing in full local CI |
+| TEST4-36 | server refuses 5.01% and stacked discounts before writing; other cashier/cart cannot use approval | integration | src/routes/discounts.integration.test.ts | passing in full local CI |
+| TEST4-37 | void and warranty claim on one sale have one winner (10 rounds) | integration | src/routes/warranty.integration.test.ts | passing in full local CI |
+| TEST4-38 | three outage receipts grow attempts, appear in monitor, recover in order and clear alerts | integration | src/eta/eta.integration.test.ts | passing in full local CI |
+| TEST4-39 | two corrections at once give one 202, one 409 and one new UUID (10 rounds) | integration | src/eta/t03.integration.test.ts | passing in full local CI |
+| TEST4-40 | full POS sale and prepared QR receipt in ar | e2e | e2e/sale-languages.spec.ts | passing in full local CI |
+| TEST4-41 | full POS sale and prepared QR receipt in en | e2e | e2e/sale-languages.spec.ts | passing in full local CI |
 
 The existing replay assertions in P05, K01, I02, I03, I04, U02, U03, U04, U05, K02 and K03 now also compare a complete snapshot. Existing S07/S12 replays and refusal assertions retain their checks and add snapshots. No existing assertion is removed or relaxed.
 
@@ -101,7 +101,7 @@ Original means the existing result is returned with no second document. Conflict
 
 API: **CI / check**, **CI / db**, **CI / integration**. Web: **CI / check**, **CI / e2e**. Existing job IDs remain unchanged. SQL is discovered by the existing glob; all integration files run with RUN_INTEGRATION=1. Web starts the local fake ETA and API worker, uses two workers and saves the HTML report and logs on failure. Every job prints known-failure markers to its summary.
 
-Web e2e needs the API TEST-4 PR merged into main before its own PR is checked: its workflow checks out API main, which must contain test4-language-fixture.mjs and the extended int4-verify.mjs.
+Web CI checks out API main. While API PR #75 is unmerged and main lacks the TEST-4 fixture, it falls back to tested, pushed revision 265d70c75cc38f503a42fd5e821d3573540fd313. Once main contains the fixture, CI uses main automatically. The Web branch is ready to push without needing a new secret or an API deployment.
 
 ## Bugs
 
@@ -120,9 +120,10 @@ API full local CI passed on 14 October 2026: check, db and integration. All 50 S
 | API full RUN_INTEGRATION=1 | 1362 passed / 106 files | 1368 passed + 1 expected failure / 107 files |
 | Contracts | 317 tests / 32 files | 317 tests / 32 files |
 | SQL | 3103 assertions / 47 files | 3973 assertions / 50 files |
-| Web e2e discovery | 41 tests / 10 files | 43 tests / 11 files; execution follows the API PR |
+| Web unit | 649 tests / 78 files | 649 tests / 78 files |
+| Web e2e | 41 tests / 10 files | 43 passed / 11 files, two workers |
 
-Before counts are derived from the unchanged baseline plus added-test deltas; the after counts are observed full runs. Unit/integration skips in the default unit job are enabled by RUN_INTEGRATION=1 in the separate job. SQL includes the two explicitly checked known-bug blocks; the API expected failure is TEST4-B2. Web unit/check/e2e validation is recorded in the Web copy after its local CI run.
+Before counts are derived from the unchanged baseline plus added-test deltas; the after counts are observed full runs. Unit/integration skips in the default unit job are enabled by RUN_INTEGRATION=1 in the separate job. SQL includes the two explicitly checked known-bug blocks; the API expected failure is TEST4-B2. Web typecheck, lint, format and build passed. All 649 unit tests passed with two workers; the default local run had worker-startup timeouts, so CI now uses the same bounded worker count. All 43 browser tests passed on a fresh local stack in 3.9 minutes; the two new complete language sales took 12.9 and 11.2 seconds in their targeted validation. INT-4 verification passed 11 database/fake-ETA checks, and all ledgers reconciled. No browser test is skipped or marked as an expected failure.
 
 ## Changed API files
 
@@ -133,7 +134,6 @@ Before counts are derived from the unchanged baseline plus added-test deltas; th
 - `scripts/int4-verify.mjs`
 - `scripts/test4-known-failures.mjs`
 - `scripts/test4-language-fixture.mjs`
-- `scripts/test4-prepare.mjs`
 - `src/eta/build-receipt.property.test.ts`
 - `src/eta/eta.integration.test.ts`
 - `src/eta/t03.integration.test.ts`
@@ -159,3 +159,7 @@ Before counts are derived from the unchanged baseline plus added-test deltas; th
 - `supabase/tests/u03_supplier_payments_test.sql`
 - `supabase/tests/u04_purchase_returns_test.sql`
 - `supabase/tests/u05_purchase_orders_test.sql`
+
+## Delivery
+
+API PR: https://github.com/ZiadKhaled-wb/EcoFin-API/pull/75. Branch: test/test-4-sales in both repositories. API is pushed; Web is committed locally and remains unpushed. The existing API CLAUDE.md modification belongs to the user and was excluded from every commit.
