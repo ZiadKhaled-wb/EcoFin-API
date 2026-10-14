@@ -4,6 +4,7 @@ import { FILE_PURPOSES } from '@ziadkhaled-wb/contracts';
 import {
   ALLOWED_TYPES,
   ENTITY_TABLES,
+  ENTITY_TYPES,
   READ_PERMISSION,
   UPLOAD_PERMISSION,
   assertAllowedType,
@@ -169,6 +170,10 @@ describe('purpose to permission map', () => {
   });
   it('entity types point only at tables the shop-ownership check knows', () => {
     expect(Object.values(ENTITY_TABLES).length).toBeGreaterThan(0);
+  });
+  it('a guarantor can carry ID photos (R04)', () => {
+    expect(ENTITY_TABLES.guarantor).toBe('guarantors');
+    expect(ENTITY_TYPES).toContain('guarantor');
   });
 });
 

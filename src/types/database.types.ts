@@ -2858,6 +2858,7 @@ export type Database = {
           effective_from: string;
           grace_days: number;
           guarantor_required_above: number | null;
+          guarantors_required_count: number;
           id: string;
           late_fee_cap: number | null;
           late_fee_recurring: boolean;
@@ -2886,6 +2887,7 @@ export type Database = {
           effective_from?: string;
           grace_days?: number;
           guarantor_required_above?: number | null;
+          guarantors_required_count?: number;
           id?: string;
           late_fee_cap?: number | null;
           late_fee_recurring?: boolean;
@@ -2914,6 +2916,7 @@ export type Database = {
           effective_from?: string;
           grace_days?: number;
           guarantor_required_above?: number | null;
+          guarantors_required_count?: number;
           id?: string;
           late_fee_cap?: number | null;
           late_fee_recurring?: boolean;
@@ -8811,6 +8814,31 @@ export type Database = {
         Returns: Json;
       };
       receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
+      create_guarantor: { Args: { p_body: Json }; Returns: Json };
+      get_guarantor: { Args: { p_id: string }; Returns: Json };
+      get_guarantor_requirement: {
+        Args: { p_customer_id: string; p_financed_amount: string };
+        Returns: Json;
+      };
+      link_customer_guarantor: {
+        Args: { p_customer_id: string; p_guarantor_id: string; p_relation: string };
+        Returns: Json;
+      };
+      list_customer_guarantors: { Args: { p_customer_id: string }; Returns: Json };
+      list_guarantors: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string; p_status?: string };
+        Returns: Json;
+      };
+      set_customer_guarantor_relation: {
+        Args: { p_customer_id: string; p_guarantor_id: string; p_relation: string };
+        Returns: Json;
+      };
+      set_guarantor_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
+      unlink_customer_guarantor: {
+        Args: { p_customer_id: string; p_guarantor_id: string };
+        Returns: Json;
+      };
+      update_guarantor: { Args: { p_body: Json; p_id: string }; Returns: Json };
       record_sale_receipt_print: { Args: { p_sale_id: string }; Returns: Json };
       register_file: {
         Args: {

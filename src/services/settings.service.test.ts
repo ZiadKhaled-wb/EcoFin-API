@@ -28,6 +28,7 @@ const policy = {
   early_settlement_rule: 'no_discount',
   early_settlement_pct: null,
   guarantor_required_above: null,
+  guarantors_required_count: 1,
   survey_required_above: null,
   effective_from: '2026-10-07T09:00:00.123456+00:00',
   created_at: '2026-10-07T09:00:00.123456+00:00',

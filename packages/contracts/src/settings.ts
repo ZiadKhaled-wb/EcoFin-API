@@ -130,6 +130,8 @@ const policyFields = {
   early_settlement_rule: z.enum(EARLY_SETTLEMENT_RULES),
   early_settlement_pct: Percent.nullable(),
   guarantor_required_above: NonNegativeMoney.nullable(),
+  /** How many guarantors a contract above `guarantor_required_above` needs (1-3). */
+  guarantors_required_count: z.number().int().min(1).max(3),
   survey_required_above: NonNegativeMoney.nullable(),
 };
 
