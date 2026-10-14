@@ -21,6 +21,13 @@ export interface FakeEtaCredentials {
   clientSecret: string;
   posSerial: string;
   presharedKey: string;
+  /** More POS devices the token call accepts (INT-4: two tills in one shop). */
+  extraPos?: { posSerial: string; presharedKey: string }[];
+}
+
+export interface FakeEtaOptions {
+  /** A fixed local port (the `npm run fake-eta` process); 0 or none picks a free one. */
+  port?: number;
 }
 
 /** What the next submission does instead of being answered normally (used once). */
@@ -107,7 +114,10 @@ export function splitReceipts(body: string): string[] {
   return out;
 }
 
-export async function startFakeEta(credentials: FakeEtaCredentials): Promise<FakeEta> {
+export async function startFakeEta(
+  credentials: FakeEtaCredentials,
+  options: FakeEtaOptions = {},
+): Promise<FakeEta> {
   const received = new Map<string, number>();
   const receipts = new Map<string, StoredReceipt>();
   const badHashes: string[] = [];
@@ -119,6 +129,10 @@ export async function startFakeEta(credentials: FakeEtaCredentials): Promise<Fak
   let inProgress = 0;
   let submissions = 0;
   const TOKEN = 'fake-eta-access-token';
+  const posKeys = new Map<string, string>([
+    [credentials.posSerial, credentials.presharedKey],
+    ...(credentials.extraPos ?? []).map((p): [string, string] => [p.posSerial, p.presharedKey]),
+  ]);
 
   const app = express();
   app.use(express.urlencoded({ extended: false }));
@@ -134,9 +148,9 @@ export async function startFakeEta(credentials: FakeEtaCredentials): Promise<Fak
       text(body['client_secret']) !== credentials.clientSecret
     ) {
       res.status(400).json({ error: 'invalid_clientsecret' });
-    } else if (req.header('posserial') !== credentials.posSerial) {
+    } else if (!posKeys.has(req.header('posserial') ?? '')) {
       res.status(400).json({ error: 'invalid_posserial' });
-    } else if (req.header('presharedkey') !== credentials.presharedKey) {
+    } else if (req.header('presharedkey') !== posKeys.get(req.header('posserial') ?? '')) {
       res.status(400).json({ error: 'invalid_presharedkey' });
     } else if (!req.header('pososversion') || !req.header('posmodelframework')) {
       res.status(400).json({ error: 'invalid_request' });
@@ -297,7 +311,7 @@ export async function startFakeEta(credentials: FakeEtaCredentials): Promise<Fak
   });
 
   const server: Server = createServer(app);
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => server.listen(options.port ?? 0, '127.0.0.1', resolve));
   const { port } = server.address() as AddressInfo;
 
   return {

@@ -45,7 +45,8 @@
     "precheck:audit": "npm run build:contracts",
     "check:audit": "tsx scripts/check-audit.ts",
     "preeta:preprod-smoke": "npm run build:contracts",
-    "eta:preprod-smoke": "tsx scripts/eta-preprod-smoke.ts"
+    "eta:preprod-smoke": "tsx scripts/eta-preprod-smoke.ts",
+    "fake-eta": "tsx src/test/fake-eta-server.ts"
   },
   "dependencies": {
     "@sentry/node": "11.4.0",

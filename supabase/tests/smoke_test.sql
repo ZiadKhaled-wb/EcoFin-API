@@ -145,7 +145,7 @@ INSERT INTO cash_movements (organization_id, cash_account_id, amount, type, sour
 VALUES ('10000000-0000-0000-0000-00000000000a', '60000000-0000-0000-0000-0000000000da', 500, 'float_in', 'shift', gen_random_uuid());
 SELECT t.expect('cash: balance and branch copied',
     (SELECT b.balance = 500 FROM cash_balances b WHERE b.cash_account_id = '60000000-0000-0000-0000-0000000000da')
-    AND (SELECT branch_id = '20000000-0000-0000-0000-00000000000a' FROM cash_movements LIMIT 1));
+    AND (SELECT branch_id = '20000000-0000-0000-0000-00000000000a' FROM cash_movements WHERE cash_account_id = '60000000-0000-0000-0000-0000000000da' LIMIT 1));
 
 -- ---------------------------------------------------------------- numbering
 SELECT t.expect('numbering: sequential per branch/type/year',
