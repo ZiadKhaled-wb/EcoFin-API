@@ -16,7 +16,7 @@ const password = 'LocalDev-Only-2026!';
 const user = await db.auth.admin.createUser({ email, password, email_confirm: true });
 if (user.error) throw user.error;
 const invite = randomBytes(32).toString('hex');
-const serial = `TEST4-${language.toUpperCase()}-${stamp}`;
+const serial = `TEST4-${language.toUpperCase()}-${stamp}`.toUpperCase();
 const sql = `BEGIN;
 SELECT set_config('request.jwt.claim.sub','f0000000-0000-0000-0000-000000000001',true);
 CREATE TEMP TABLE fixture AS SELECT public.admin_provision_organization('TEST4 ${language}','test4-${language}-${stamp}','retail_pro','Owner','${email}',NULL,'Main','${invite}',now()+interval '1 day') result;
@@ -24,7 +24,7 @@ SELECT public.accept_invite('${invite}','${user.data.user.id}');
 SELECT set_config('request.jwt.claim.sub','${user.data.user.id}',true);
 SELECT set_config('request.headers',json_build_object('x-org-id',(SELECT result->>'organization_id' FROM fixture))::text,true);
 UPDATE public.organizations SET legal_name='TEST4 Shop',tax_registration_no='674859545',default_language='${language}' WHERE id=(SELECT (result->>'organization_id')::uuid FROM fixture);
-UPDATE public.org_settings SET prices_include_vat=true,discount_caps='{"OWNER":5,"CASHIER":5}' WHERE organization_id=(SELECT (result->>'organization_id')::uuid FROM fixture);
+UPDATE public.org_settings SET prices_include_vat=true,discount_caps='{"CASHIER":5,"BRANCH_MANAGER":15}' WHERE organization_id=(SELECT (result->>'organization_id')::uuid FROM fixture);
 UPDATE public.branches SET eta_branch_code='0',address='Main Street',city='Nasr City',governorate='Cairo',building_number='1' WHERE organization_id=(SELECT (result->>'organization_id')::uuid FROM fixture);
 CREATE TEMP TABLE products AS SELECT public.create_product('{"name_ar":"كرسي","name_en":"Chair","sku":"TEST4-CHAIR","barcode":"6222000000011","cash_price":"1000.00","eta_item_code":"EG-674859545-T4CH","eta_item_type":"EGS"}') chair,
 public.create_product('{"name_ar":"هاتف","name_en":"Phone","sku":"TEST4-PHONE","cash_price":"5000.00","is_serialized":true,"warranty_months":12,"eta_item_code":"EG-674859545-T4PH","eta_item_type":"EGS"}') phone;
