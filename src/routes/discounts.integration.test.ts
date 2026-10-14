@@ -350,6 +350,37 @@ describe.skipIf(!RUN)('S03 discounts against local stack', () => {
       decision_note: 'Fine',
       used: false,
     });
+
+    const otherCashier = await employee('CASHIER', 'approval-misuse');
+    const device = await pairTestDevice(service, org, branch, 'TEST4 approval misuse');
+    const otherCall = (path: string, data: object, keyValue: string) =>
+      request(app)
+        .post(path)
+        .set('X-Forwarded-For', `198.18.66.${(++ip % 250) + 1}`)
+        .set('Authorization', 'Bearer ' + otherCashier)
+        .set('x-org-id', org)
+        .set(DEVICE_TOKEN_HEADER, device.token)
+        .set('Idempotency-Key', key(keyValue))
+        .send(data);
+    expect(
+      (await otherCall('/api/shifts', { branch_id: branch, opening_float: '0' }, 'misuse-shift'))
+        .status,
+    ).toBe(201);
+    const wrongUser = await otherCall('/api/sales', body, 'ap-other-cashier');
+    expect(wrongUser.status, JSON.stringify(wrongUser.body)).toBe(409);
+    expect(code(wrongUser)).toBe('APPROVAL_INVALID');
+
+    const wrongCart = await sell(
+      cashier,
+      {
+        ...body,
+        lines: [{ product_id: tv, quantity: 2, discount: { type: 'percent', value: '8' } }],
+        expected_total: '2097.60',
+      },
+      'ap-other-cart',
+    );
+    expect(wrongCart.status).toBe(409);
+    expect(code(wrongCart)).toBe('APPROVAL_INVALID');
     const sold = await sell(cashier, body, 'ap-sale');
     expect(sold.status, JSON.stringify(sold.body)).toBe(201);
     expect(Sale.parse(sold.body)).toMatchObject({ discount_total: '91.20', total: '1048.80' });
@@ -413,5 +444,68 @@ describe.skipIf(!RUN)('S03 discounts against local stack', () => {
     expect(code(res)).toBe('APPROVAL_NOT_FOUND');
     const still = await service.from('approvals').select('status').eq('id', id).single();
     expect(still.data?.status).toBe('pending');
+  });
+  it('TEST4: one approval cannot authorize two concurrent sales (10 rounds)', async () => {
+    for (let round = 0; round < 10; round++) {
+      const lines = [{ product_id: tv, quantity: 1, discount: { type: 'percent', value: '8' } }];
+      const asked = await call('post', '/api/sales/discount-approvals', cashier, {
+        branch_id: branch,
+        lines,
+        reason: 'TEST4 race',
+      });
+      expect(asked.status, JSON.stringify(asked.body)).toBe(201);
+      const approval = DiscountApprovalRequested.parse(asked.body).approval_id;
+      expect(
+        (await call('post', `/api/approvals/${approval}/decide`, manager, { approve: true }))
+          .status,
+      ).toBe(200);
+      const body = {
+        lines,
+        expected_total: '1048.80',
+        discount_reason: 'TEST4 race',
+        discount_approval_id: approval,
+      };
+      const responses = await Promise.all([
+        sell(cashier, body, `race-a-${round}`),
+        sell(cashier, body, `race-b-${round}`),
+      ]);
+      expect(
+        responses.map((r) => r.status).sort(),
+        JSON.stringify(responses.map((r) => r.body)),
+      ).toEqual([201, 409]);
+      expect(code(responses.find((r) => r.status === 409)!)).toBe('APPROVAL_INVALID');
+      const saved = await service.from('approvals').select('entity_id').eq('id', approval).single();
+      expect(saved.error).toBeNull();
+      expect(saved.data?.entity_id).toBe(
+        Sale.parse(responses.find((r) => r.status === 201)!.body).id,
+      );
+    }
+  }, 60000);
+
+  it('TEST4: server refuses 5.01% and stacked discounts before writing', async () => {
+    const before = await service.from('sales').select('id').eq('organization_id', org);
+    expect(before.error).toBeNull();
+    for (const [lineDiscount, saleDiscount] of [
+      ['5.01', undefined],
+      ['4', '2'],
+    ] as const) {
+      const res = await sell(
+        cashier,
+        {
+          lines: [
+            { product_id: tv, quantity: 1, discount: { type: 'percent', value: lineDiscount } },
+          ],
+          expected_total: '1.00',
+          discount_reason: 'TEST4 cap',
+          ...(saleDiscount ? { sale_discount: { type: 'percent', value: saleDiscount } } : {}),
+        },
+        `cap-${lineDiscount}`,
+      );
+      expect(res.status, JSON.stringify(res.body)).toBe(403);
+      expect(code(res)).toBe('DISCOUNT_ABOVE_CAP');
+    }
+    const after = await service.from('sales').select('id').eq('organization_id', org);
+    expect(after.error).toBeNull();
+    expect(after.data).toEqual(before.data);
   });
 });

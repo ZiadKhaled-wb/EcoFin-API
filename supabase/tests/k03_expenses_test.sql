@@ -139,9 +139,15 @@ SELECT t.expect('Done when: 1 200 of rent leaves the safe: numbered EX, one expe
 FROM (SELECT app.expense_json(t.org('a'),t.id('e1')) x) y;
 SELECT t.as_user('a6030000-0000-0000-8000-000000000003',t.org('a'));
 SET ROLE authenticated;
+SELECT current_user AS test4_role \gset
+RESET ROLE;
+\ir helpers/test4_snapshot.sql
+SET ROLE :"test4_role";
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('idempotent: the same key again -> the same expense, nothing spent twice',
   (public.post_expense(t.id('rent'),'1200.00','k03-e1-key',t.id('main'),t.id('safe'))->>'id')::uuid=t.id('e1')
   AND t.cash('safe')=2800 AND t.count()=1);
+SELECT t.expect('TEST4 replay snapshot 1',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 INSERT INTO t.ids SELECT 'e2',(public.post_expense(t.id('transport'),'150.50','k03-e2-key',t.id('main'),t.id('bank'))->>'id')::uuid;
 SELECT t.expect('a shop-wide bank pays, booked in the expense''s branch',
   t.cash('bank')=849.50 AND (SELECT branch_id FROM public.cash_movements WHERE source_id=t.id('e2'))=t.id('main'));
@@ -186,8 +192,10 @@ SELECT t.expect('reversal (shift still open): the money is back in the drawer an
   t.expected('s1')='300.00' AND (r->>'reverses_expense_id')::uuid=t.id('e3') AND (r->>'shift_id')::uuid=t.id('s1')
   AND r->>'note'='Paid twice' AND r->>'number'<>x->>'number' AND (x->>'reversed_by_expense_id')::uuid=t.id('r3'), r::text)
 FROM (SELECT public.get_expense(t.id('r3')) r,public.get_expense(t.id('e3')) x) y;
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('reversal: the same key again -> the same reversal',
   (public.reverse_expense(t.id('e3'),'Paid twice','k03-r3-key')->>'id')::uuid=t.id('r3') AND t.expected('s1')='300.00');
+SELECT t.expect('TEST4 replay snapshot 2',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.error('reversal: again with a new key',format('SELECT public.reverse_expense(%L,%L,%L)',t.id('e3'),'Again','k03-r3-again'),'EXPENSE_ALREADY_REVERSED');
 SELECT t.error('reversal: a reversal can''t be reversed',format('SELECT public.reverse_expense(%L,%L,%L)',t.id('r3'),'Undo','k03-r3-undo'),'VALIDATION_FAILED');
 SELECT t.error('reversal: the key of another expense',format('SELECT public.reverse_expense(%L,%L,%L)',t.id('e1'),'Wrong key','k03-r3-key'),'IDEMPOTENCY_CONFLICT');

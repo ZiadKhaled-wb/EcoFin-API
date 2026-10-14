@@ -505,22 +505,24 @@ describe.skipIf(!RUN)('T03 ETA monitor and corrections against local stack and a
     expect(fake.badHashes).toEqual([]);
   });
 
-  it('race: two corrections at once give one 202, one 409 CORRECTION_QUEUED and one new UUID', async () => {
-    const product = await newProduct('EG-BAD-RACE');
-    const { row } = await rejectedSale(product);
-    await setCode(product, 'EG-OK-RACE');
-    const [a, b] = await Promise.all([
-      call('post', `/api/fiscal/${row.id}/correct`, owner),
-      call('post', `/api/fiscal/${row.id}/correct`, owner),
-    ]);
-    const statuses = [a.status, b.status].sort();
-    expect(statuses, JSON.stringify([a.body, b.body])).toEqual([202, 409]);
-    const loser = a.status === 409 ? a : b;
-    expect(code(loser)).toBe('CORRECTION_QUEUED');
-    await drain();
-    const refs = [...fake.receipts.values()].filter((r) => r.referenceOldUuid === row.eta_uuid);
-    expect(refs).toHaveLength(1);
-    expect(fake.received.get(refs[0]!.uuid)).toBe(1);
+  it('race: two corrections at once give one 202, one 409 CORRECTION_QUEUED and one new UUID (10 rounds)', async () => {
+    for (let iteration = 0; iteration < 10; iteration++) {
+      const product = await newProduct(`EG-BAD-RACE-${iteration}`);
+      const { row } = await rejectedSale(product);
+      await setCode(product, `EG-OK-RACE-${iteration}`);
+      const [a, b] = await Promise.all([
+        call('post', `/api/fiscal/${row.id}/correct`, owner),
+        call('post', `/api/fiscal/${row.id}/correct`, owner),
+      ]);
+      const statuses = [a.status, b.status].sort();
+      expect(statuses, JSON.stringify([a.body, b.body])).toEqual([202, 409]);
+      const loser = a.status === 409 ? a : b;
+      expect(code(loser)).toBe('CORRECTION_QUEUED');
+      await drain();
+      const refs = [...fake.receipts.values()].filter((r) => r.referenceOldUuid === row.eta_uuid);
+      expect(refs).toHaveLength(1);
+      expect(fake.received.get(refs[0]!.uuid)).toBe(1);
+    }
   });
 
   it('a correction of a receipt that is not rejected, and a check on one that is not submitted, are refused', async () => {

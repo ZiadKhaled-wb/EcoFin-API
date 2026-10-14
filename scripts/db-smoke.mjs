@@ -6,6 +6,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const sqlFile = process.argv[2] ?? `${root}supabase/tests/smoke_test.sql`;
@@ -20,7 +21,16 @@ function dbContainer() {
 
 const container = dbContainer();
 // A Windows UTF-8 BOM is not SQL whitespace after the BEGIN wrapper.
-const sql = readFileSync(sqlFile, 'utf8').replace(/^\uFEFF/, '');
+function readSql(path, ancestors = []) {
+  const absolute = resolve(path);
+  if (ancestors.includes(absolute)) throw new Error('Circular SQL fixture include: ' + absolute);
+  return readFileSync(absolute, 'utf8')
+    .replace(/^\uFEFF/, '')
+    .replace(/^\\ir\s+([^\r\n]+)\s*$/gm, (_, relative) =>
+      readSql(resolve(dirname(absolute), relative.trim()), [...ancestors, absolute]),
+    );
+}
+const sql = readSql(sqlFile);
 const run = spawnSync(
   'docker',
   [

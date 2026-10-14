@@ -67,7 +67,13 @@ SELECT t.error('dates order',format('SELECT public.admin_set_subscription_dates(
 SELECT t.error('reason required',format('SELECT public.admin_change_plan(%L,''retail'','' '')',t.org('p05-starter')),'REASON_REQUIRED');
 SELECT t.error('non-finite payment denied',format('SELECT public.admin_record_subscription_payment(%L,''NaN''::numeric,CURRENT_DATE,CURRENT_DATE,NULL,true,gen_random_uuid())',t.org('p05-starter')),'VALIDATION_FAILED');
 INSERT INTO t.payments SELECT public.admin_record_subscription_payment(t.org('p05-starter'),500.25,app.org_today(t.org('p05-starter')),app.org_today(t.org('p05-starter'))+30,'manual',true,'a0500000-0000-4000-8000-000000000002');
+SELECT current_user AS test4_role \gset
+RESET ROLE;
+\ir helpers/test4_snapshot.sql
+SET ROLE :"test4_role";
+SELECT t.snapshot(t.org('p05-starter'))::text AS test4_snapshot \gset
 SELECT t.expect('payment replay same id',public.admin_record_subscription_payment(t.org('p05-starter'),500.25,CURRENT_DATE,CURRENT_DATE+30,'manual',true,'a0500000-0000-4000-8000-000000000002')=(SELECT id FROM t.payments));
+SELECT t.expect('TEST4 replay snapshot 1',t.snapshot(t.org('p05-starter'))=:'test4_snapshot'::jsonb);
 SELECT t.expect('one decimal payment and platform actor',(SELECT count(*)=1 AND bool_and(amount=500.25 AND recorded_by_admin='f0000000-0000-0000-0000-000000000001') FROM public.subscription_payments WHERE organization_id=t.org('p05-starter')));
 SELECT t.expect('payment sets start and extends end',(SELECT subscription_start=app.org_today(id) AND subscription_end=app.org_today(id)+30 FROM public.organizations WHERE id=t.org('p05-starter')));
 SELECT t.expect('payment single audit',(SELECT count(*)=1 FROM public.audit_log WHERE organization_id=t.org('p05-starter') AND action='subscription.payment_recorded'));

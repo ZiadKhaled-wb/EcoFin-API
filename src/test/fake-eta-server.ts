@@ -21,7 +21,11 @@ export const INT4_FAKE_ETA: FakeEtaCredentials = {
   clientSecret: 'int4-fake-secret',
   posSerial: 'INT4-POS-1',
   presharedKey: 'int4-fake-psk-1',
-  extraPos: [{ posSerial: 'INT4-POS-2', presharedKey: 'int4-fake-psk-2' }],
+  extraPos: [
+    { posSerial: 'INT4-POS-2', presharedKey: 'int4-fake-psk-2' },
+    { posSerial: 'TEST4-POS-AR', presharedKey: 'test4-fake-psk-ar' },
+    { posSerial: 'TEST4-POS-EN', presharedKey: 'test4-fake-psk-en' },
+  ],
 };
 
 const FAULTS: readonly SubmitFault[] = ['accept-then-drop', 'unavailable', 'duplicate'];

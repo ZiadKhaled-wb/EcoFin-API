@@ -79,9 +79,15 @@ SELECT t.expect('the ledger row: type adjustment, source = the adjustment and it
   (SELECT count(*)=1 AND bool_and(m.type='adjustment' AND m.source_type='stock_adjustment' AND m.source_line_id=l.id AND m.unit_cost=0)
    FROM public.stock_movements m JOIN public.stock_adjustment_lines l ON l.adjustment_id=m.source_id
    WHERE m.source_id=(:'adj1'::jsonb->>'id')::uuid));
+SELECT current_user AS test4_role \gset
+RESET ROLE;
+\ir helpers/test4_snapshot.sql
+SET ROLE :"test4_role";
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('same idempotency key again: the same document, nothing posted twice',
   (public.post_stock_adjustment(t.id('main'),'found',NULL,jsonb_build_array(jsonb_build_object('product_id',t.id('cable'),'quantity',99)),'i02-adj-found-1')->>'id')=(:'adj1'::jsonb->>'id')
   AND t.level('cable','main')=12);
+SELECT t.expect('TEST4 replay snapshot 1',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT public.post_stock_adjustment(t.id('main'),'damage',NULL,
   jsonb_build_array(jsonb_build_object('product_id',t.id('tv'),'quantity',-2),jsonb_build_object('product_id',t.id('cable'),'quantity',-1)),'i02-adj-damage-1') AS adj2 \gset
 SELECT t.expect('damage -2 tv, -1 cable: two lines, cost of the tv = its average cost',
@@ -161,7 +167,9 @@ SELECT public.create_stock_count(t.id('main'),NULL,'i02-count-main-1') AS c1 \gs
 SELECT t.expect('whole-branch count: SC number, open, a line per product and per unit in the branch',
   :'c1'::jsonb->>'number' ~ '^MAIN-SC-\d{2}-000001$' AND :'c1'::jsonb->>'status'='open'
   AND (:'c1'::jsonb->>'lines_total')::int=6 AND (:'c1'::jsonb->>'lines_counted')::int=0, :'c1'::text);
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('same key again: the same count',(public.create_stock_count(t.id('main'),NULL,'i02-count-main-1')->>'id')=(:'c1'::jsonb->>'id'));
+SELECT t.expect('TEST4 replay snapshot 2',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.error('a second open count over the same products',format($q$SELECT public.create_stock_count(%L,%L,'i02-count-main-2')$q$,t.id('main'),t.id('cables')),'STOCK_COUNT_OPEN');
 SELECT t.error('keeper: another branch',format($q$SELECT public.create_stock_count(%L,NULL,'i02-count-second-x')$q$,t.id('second')),'BRANCH_DENIED');
 SELECT public.get_stock_count((:'c1'::jsonb->>'id')::uuid,p_limit=>100) AS g1 \gset
@@ -218,9 +226,11 @@ SELECT t.expect('the sheet keeps what was expected at posting time, uncounted li
 SELECT t.expect('ledger caches still match the ledger',NOT EXISTS(SELECT 1 FROM app.ledger_mismatches(t.org('a'))));
 SELECT t.as_user('a2000000-0000-0000-8000-000000000004',t.org('a'));
 SET LOCAL ROLE authenticated;
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('replaying the post key: the same adjustment, nothing posted twice',
   (public.post_stock_count((:'c1'::jsonb->>'id')::uuid,true,'i02-post-1')->>'adjustment_id')=(:'p1'::jsonb->>'adjustment_id')
   AND (SELECT count(*)=1 FROM public.stock_adjustments WHERE count_id=(:'p1'::jsonb->>'id')::uuid) AND t.level('tv','main')=6);
+SELECT t.expect('TEST4 replay snapshot 3',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.expect('posting again: the same result, nothing posted twice',
   (public.post_stock_count((:'c1'::jsonb->>'id')::uuid,true,'i02-post-1b')->>'adjustment_id')=(:'p1'::jsonb->>'adjustment_id') AND t.level('tv','main')=6);
 SELECT t.error('a posted count can''t change',format($q$SELECT public.save_stock_count_lines(%L,'[{"product_id":"%s","counted_qty":1}]')$q$,:'c1'::jsonb->>'id',t.id('tv')),'DOCUMENT_FINAL');

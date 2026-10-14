@@ -96,10 +96,16 @@ SELECT t.expect('Done when: the return is numbered PR, totals with VAT, the supp
   AND t.bal('nile')=23940-6156 AND jsonb_array_length(r->'lines')=2 AND r->>'refund_mode'='supplier_credit'
   AND t.audits('purchase_return.posted','r1')=1, r::text)
 FROM (SELECT public.get_purchase_return(t.id('r1')) r) x;
+SELECT current_user AS test4_role \gset
+RESET ROLE;
+\ir helpers/test4_snapshot.sql
+SET ROLE :"test4_role";
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('Done when: the same key again -> the same return, nothing moves',
   (public.post_purchase_return(t.id('inv1'),'supplier_credit','Damaged on arrival',
      jsonb_build_array(t.q('inv1','tv',4)),'u04-r1-key')->>'id')::uuid=t.id('r1')
   AND t.stock('tv')=6 AND t.bal('nile')=17784 AND (SELECT count(*) FROM public.purchase_returns)=1);
+SELECT t.expect('TEST4 replay snapshot 1',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.expect('statement: the return is on the U01 statement and closes at the balance',
   EXISTS(SELECT 1 FROM jsonb_array_elements(s->'rows') r WHERE r->>'kind'='return' AND r->>'credit'='6156.00')
   AND (s->>'closing_balance')::numeric=t.bal('nile'), s::text)

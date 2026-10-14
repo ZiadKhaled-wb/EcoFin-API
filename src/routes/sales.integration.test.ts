@@ -223,15 +223,27 @@ describe.skipIf(!RUN)('S01 sale core against local stack', () => {
       400,
     );
 
-    // Done when: a double submit (two requests at once, one key) creates one sale.
-    const [first, second] = await Promise.all([
-      call('post', '/api/sales', cashier, body, key('sale')),
-      call('post', '/api/sales', cashier, body, key('sale')),
-    ]);
-    expect(first.status, JSON.stringify(first.body)).toBe(201);
-    expect(second.status, JSON.stringify(second.body)).toBe(201);
-    const sale = Sale.parse(first.body);
-    expect(Sale.parse(second.body).id).toBe(sale.id);
+    // TEST4: five genuinely concurrent submissions; all preserve one sale and its ledgers.
+    const responses = await Promise.all(
+      Array.from({ length: 5 }, () => call('post', '/api/sales', cashier, body, key('sale'))),
+    );
+    // Preserve S01's original two-response success assertions.
+    expect(responses[0]?.status).toBe(201);
+    expect(responses[1]?.status).toBe(201);
+    const first = responses.find((r) => r.status === 201);
+    expect(first, JSON.stringify(responses.map((r) => r.body))).toBeDefined();
+    const sale = Sale.parse(first!.body);
+    for (const response of responses) {
+      expect([201, 409]).toContain(response.status);
+      if (response.status === 201) expect(Sale.parse(response.body).id).toBe(sale.id);
+    }
+    const stored = await service
+      .from('sales')
+      .select('id')
+      .eq('organization_id', org)
+      .eq('idempotency_key', key('sale'));
+    expect(stored.error).toBeNull();
+    expect(stored.data).toEqual([{ id: sale.id }]);
     expect(sale).toMatchObject({
       total: '5500.00',
       tax_total: '675.44',
@@ -423,4 +435,151 @@ describe.skipIf(!RUN)('S01 sale core against local stack', () => {
       2, 575_000, 575_000, 575_000,
     ]);
   }, 90_000);
+  it('TEST4: last unit on two devices has exactly one winner (10 rounds)', async () => {
+    const secondDevice = await pairTestDevice(service, org, branch, 'TEST4 second POS');
+    const secondLogin = await service.auth.admin.createUser({
+      email: `test4.race.${STAMP}@ecotech.test`,
+      password: PASSWORD,
+      email_confirm: true,
+    });
+    expect(secondLogin.error).toBeNull();
+    const employee = await service
+      .from('employees')
+      .insert({
+        organization_id: org,
+        auth_user_id: secondLogin.data.user!.id,
+        full_name: 'TEST4 Cashier Two',
+        role: 'CASHIER',
+        default_branch_id: branch,
+      })
+      .select('id')
+      .single();
+    expect(employee.error).toBeNull();
+    expect(
+      (
+        await service
+          .from('employee_branches')
+          .insert({ organization_id: org, employee_id: employee.data!.id, branch_id: branch })
+      ).error,
+    ).toBeNull();
+    const token = await login(`test4.race.${STAMP}@ecotech.test`);
+    const second = (path: string, body: object, idem: string) =>
+      request(app)
+        .post(path)
+        .set('X-Forwarded-For', `198.18.64.${(++ip % 250) + 1}`)
+        .set('Authorization', 'Bearer ' + token)
+        .set('x-org-id', org)
+        .set(DEVICE_TOKEN_HEADER, secondDevice.token)
+        .set('Idempotency-Key', idem)
+        .send(body);
+    expect(
+      (
+        await call(
+          'post',
+          '/api/shifts',
+          cashier,
+          { branch_id: branch, opening_float: '0' },
+          key('race-shift'),
+        )
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await second(
+          '/api/shifts',
+          { branch_id: branch, opening_float: '0' },
+          key('race-shift-two'),
+        )
+      ).status,
+    ).toBe(201);
+    for (let round = 0; round < 10; round++) {
+      const product = await call('post', '/api/products', owner, {
+        name_ar: 'آخر وحدة',
+        sku: `TEST4-LAST-${round}`,
+        cash_price: '1.00',
+      });
+      expect(product.status, JSON.stringify(product.body)).toBe(201);
+      const productId = String((product.body as { id: string }).id);
+      expect(
+        (
+          await call(
+            'post',
+            '/api/stock/adjustments',
+            owner,
+            { branch_id: branch, reason: 'found', lines: [{ product_id: productId, quantity: 1 }] },
+            key(`race-stock-${round}`),
+          )
+        ).status,
+      ).toBe(201);
+      const body = { lines: [{ product_id: productId, quantity: 1 }], expected_total: '1.00' };
+      const responses = await Promise.all([
+        call('post', '/api/sales', cashier, body, key(`race-a-${round}`)),
+        second('/api/sales', body, key(`race-b-${round}`)),
+      ]);
+      expect(
+        responses.map((r) => r.status).sort(),
+        JSON.stringify(responses.map((r) => r.body)),
+      ).toEqual([201, 409]);
+      expect(code(responses.find((r) => r.status === 409)!)).toBe('OUT_OF_STOCK');
+      const stock = await service
+        .from('stock_levels')
+        .select('on_hand')
+        .eq('organization_id', org)
+        .eq('product_id', productId)
+        .eq('branch_id', branch);
+      expect(stock.error).toBeNull();
+      expect(stock.data).toEqual([{ on_hand: 0 }]);
+      const sales = await service
+        .from('sale_lines')
+        .select('id')
+        .eq('organization_id', org)
+        .eq('product_id', productId);
+      expect(sales.error).toBeNull();
+      expect(sales.data).toHaveLength(1);
+    }
+  }, 60000);
+  it('TEST4: unauthorized client price is rejected without creating a sale', async () => {
+    const snapshot = async () =>
+      Promise.all(
+        [
+          'sales',
+          'sale_lines',
+          'payments',
+          'payment_allocations',
+          'stock_movements',
+          'cash_movements',
+          'store_credit_movements',
+          'fiscal_submissions',
+          'audit_log',
+          'approvals',
+          'document_counters',
+          'stock_levels',
+          'cash_balances',
+          'store_credit_balances',
+          'units',
+        ].map(async (table) => {
+          const result = await service.from(table).select('*').eq('organization_id', org);
+          expect(result.error, table).toBeNull();
+          return { table, rows: (result.data ?? []).map((row) => JSON.stringify(row)).sort() };
+        }),
+      );
+    const before = await snapshot();
+    const response = await call(
+      'post',
+      '/api/sales',
+      cashier,
+      { lines: [{ product_id: chair, quantity: 1, unit_price: '1.00' }], expected_total: '250.00' },
+      key('rejected-client-price'),
+    );
+    expect(response.status, JSON.stringify(response.body)).toBe(403);
+    expect(code(response)).toBe('PRICE_OVERRIDE_DENIED');
+    expect(await snapshot()).toEqual(before);
+    const sales = await service
+      .from('sales')
+      .select('id')
+      .eq('organization_id', org)
+      .eq('idempotency_key', key('rejected-client-price'));
+    expect(sales.error).toBeNull();
+    expect(sales.data).toEqual([]);
+  });
 });

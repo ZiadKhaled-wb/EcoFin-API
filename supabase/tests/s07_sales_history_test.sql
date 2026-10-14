@@ -109,6 +109,7 @@ GRANT SELECT ON t.shops,t.ids,t.docs TO authenticated;
 GRANT INSERT ON t.results,t.ids,t.docs TO authenticated;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA t TO authenticated;
 
+\ir helpers/test4_snapshot.sql
 -- ---------------------------------------------------------------- setup: shop a (serials, two branches), shop b
 SELECT t.as_user('f0000000-0000-0000-0000-000000000001');
 INSERT INTO t.shops SELECT s,public.admin_provision_organization('S07 '||s,'s07-'||s,'retail_pro','Owner',s||'s07@example.com',NULL,'Main',h,now()+interval '1 day')
@@ -204,7 +205,9 @@ SELECT t.as_user('a7070000-0000-0000-8000-000000000001',t.org('a'));
 SET ROLE authenticated;
 SELECT t.error('reason required',format('SELECT public.void_sale(%L,%L,%L)',t.id('sale'),' ','s07-empty-reason'),'REASON_REQUIRED');
 INSERT INTO t.docs SELECT 'void',public.void_sale(t.id('sale'),'Duplicate receipt','s07-void-main');
+INSERT INTO t.docs SELECT 'test4-replay-before',t.snapshot(t.org('a'));
 SELECT t.expect('idempotent replay',public.void_sale(t.id('sale'),'Duplicate receipt','s07-void-main')=t.doc('void'));
+SELECT t.expect('TEST4 void replay leaves all rows, balances and counters unchanged',t.snapshot(t.org('a'))=t.doc('test4-replay-before'));
 SELECT t.error('second void',format('SELECT public.void_sale(%L,%L,%L)',t.id('sale'),'Duplicate','s07-second-void'),'ALREADY_VOIDED');
 SELECT t.expect('status in search',EXISTS(SELECT 1 FROM public.search_sales('S7-IMEI-1',NULL,NULL,NULL,NULL,NULL,'voided',20,0) WHERE id=t.id('sale') AND status='voided'));
 SELECT t.expect('status and history in detail',public.get_sale_details(t.id('sale'))->>'status'='voided' AND jsonb_array_length(public.get_sale_details(t.id('sale'))->'returns')=1 AND public.get_sale_details(t.id('sale'))->>'voidable'='false');
@@ -258,7 +261,7 @@ SET ROLE authenticated;
 SELECT public.close_shift(t.id('owner-shift'),'{}',p_difference_reason=>'S07 closing difference');
 RESET ROLE;
 SET ROLE authenticated;
-SELECT t.error('closed shift blocked',format('SELECT public.void_sale(%L,%L,%L)',t.id('closed'),'Duplicate','s07-void-closed'),'VOID_SHIFT_CLOSED');
+SELECT t.unchanged('closed shift blocked',format('SELECT public.void_sale(%L,%L,%L)',t.id('closed'),'Duplicate','s07-void-closed'),'VOID_SHIFT_CLOSED');
 RESET ROLE;
 SELECT t.expect('void serializes sale, shift and stock locks before checks',
  strpos(pg_get_functiondef('public.void_sale(uuid,text,text)'::regprocedure),'FOR UPDATE') < strpos(pg_get_functiondef('public.void_sale(uuid,text,text)'::regprocedure),'VOID_NOT_SAME_DAY')

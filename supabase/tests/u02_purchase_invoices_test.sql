@@ -113,10 +113,16 @@ SELECT t.expect('draft: no stock, no cost change, no balance yet',
 SELECT t.expect('create: one audit row',t.audits('purchase_invoice.created','inv1')=1);
 
 -- Idempotency
+SELECT current_user AS test4_role \gset
+RESET ROLE;
+\ir helpers/test4_snapshot.sql
+SET ROLE :"test4_role";
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('the same create key returns the same invoice, nothing new',
   (public.create_purchase_invoice(t.id('nile'),t.id('main'),NULL,current_date,jsonb_build_array(t.l('cable',1,'1')),'u02-inv1-key')->>'id')=t.id('inv1')::text
   AND (SELECT count(*) FROM public.purchase_invoices WHERE organization_id=t.org('a') AND idempotency_key='u02-inv1-key')=1
   AND t.audits('purchase_invoice.created','inv1')=1);
+SELECT t.expect('TEST4 changed-arguments replay snapshot',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.error('a system: key is refused',format('SELECT public.create_purchase_invoice(%L,%L,NULL,current_date,%L,%L)',t.id('nile'),t.id('main'),jsonb_build_array(t.l('cable',1,'1')),'system:u02-x'),'VALIDATION_FAILED');
 
 -- ---------------------------------------------------------------- tax: 1 000 at 14%; a rate changed after the draft

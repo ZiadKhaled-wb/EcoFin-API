@@ -74,8 +74,14 @@ SELECT t.expect('branch names travel with the transfer (a receiver may not work 
   :'d1'::jsonb->>'from_branch_name'='Main' AND :'d1'::jsonb->>'to_branch_name'='Second');
 SELECT t.expect('destinations: every active branch of the shop, also those the sender doesn''t work in',
   (SELECT array_agg(r->>'name' ORDER BY o)=ARRAY['Main','Second'] FROM jsonb_array_elements(public.list_transfer_destinations()) WITH ORDINALITY x(r,o)));
+SELECT current_user AS test4_role \gset
+RESET ROLE;
+\ir helpers/test4_snapshot.sql
+SET ROLE :"test4_role";
+SELECT t.snapshot(t.org('a'))::text AS test4_snapshot \gset
 SELECT t.expect('same key again: the same transfer',
   (public.create_stock_transfer(t.id('main'),t.id('second'),NULL,'[{"product_id":"00000000-0000-0000-0000-000000000000","quantity":1}]','i03-transfer-1')->>'id')=(:'d1'::jsonb->>'id'));
+SELECT t.expect('TEST4 replay snapshot 1',t.snapshot(t.org('a'))=:'test4_snapshot'::jsonb);
 SELECT t.error('to the same branch',format($q$SELECT public.create_stock_transfer(%L,%L,NULL,'[{"product_id":"%s","quantity":1}]','i03-bad-1')$q$,t.id('main'),t.id('main'),t.id('cable')),'TRANSFER_SAME_BRANCH');
 SELECT t.error('to another shop''s branch',format($q$SELECT public.create_stock_transfer(%L,%L,NULL,'[{"product_id":"%s","quantity":1}]','i03-bad-2')$q$,t.id('main'),t.id('main_b'),t.id('cable')),'BRANCH_NOT_FOUND');
 SELECT t.error('from a branch the sender doesn''t work in',format($q$SELECT public.create_stock_transfer(%L,%L,NULL,'[{"product_id":"%s","quantity":1}]','i03-bad-3')$q$,t.id('second'),t.id('main'),t.id('cable')),'BRANCH_DENIED');
