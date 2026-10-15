@@ -5,9 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# Jobs run on the self-hosted runner on the owner's PC (WSL Ubuntu + Docker Desktop, since 16 Oct 2026,
+# when the GitHub-hosted minutes ran out). Repo variable CI_RUNNER=ubuntu-latest switches back.
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -69,9 +71,9 @@ jobs:
   # admin works, and every SQL test in supabase/tests passes (TEST-1: found by a glob).
   # Local Supabase only: this job never links to or pushes to a real project.
   db:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}
     env:
-      DB_CONTAINER: supabase_db_ecofin-api
+      DB_CONTAINER: supabase_db_ecofin-ci
 
     steps:
       - uses: actions/checkout@v4
@@ -88,6 +90,17 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.119.0
+
+      # The runner on the owner's PC shares one Docker and Supabase's fixed ports between the API and
+      # Web runners: one job at a time holds the local stack (released in the last step, or when the
+      # job ends). The stack is named ecofin-ci, never the developer's own ecofin-api stack.
+      - name: Wait for the local Supabase slot (stack ecofin-ci)
+        run: |
+          touch "$RUNNER_TEMP/supabase-slot"
+          nohup flock /tmp/ecofin-ci-supabase.lock sh -c 'touch "$0.held"; while [ -e "$0" ]; do sleep 2; done' "$RUNNER_TEMP/supabase-slot" > /dev/null 2>&1 &
+          until [ -e "$RUNNER_TEMP/supabase-slot.held" ]; do sleep 5; done
+          sed -i 's/^project_id = .*/project_id = "ecofin-ci"/' supabase/config.toml
+          supabase stop --no-backup > /dev/null 2>&1 || true
 
       - name: Start local Supabase (applies migrations and seeds)
         run: supabase start -x studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor,realtime
@@ -162,6 +175,10 @@ jobs:
         if: always()
         run: supabase stop --no-backup
 
+      - name: Release the local Supabase slot
+        if: always()
+        run: rm -f "$RUNNER_TEMP/supabase-slot"
+
       - name: TEST4 known failures
         if: always()
         run: node scripts/test4-known-failures.mjs
@@ -170,7 +187,7 @@ jobs:
   # on a fresh local stack. The tests start the app themselves, in-process (supertest), so no
   # separate API server is needed. Local demo keys printed by the CLI for this stack, not secrets.
   integration:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -188,6 +205,17 @@ jobs:
           version: 2.119.0
 
       # The integration tests need Auth, PostgREST, Kong, Storage and Mailpit, not just Postgres.
+      # The runner on the owner's PC shares one Docker and Supabase's fixed ports between the API and
+      # Web runners: one job at a time holds the local stack (released in the last step, or when the
+      # job ends). The stack is named ecofin-ci, never the developer's own ecofin-api stack.
+      - name: Wait for the local Supabase slot (stack ecofin-ci)
+        run: |
+          touch "$RUNNER_TEMP/supabase-slot"
+          nohup flock /tmp/ecofin-ci-supabase.lock sh -c 'touch "$0.held"; while [ -e "$0" ]; do sleep 2; done' "$RUNNER_TEMP/supabase-slot" > /dev/null 2>&1 &
+          until [ -e "$RUNNER_TEMP/supabase-slot.held" ]; do sleep 5; done
+          sed -i 's/^project_id = .*/project_id = "ecofin-ci"/' supabase/config.toml
+          supabase stop --no-backup > /dev/null 2>&1 || true
+
       - name: Start local Supabase (applies migrations and seeds)
         run: supabase start -x studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor,realtime
 
@@ -214,6 +242,10 @@ jobs:
       - name: Stop database
         if: always()
         run: supabase stop --no-backup
+
+      - name: Release the local Supabase slot
+        if: always()
+        run: rm -f "$RUNNER_TEMP/supabase-slot"
 
       - name: TEST4 known failures
         if: always()
