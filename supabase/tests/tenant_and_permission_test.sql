@@ -361,7 +361,7 @@ INSERT INTO t.denial
 SELECT 'register_file', 'register_file(' || p || ')', k,
        format($f$SELECT public.register_file(gen_random_uuid(), 'd1000000-0000-0000-0000-000000000001/%s/2026/10/' || gen_random_uuid() || '.png', 'd.png', 'image/png', 10, NULL, %L, NULL, NULL)$f$, p, p)
 FROM (VALUES ('logo', 'org.settings_manage'), ('product_image', 'catalog.manage'), ('customer_id', 'customer.create'),
-             ('survey_photo', 'survey.submit'), ('signature', 'installment.create'), ('contract_pdf', 'installment.create'),
+             ('signature', 'installment.create'), ('contract_pdf', 'installment.create'),
              ('promissory_note', 'installment.create'), ('delivery_proof', 'delivery.manage'), ('expense_receipt', 'expense.create'),
              ('legal_document', 'legal.manage'), ('import', 'import.data'), ('export', 'export.data'), ('other', 'org.settings_manage')) v(p, k);
 
@@ -596,6 +596,27 @@ INSERT INTO t.denial VALUES
  ('get_guarantor_requirement','zz_r04_8_requirement','customer.create',$$SELECT public.get_guarantor_requirement((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R04 customer'),'1000.00')$$),
  ('unlink_customer_guarantor','zz_r04_9_unlink','guarantor.manage',$$SELECT public.unlink_customer_guarantor((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R04 customer'),(SELECT id FROM public.guarantors WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial guarantor'))$$),
  ('set_guarantor_archived','zz_r04_a_archive','guarantor.manage',$$SELECT public.set_guarantor_archived((SELECT id FROM public.guarantors WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial guarantor'),true)$$);
+-- R05: survey photos need an assigned survey of the caller (the owner here): one made as the database owner
+-- for the register_file(survey_photo) case, then the survey calls in the order the case names sort: assign
+-- (to the owner), the reads, reassign (to the owner again: no change), save, submit (with a photo), decide,
+-- and cancel of the photo survey.
+INSERT INTO public.customers (id, organization_id, full_name, phones)
+VALUES ('d9050000-0000-0000-0000-000000000001', 'd1000000-0000-0000-0000-000000000001', 'TEST-1 denial R05 photo customer', ARRAY['01000000005']),
+       ('d9050000-0000-0000-0000-000000000002', 'd1000000-0000-0000-0000-000000000001', 'TEST-1 denial R05 customer', ARRAY['01000000006']);
+INSERT INTO public.field_surveys (id, organization_id, customer_id, assigned_to)
+VALUES ('d9050000-0000-0000-0000-000000000011', 'd1000000-0000-0000-0000-000000000001', 'd9050000-0000-0000-0000-000000000001', 'd3000000-0000-0000-0000-000000000011');
+INSERT INTO t.denial VALUES
+ ('register_file','register_file(survey_photo)','survey.submit',$$SELECT public.register_file(gen_random_uuid(), 'd1000000-0000-0000-0000-000000000001/survey_photo/2026/10/' || gen_random_uuid() || '.png', 'd.png', 'image/png', 10, NULL, 'survey_photo', 'field_survey', 'd9050000-0000-0000-0000-000000000011')$$),
+ ('assign_field_survey','zz_r05_1_assign','survey.assign',$$SELECT public.assign_field_survey('{"customer_id":"d9050000-0000-0000-0000-000000000002","assigned_to":"d3000000-0000-0000-0000-000000000011"}')$$),
+ ('list_field_surveys','zz_r05_2_list','customer.create',$$SELECT public.list_field_surveys()$$),
+ ('get_field_survey','zz_r05_3_get','customer.create',$$SELECT public.get_field_survey((SELECT id FROM public.field_surveys WHERE customer_id='d9050000-0000-0000-0000-000000000002'))$$),
+ ('list_customer_surveys','zz_r05_4_customer_list','customer.create',$$SELECT public.list_customer_surveys('d9050000-0000-0000-0000-000000000002')$$),
+ ('get_survey_requirement','zz_r05_5_requirement','customer.create',$$SELECT public.get_survey_requirement('d9050000-0000-0000-0000-000000000002','1000.00')$$),
+ ('reassign_field_survey','zz_r05_6_reassign','survey.assign',$$SELECT public.reassign_field_survey((SELECT id FROM public.field_surveys WHERE customer_id='d9050000-0000-0000-0000-000000000002'),'d3000000-0000-0000-0000-000000000011')$$),
+ ('save_field_survey','zz_r05_7_save','survey.submit',$$SELECT public.save_field_survey((SELECT id FROM public.field_surveys WHERE customer_id='d9050000-0000-0000-0000-000000000002'),'{"notes":"Denial test"}')$$),
+ ('submit_field_survey','zz_r05_8_submit','survey.submit',$$SELECT public.register_file(gen_random_uuid(), 'd1000000-0000-0000-0000-000000000001/r05/' || gen_random_uuid() || '.png', 'd.png', 'image/png', 10, NULL, 'survey_photo', 'field_survey', (SELECT id FROM public.field_surveys WHERE customer_id='d9050000-0000-0000-0000-000000000002')), public.submit_field_survey((SELECT id FROM public.field_surveys WHERE customer_id='d9050000-0000-0000-0000-000000000002'), jsonb_build_object('scores','{"housing_quality":5,"neighbourhood":5,"income_stability":5,"job_status":5,"property_ownership":5,"overall_impression":5}'::jsonb,'checklist','{"met_customer":true,"address_matches":true,"id_original_seen":true,"neighbours_confirm":true,"utility_bill_seen":true,"workplace_confirmed":true}'::jsonb,'gps',jsonb_build_object('lat',30,'lng',31,'gps_accuracy_m',10,'client_captured_at',now())))$$),
+ ('decide_field_survey','zz_r05_9_decide','survey.decide',$$SELECT public.decide_field_survey((SELECT id FROM public.field_surveys WHERE customer_id='d9050000-0000-0000-0000-000000000002'),'approve')$$),
+ ('cancel_field_survey','zz_r05_a_cancel','survey.assign',$$SELECT public.cancel_field_survey('d9050000-0000-0000-0000-000000000011','Denial test')$$);
 -- R03: a customer of the denial shop for the credit calls, in the order the case names sort: set the limit,
 -- ask for two exceptions (5 000 and 6 000: the owner decides the first and cancels the second), then the reads.
 INSERT INTO public.customers (organization_id, full_name, phones)

@@ -2328,13 +2328,18 @@ export type Database = {
       field_surveys: {
         Row: {
           assigned_to: string;
+          checklist: NonNullable<Json>;
+          client_captured_at: string | null;
           created_at: string;
           created_by: string | null;
           customer_id: string;
           decided_at: string | null;
           decided_by: string | null;
+          decision_note: string | null;
+          due_date: string | null;
           gps_accuracy_m: number | null;
           id: string;
+          instructions: string | null;
           lat: number | null;
           lng: number | null;
           notes: string | null;
@@ -2342,18 +2347,25 @@ export type Database = {
           scores: NonNullable<Json>;
           status: Database['public']['Enums']['survey_status'];
           submitted_at: string | null;
+          survey_score: number | null;
           updated_at: string;
           updated_by: string | null;
+          visit_type: string;
         };
         Insert: {
           assigned_to: string;
+          checklist?: NonNullable<Json>;
+          client_captured_at?: string | null;
           created_at?: string;
           created_by?: string | null;
           customer_id: string;
           decided_at?: string | null;
           decided_by?: string | null;
+          decision_note?: string | null;
+          due_date?: string | null;
           gps_accuracy_m?: number | null;
           id?: string;
+          instructions?: string | null;
           lat?: number | null;
           lng?: number | null;
           notes?: string | null;
@@ -2361,18 +2373,25 @@ export type Database = {
           scores?: NonNullable<Json>;
           status?: Database['public']['Enums']['survey_status'];
           submitted_at?: string | null;
+          survey_score?: number | null;
           updated_at?: string;
           updated_by?: string | null;
+          visit_type?: string;
         };
         Update: {
           assigned_to?: string;
+          checklist?: NonNullable<Json>;
+          client_captured_at?: string | null;
           created_at?: string;
           created_by?: string | null;
           customer_id?: string;
           decided_at?: string | null;
           decided_by?: string | null;
+          decision_note?: string | null;
+          due_date?: string | null;
           gps_accuracy_m?: number | null;
           id?: string;
+          instructions?: string | null;
           lat?: number | null;
           lng?: number | null;
           notes?: string | null;
@@ -2380,8 +2399,10 @@ export type Database = {
           scores?: NonNullable<Json>;
           status?: Database['public']['Enums']['survey_status'];
           submitted_at?: string | null;
+          survey_score?: number | null;
           updated_at?: string;
           updated_by?: string | null;
+          visit_type?: string;
         };
         Relationships: [
           {
@@ -8175,6 +8196,7 @@ export type Database = {
         Returns: undefined;
       };
       approve_purchase_invoice: { Args: { p_id: string; p_note?: string }; Returns: Json };
+      assign_field_survey: { Args: { p_body: Json }; Returns: Json };
       auth_clear_must_change_password: { Args: { p_auth_user_id: string }; Returns: number };
       auth_record_login: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
@@ -8182,6 +8204,7 @@ export type Database = {
       branch_deactivation_check: { Args: { p_branch_id: string }; Returns: Json };
       cancel_credit_exception: { Args: { p_approval_id: string }; Returns: Json };
       cancel_discount_approval: { Args: { p_approval_id: string }; Returns: Json };
+      cancel_field_survey: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_purchase_order: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_stock_count: { Args: { p_count_id: string }; Returns: Json };
       cancel_stock_transfer: { Args: { p_id: string }; Returns: Json };
@@ -8310,6 +8333,10 @@ export type Database = {
         Args: { p_approval_id: string; p_approve: boolean; p_note?: string };
         Returns: Json;
       };
+      decide_field_survey: {
+        Args: { p_decision: string; p_id: string; p_note?: string };
+        Returns: Json;
+      };
       eta_block: {
         Args: { p_code: string; p_fiscal_id: string; p_message: string };
         Returns: boolean;
@@ -8430,6 +8457,7 @@ export type Database = {
       get_discount_approval: { Args: { p_approval_id: string }; Returns: Json };
       get_eta_settings: { Args: Record<PropertyKey, never>; Returns: Json };
       get_expense: { Args: { p_id: string }; Returns: Json };
+      get_field_survey: { Args: { p_id: string }; Returns: Json };
       get_guarantor: { Args: { p_id: string }; Returns: Json };
       get_guarantor_requirement: {
         Args: { p_customer_id: string; p_financed_amount: string };
@@ -8460,6 +8488,10 @@ export type Database = {
       get_subscription_status: { Args: Record<PropertyKey, never>; Returns: Json };
       get_supplier: { Args: { p_id: string }; Returns: Json };
       get_supplier_payment: { Args: { p_id: string }; Returns: Json };
+      get_survey_requirement: {
+        Args: { p_customer_id: string; p_financed_amount: string };
+        Returns: Json;
+      };
       get_unit: { Args: { p_id: string }; Returns: Json };
       get_warranty_claim: { Args: { p_claim_id: string }; Returns: Json };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
@@ -8535,6 +8567,7 @@ export type Database = {
       list_categories: { Args: Record<PropertyKey, never>; Returns: Json };
       list_credit_exceptions: { Args: { p_status?: string }; Returns: Json };
       list_customer_guarantors: { Args: { p_customer_id: string }; Returns: Json };
+      list_customer_surveys: { Args: { p_customer_id: string }; Returns: Json };
       list_customers: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string; p_status?: string };
         Returns: Json;
@@ -8575,6 +8608,17 @@ export type Database = {
           p_limit?: number;
           p_offset?: number;
           p_to?: string;
+        };
+        Returns: Json;
+      };
+      list_field_surveys: {
+        Args: {
+          p_assigned_to?: string;
+          p_customer_id?: string;
+          p_limit?: number;
+          p_mine?: boolean;
+          p_offset?: number;
+          p_status?: string;
         };
         Returns: Json;
       };
@@ -8849,6 +8893,7 @@ export type Database = {
         Args: { p_customer_id?: string; p_lines: Json; p_payments?: Json; p_sale_discount?: Json };
         Returns: Json;
       };
+      reassign_field_survey: { Args: { p_assigned_to: string; p_id: string }; Returns: Json };
       receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
       record_sale_receipt_print: { Args: { p_sale_id: string }; Returns: Json };
       register_file: {
@@ -8908,6 +8953,7 @@ export type Database = {
         Args: { p_id: string; p_idempotency_key: string; p_reason: string };
         Returns: Json;
       };
+      save_field_survey: { Args: { p_body: Json; p_id: string }; Returns: Json };
       save_stock_count_lines: { Args: { p_count_id: string; p_lines: Json }; Returns: Json };
       scan_stock_count: { Args: { p_code: string; p_count_id: string }; Returns: Json };
       search_sales: {
@@ -9047,6 +9093,7 @@ export type Database = {
       set_product_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
       set_supplier_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
       set_tax_class_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
+      submit_field_survey: { Args: { p_body?: Json; p_id: string }; Returns: Json };
       supplier_statement: { Args: { p_from?: string; p_id: string; p_to?: string }; Returns: Json };
       unlink_customer_guarantor: {
         Args: { p_customer_id: string; p_guarantor_id: string };

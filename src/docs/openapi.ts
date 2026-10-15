@@ -1435,6 +1435,114 @@ export const openApiSpec = {
                 responses: { 200: { description: 'GuarantorRequirement' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/surveys': {
+            get: {
+                tags: ['Surveys'],
+                summary: 'List field surveys (any customer read key; a collector sees only their own)',
+                description: 'R05 (D75). Readable with the customer read keys of D63; needs the plan module customers; works in an expired shop. A caller with survey.submit but neither survey.assign nor survey.decide (the collector) gets only the surveys assigned to them; mine=true limits anyone to their own. Filters: status (assigned | submitted | approved | rejected | cancelled), customer_id, assigned_to. Newest first; without a status filter the submitted ones (the review queue) come first. Schema: SurveyListQuery → SurveyList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['assigned', 'submitted', 'approved', 'rejected', 'cancelled'] } },
+                    { name: 'customer_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'assigned_to', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'mine', in: 'query', schema: { type: 'boolean', default: false } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'SurveyList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Surveys'],
+                summary: 'Assign a field survey (survey.assign)',
+                description: 'R05 (D75). customer_id and assigned_to are required; visit_type home (default) | work; due_date not before today; instructions up to 500. The customer must be active or on watch (CUSTOMER_BLOCKED for blocked or archived); the assignee must be an active employee of the shop who has survey.submit (SURVEY_ASSIGNEE_INVALID, details employee_id); one open survey (assigned or submitted) per customer (SURVEY_ALREADY_OPEN, details survey_id and status). Audited as survey.assigned. Schema: SurveyCreateBody → Survey.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 201: { description: 'Survey' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/surveys/{id}': {
+            get: {
+                tags: ['Surveys'],
+                summary: 'Read a field survey (any customer read key; a collector only their own)',
+                description: 'R05 (D75). The customer (name, phones, address, city), the assignee, the answers (scores, checklist, notes, gps), gps_low_accuracy (accuracy above 100 m), survey_score, photos_count, the decision and valid_until (approved: 180 days after the decision). Photos: GET /api/files with entityType field_survey (needs customer.view_pii). Another shop, or another collector\'s survey, answers SURVEY_NOT_FOUND. Schema: Survey.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Survey' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            patch: {
+                tags: ['Surveys'],
+                summary: 'Save answers (survey.submit, the assignee)',
+                description: 'R05 (D75). Status assigned; only the assignee (SURVEY_NOT_ASSIGNEE). Any of visit_type, scores (criteria 1-10), checklist (yes/no), notes (up to 2000), gps {lat, lng, gps_accuracy_m, client_captured_at} (all four, the capture time at most 5 minutes in the future); at least one key. Merged into what is saved; a criterion or item sent as null is removed, gps null clears the fix. The same values again change nothing and write no audit row. Audited as survey.saved with the changed keys (the GPS point itself is never in the audit log). Schema: SurveyAnswersBody → Survey.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Survey' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/surveys/{id}/reassign': {
+            post: {
+                tags: ['Surveys'],
+                summary: 'Reassign a survey (survey.assign)',
+                description: 'R05 (D75). Status assigned only (SURVEY_WRONG_STATUS); the same assignee rules as assigning. Saved answers and photos stay. The same assignee again changes nothing. Audited as survey.reassigned. Schema: SurveyReassignBody → Survey.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Survey' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/surveys/{id}/cancel': {
+            post: {
+                tags: ['Surveys'],
+                summary: 'Cancel a survey (survey.assign)',
+                description: 'R05 (D75). From assigned or submitted; a reason of 3-300 characters (kept in decision_note). Final. Audited as survey.cancelled (warning) with the reason. Schema: SurveyCancelBody → Survey.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Survey' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/surveys/{id}/submit': {
+            post: {
+                tags: ['Surveys'],
+                summary: 'Submit a survey (survey.submit, the assignee)',
+                description: 'R05 (D75). The same body as a save (may be empty), merged; then every criterion, every checklist item and the GPS fix are required (VALIDATION_FAILED) and at least one photo (SURVEY_PHOTO_REQUIRED; upload with POST /api/files, purpose survey_photo, entityType field_survey, at most 10, only the assignee while assigned). survey_score = round(average of the criteria x 10). Audited as survey.submitted. Schema: SurveySubmitBody → Survey.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Survey' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/surveys/{id}/decide': {
+            post: {
+                tags: ['Surveys'],
+                summary: 'Approve or reject a survey (survey.decide)',
+                description: 'R05 (D75). Status submitted only (SURVEY_WRONG_STATUS). decision approve | reject; a rejection needs a note of 3-500, an approval may have one. The assignee can not decide their own survey unless they are the OWNER (SURVEY_SELF_DECISION). Final. An approved survey counts for 180 days: it fills the residence part of the credit score and allows an installment contract above the policy\'s survey_required_above. Audited as survey.approved or survey.rejected (warning). Schema: SurveyDecisionBody → Survey.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Survey' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}/surveys': {
+            get: {
+                tags: ['Surveys'],
+                summary: "A customer's field surveys (any customer read key; a collector only their own)",
+                description: 'R05 (D75). Newest first, at most 50, no paging. Another shop\'s customer answers CUSTOMER_NOT_FOUND. Schema: Survey[].',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Survey[]' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}/survey-requirement': {
+            get: {
+                tags: ['Surveys'],
+                summary: 'Does the customer need (and have) an approved survey for a financed amount? (any customer read key)',
+                description: 'R05 (D75). Against the shop\'s current installment policy version: required when survey_required_above is set and the financed amount (cash price minus down payment) is greater than it; valid_survey is the newest approved survey decided within 180 days; open_survey the one assigned or submitted; met = not required or a valid survey exists. The database also refuses such a contract without one, at commit (SURVEY_REQUIRED). Schema: SurveyRequirementQuery → SurveyRequirement.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'financed_amount', in: 'query', required: true, schema: { type: 'string', example: '25000.00' } },
+                ],
+                responses: { 200: { description: 'SurveyRequirement' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/customers/{id}/account': {
             get: {
                 tags: ['Customers'],

@@ -46,6 +46,7 @@ const profile = (extra: Record<string, unknown> = {}) => ({
   },
   store_credit: '0.00',
   limit_history: [],
+  latest_survey: null,
   ...extra,
 });
 const exception = (extra: Record<string, unknown> = {}) => ({

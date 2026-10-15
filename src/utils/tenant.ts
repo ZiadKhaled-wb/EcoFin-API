@@ -32,6 +32,7 @@ export const SAME_ORG_TABLES = [
   'suppliers',
   'customers',
   'guarantors',
+  'field_surveys',
   'cash_accounts',
   'shifts',
   'expense_categories',

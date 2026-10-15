@@ -52,6 +52,7 @@ const profile = {
   behaviour,
   store_credit: '0.00',
   limit_history: [{ at: AT, by_name: 'Owner', from: '0.00', to: '20000.00', reason: 'Good payer' }],
+  latest_survey: null,
 };
 const exception = {
   id: ID,

@@ -26,6 +26,9 @@ import {
   GuarantorRequiredDetail,
   CreditLimitExceededDetail,
   DiscountAboveCapDetail,
+  SurveyAlreadyOpenDetail,
+  SurveyAssigneeInvalidDetail,
+  SurveyRequiredDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 import type { ZodTypeAny } from 'zod';
@@ -110,6 +113,9 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   CREDIT_SCORE_TOO_LOW: CreditLimitExceededDetail,
   CREDIT_CUSTOMER_WATCH: CreditLimitExceededDetail,
   DISCOUNT_ABOVE_CAP: DiscountAboveCapDetail,
+  SURVEY_ALREADY_OPEN: SurveyAlreadyOpenDetail,
+  SURVEY_ASSIGNEE_INVALID: SurveyAssigneeInvalidDetail,
+  SURVEY_REQUIRED: SurveyRequiredDetail,
 };
 
 /**
