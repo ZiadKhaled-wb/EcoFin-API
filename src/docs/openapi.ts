@@ -1435,6 +1435,45 @@ export const openApiSpec = {
                 responses: { 200: { description: 'GuarantorRequirement' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/customers/{id}/account': {
+            get: {
+                tags: ['Customers'],
+                summary: "A customer's account: balances, overdue, contracts, payments, returns (any customer read key)",
+                description: 'R02 (D74). Read only; readable with the customer read keys of D63; needs the plan module customers; works in an expired shop. balance: open_balance = contract totals (current schedule lines + what was paid on superseded ones) - payments on their schedule lines - returns settled against the contract (refund_method contract_adjustment), over the active and rescheduled contracts; fees_due apart, total_due = open_balance + fees_due; store_credit, and credit_limit / available as R03 shows them. overdue: amount, lines, max days late, the earliest unpaid line (next_due_date, may be in the past) and the aging buckets. totals: purchases (sales not voided), returns (returns, voids and exchanges), cash and bank transfer payments in and out that were not reversed. contracts: every contract, newest first. recent_payments and recent_returns: the last 10, newest first. documents_count: files on the customer and on its contracts (the list itself: GET /api/files). Purchases: GET /api/sales with customer_id (sale.create or report.view); guarantors: GET /api/customers/{id}/guarantors. Another shop\'s customer answers CUSTOMER_NOT_FOUND. Schema: CustomerAccount.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'CustomerAccount' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}/contracts/{contractId}/schedule': {
+            get: {
+                tags: ['Customers'],
+                summary: "One contract's schedule with line statuses and fees (any customer read key)",
+                description: 'R02 (D74). The contract (as in the account) with its schedule lines: the current version first, then the superseded ones (status superseded); each line has paid, remaining, fees_due, status (upcoming, due, partly_paid, overdue, paid, closed) and days_late (0 unless overdue). charges: late fees with what was waived, paid and is still due. A contract that is not this customer\'s answers CONTRACT_NOT_FOUND; another shop\'s customer CUSTOMER_NOT_FOUND. Schema: CustomerContractSchedule.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'contractId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'CustomerContractSchedule' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}/statement': {
+            get: {
+                tags: ['Customers'],
+                summary: "A customer's statement with a running balance (any customer read key)",
+                description: 'R02 (D74). Shop-wide, dates in the shop timezone; from and to are optional (at most three years apart; from after to or a longer range answers VALIDATION_FAILED). A balance above 0 means the customer owes the shop. Debits: sales (a void is its own return row), a contract\'s total above its financed amount (the markup, plus what a reschedule added; a contract without a sale: its whole total), refunds paid out, late fees, reversals of payments in. Credits: payments in, returns / voids / exchanges, fee waivers, reversals of refunds. Store-credit payments are not rows (the credit was counted when it was given). opening_balance = everything before from; without dates closing_balance = total_due - store_credit of the account. Schema: CustomerStatementQuery → CustomerStatement.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'from', in: 'query', required: false, schema: { type: 'string', format: 'date' } },
+                    { name: 'to', in: 'query', required: false, schema: { type: 'string', format: 'date' } },
+                ],
+                responses: { 200: { description: 'CustomerStatement' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/customers/{id}/credit': {
             get: {
                 tags: ['Credit'],

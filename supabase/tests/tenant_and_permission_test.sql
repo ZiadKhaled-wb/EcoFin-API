@@ -609,6 +609,20 @@ INSERT INTO t.denial VALUES
  ('get_customer_credit_check','zz_r03_6_check','customer.create',$$SELECT public.get_customer_credit_check((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'),'100.00')$$),
  ('decide_credit_exception','zz_r03_7_decide','credit.approve',$$SELECT public.decide_credit_exception((SELECT id FROM public.approvals WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND kind='credit_exception' AND amount=5000),true,NULL)$$),
  ('cancel_credit_exception','zz_r03_8_cancel','sale.create|credit.approve',$$SELECT public.cancel_credit_exception((SELECT id FROM public.approvals WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND kind='credit_exception' AND amount=6000))$$);
+-- R02: the three account reads on the R03 denial customer, which gets one migrated contract (a policy
+-- row first: the denial shop has none until publish_installment_policy runs).
+INSERT INTO public.installment_policies (organization_id, version, max_months, markup_tiers)
+VALUES ('d1000000-0000-0000-0000-000000000001', 1, 12, '[{"pct": 0, "up_to_months": 12}]');
+INSERT INTO public.contracts (organization_id, number, customer_id, branch_id, policy_id, creditor, cash_price, financed_amount,
+    markup_pct, markup_amount, total_payable, installments_count, frequency, first_due_date, is_migrated, idempotency_key)
+SELECT 'd1000000-0000-0000-0000-000000000001', 'TEST-1-R02-C1', c.id, 'd2000000-0000-0000-0000-000000000011', p.id, 'in_house',
+       1000, 1000, 0, 0, 1000, 1, 'monthly', current_date + 30, true, 'test-1-r02-contract'
+FROM public.customers c, public.installment_policies p
+WHERE c.organization_id = 'd1000000-0000-0000-0000-000000000001' AND c.full_name = 'TEST-1 denial R03 customer'
+  AND p.organization_id = c.organization_id AND p.version = 1;
+INSERT INTO t.denial VALUES ('get_customer_account','zz_r02_1_account','customer.create',$$SELECT public.get_customer_account((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'))$$),
+ ('get_customer_contract_schedule','zz_r02_2_schedule','customer.create',$$SELECT public.get_customer_contract_schedule((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'),(SELECT id FROM public.contracts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND number='TEST-1-R02-C1'))$$),
+ ('customer_statement','zz_r02_3_statement','customer.create',$$SELECT public.customer_statement((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'))$$);
 INSERT INTO t.denial VALUES
  ('search_sales','zz_s07_1_history','sale.create|report.view',$$SELECT public.search_sales()$$),
  ('get_sale_details','zz_s07_2_details','sale.create|report.view',$$SELECT public.get_sale_details((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'))$$),

@@ -319,6 +319,10 @@ See [S01 plan](plans/S01.md). Covers the Done when (the four ledger / reconcilia
 
 See [R01 plan](plans/R01.md). Covers the Done when (a user without `customer.view_pii` sees masked IDs; duplicate national IDs are rejected) and the D62 rules (the national ID parser, birth date and gender from the ID, who may change an ID, phones, block with a reason, who may read, search by name, phone and ID, the `customers` module).
 
+## R02 — customer account (EC-64)
+
+See [R02 plan](plans/R02.md). Covers the Done when (the open balance equals contract totals − payments − returns) and the D74 rules (contract total after a reschedule, fees kept apart, overdue and aging, the account, the schedule, the statement and its closing check, who may, the 3 routes).
+
 ## R03 — credit profile and limit (EC-65)
 
 See [R03 plan](plans/R03.md). Covers the Done when (the server blocks an installment sale over the limit even if the client sends it directly) and the D72 rules (the explicit limit and its history, exposure, the score and the behaviour, the check and its errors, exceptions as approvals on the spot, the commit-time trigger, the preview, who may, the 8 routes).
