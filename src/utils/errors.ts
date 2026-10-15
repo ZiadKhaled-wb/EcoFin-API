@@ -22,6 +22,8 @@ import {
   ReturnQtyExceededDetail,
   SerialsRequiredDetail,
   CustomerNationalIdTakenDetail,
+  GuarantorNationalIdTakenDetail,
+  GuarantorRequiredDetail,
   DiscountAboveCapDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
@@ -101,6 +103,8 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   INSUFFICIENT_STORE_CREDIT: StoreCreditDetail,
   OUT_OF_STOCK: OutOfStockDetail,
   CUSTOMER_NATIONAL_ID_TAKEN: CustomerNationalIdTakenDetail,
+  GUARANTOR_NATIONAL_ID_TAKEN: GuarantorNationalIdTakenDetail,
+  GUARANTOR_REQUIRED: GuarantorRequiredDetail,
   DISCOUNT_ABOVE_CAP: DiscountAboveCapDetail,
 };
 

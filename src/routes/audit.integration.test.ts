@@ -159,6 +159,32 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     return (res.body as { id: string }).id;
   }
+  /** R04: a valid national ID that is new on every call. */
+  function freshNationalId() {
+    const serial = String(Math.floor(Math.random() * 100000)).padStart(5, '0');
+    const month = String(1 + Math.floor(Math.random() * 12)).padStart(2, '0');
+    const day = String(1 + Math.floor(Math.random() * 28)).padStart(2, '0');
+    return `2${50 + Math.floor(Math.random() * 50)}${month}${day}01${serial}`;
+  }
+  async function newGuarantor(token: string) {
+    const { res } = await send('post', '/api/guarantors', {
+      token,
+      body: {
+        full_name: `R04 guarantor ${STAMP}-${ipCounter}`,
+        phone: '01000000008',
+        national_id: freshNationalId(),
+      },
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return (res.body as { id: string }).id;
+  }
+  async function linkGuarantor(token: string, customerId: string, guarantorId: string) {
+    const { res } = await send('post', `/api/customers/${customerId}/guarantors`, {
+      token,
+      body: { guarantor_id: guarantorId, relation: 'friend' },
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+  }
   /** K01: a new shop-wide bank (balance 0, not a branch default). */
   async function newCashAccount(token: string) {
     const { res } = await send('post', '/api/cash-accounts', {
@@ -971,6 +997,87 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         sent: await send('post', `/api/customers/${id}/status`, {
           token: owner.accessToken,
           body: { status: 'blocked', reason: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/guarantors': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', '/api/guarantors', {
+          token: owner.accessToken,
+          body: {
+            full_name: `R04 guarantor ${STAMP}-${ipCounter}`,
+            phone: '01000000008',
+            national_id: freshNationalId(),
+          },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'PATCH /api/guarantors/:id': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newGuarantor(owner.accessToken);
+      return {
+        sent: await send('patch', `/api/guarantors/${id}`, {
+          token: owner.accessToken,
+          body: { job: `R04 ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/guarantors/:id/archive': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newGuarantor(owner.accessToken);
+      return {
+        sent: await send('post', `/api/guarantors/${id}/archive`, { token: owner.accessToken }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/guarantors/:id/restore': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newGuarantor(owner.accessToken);
+      await send('post', `/api/guarantors/${id}/archive`, { token: owner.accessToken });
+      return {
+        sent: await send('post', `/api/guarantors/${id}/restore`, { token: owner.accessToken }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/customers/:id/guarantors': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const customerId = await newCustomer(owner.accessToken);
+      const guarantorId = await newGuarantor(owner.accessToken);
+      return {
+        sent: await send('post', `/api/customers/${customerId}/guarantors`, {
+          token: owner.accessToken,
+          body: { guarantor_id: guarantorId, relation: 'brother' },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'PATCH /api/customers/:id/guarantors/:guarantorId': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const customerId = await newCustomer(owner.accessToken);
+      const guarantorId = await newGuarantor(owner.accessToken);
+      await linkGuarantor(owner.accessToken, customerId, guarantorId);
+      return {
+        sent: await send('patch', `/api/customers/${customerId}/guarantors/${guarantorId}`, {
+          token: owner.accessToken,
+          body: { relation: 'colleague' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/customers/:id/guarantors/:guarantorId/unlink': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const customerId = await newCustomer(owner.accessToken);
+      const guarantorId = await newGuarantor(owner.accessToken);
+      await linkGuarantor(owner.accessToken, customerId, guarantorId);
+      return {
+        sent: await send('post', `/api/customers/${customerId}/guarantors/${guarantorId}/unlink`, {
+          token: owner.accessToken,
         }),
         org: SHOP_ONE,
       };

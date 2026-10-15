@@ -580,6 +580,22 @@ INSERT INTO t.denial VALUES
  ('set_customer_status','customer_3_status','customer.edit',$$SELECT public.set_customer_status((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial customer'),'blocked','Denial test')$$),
  ('list_customers','customer_4_list','customer.create',$$SELECT public.list_customers()$$),
  ('get_customer','customer_5_get','customer.create',$$SELECT public.get_customer((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial customer'))$$);
+-- R04: a customer of the denial shop that no other case touches (customer_3_status blocks the first
+-- one), then the guarantor calls in order. Owner and role both call the same text: the owner's call must
+-- work, so the case names order create, update, link, relation, reads, unlink, archive.
+INSERT INTO public.customers (organization_id, full_name, phones)
+VALUES ('d1000000-0000-0000-0000-000000000001', 'TEST-1 denial R04 customer', ARRAY['01000000003']);
+INSERT INTO t.denial VALUES
+ ('create_guarantor','zz_r04_1_create','guarantor.manage|customer.create',$$SELECT public.create_guarantor('{"full_name":"TEST-1 denial guarantor","phone":"01000000002","national_id":"29001010100015"}')$$),
+ ('update_guarantor','zz_r04_2_update','guarantor.manage',$$SELECT public.update_guarantor((SELECT id FROM public.guarantors WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial guarantor'),'{"job":"Denied"}')$$),
+ ('link_customer_guarantor','zz_r04_3_link','guarantor.manage|customer.create',$$SELECT public.link_customer_guarantor((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R04 customer'),(SELECT id FROM public.guarantors WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial guarantor'),'friend')$$),
+ ('set_customer_guarantor_relation','zz_r04_4_relation','guarantor.manage',$$SELECT public.set_customer_guarantor_relation((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R04 customer'),(SELECT id FROM public.guarantors WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial guarantor'),'brother')$$),
+ ('list_guarantors','zz_r04_5_list','customer.create',$$SELECT public.list_guarantors()$$),
+ ('get_guarantor','zz_r04_6_get','customer.create',$$SELECT public.get_guarantor((SELECT id FROM public.guarantors WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial guarantor'))$$),
+ ('list_customer_guarantors','zz_r04_7_customer_list','customer.create',$$SELECT public.list_customer_guarantors((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R04 customer'))$$),
+ ('get_guarantor_requirement','zz_r04_8_requirement','customer.create',$$SELECT public.get_guarantor_requirement((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R04 customer'),'1000.00')$$),
+ ('unlink_customer_guarantor','zz_r04_9_unlink','guarantor.manage',$$SELECT public.unlink_customer_guarantor((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R04 customer'),(SELECT id FROM public.guarantors WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial guarantor'))$$),
+ ('set_guarantor_archived','zz_r04_a_archive','guarantor.manage',$$SELECT public.set_guarantor_archived((SELECT id FROM public.guarantors WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial guarantor'),true)$$);
 INSERT INTO t.denial VALUES
  ('search_sales','zz_s07_1_history','sale.create|report.view',$$SELECT public.search_sales()$$),
  ('get_sale_details','zz_s07_2_details','sale.create|report.view',$$SELECT public.get_sale_details((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'))$$),

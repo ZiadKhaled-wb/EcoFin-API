@@ -319,6 +319,10 @@ See [S01 plan](plans/S01.md). Covers the Done when (the four ledger / reconcilia
 
 See [R01 plan](plans/R01.md). Covers the Done when (a user without `customer.view_pii` sees masked IDs; duplicate national IDs are rejected) and the D62 rules (the national ID parser, birth date and gender from the ID, who may change an ID, phones, block with a reason, who may read, search by name, phone and ID, the `customers` module).
 
+## R04 — guarantors (EC-66)
+
+See [R04 plan](plans/R04.md). Covers the Done when (editing a customer never deletes their guarantors; a contract that needs a guarantor can't be created without one, whoever writes it) and the D71 rules (national ID and masking as customers, who may, links and limits, archive, the policy count, the contract helpers and the commit-time trigger, ID photos, the 11 routes).
+
 ## S02 — split payments (EC-69)
 
 See [S02 plan](plans/S02.md). Covers the Done when (a sale paid half cash, half bank transfer posts each amount to the right place and the shift shows both) and the D64 rules (exact total, cash with change, bank reference, store credit, nothing left behind on a refusal, names-only account list, replays).

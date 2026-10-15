@@ -1734,6 +1734,332 @@ for (const [method, suffix] of [
   });
 }
 
+// R04 guarantors: shop B's customer and guarantor (linked) are created the real way, then shop A aims at them.
+async function shopBGuarantor(h: CrossShopHarness, tag: string) {
+  const customer = await shopBCustomer(h, 'g-' + tag);
+  const national_id = freshNationalId();
+  const created = await h.call('POST', '/api/guarantors', {
+    token: customer.token,
+    body: {
+      full_name: `Cross-shop guarantor ${tag} ${Date.now()}-${Math.random()}`,
+      phone: '01000000097',
+      national_id,
+      link: { customer_id: customer.id, relation: 'friend' },
+    },
+  });
+  h.expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+  const guarantor = created.res.body as { id: string; full_name: string; updated_at: string };
+  return { guarantor, customer, national_id, token: customer.token };
+}
+
+async function shopACustomer(h: CrossShopHarness, tag: string) {
+  const a = await h.login(OWNER_A);
+  const created = await h.call('POST', '/api/customers', {
+    token: a.accessToken,
+    body: { full_name: `Cross-shop A customer ${tag} ${Date.now()}`, phones: ['01000000096'] },
+  });
+  h.expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+  return { id: (created.res.body as { id: string }).id, token: a.accessToken };
+}
+
+async function shopAGuarantor(h: CrossShopHarness, tag: string) {
+  const a = await h.login(OWNER_A);
+  const created = await h.call('POST', '/api/guarantors', {
+    token: a.accessToken,
+    body: {
+      full_name: `Cross-shop A guarantor ${tag} ${Date.now()}-${Math.random()}`,
+      phone: '01000000095',
+      national_id: freshNationalId(),
+    },
+  });
+  h.expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+  return { id: (created.res.body as { id: string }).id, token: a.accessToken };
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/guarantors',
+  name: "guarantors list refuses a foreign header and an org query key, and never shows shop B's, not even by national ID",
+  async run(h) {
+    const theirs = await shopBGuarantor(h, 'list');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/guarantors', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/guarantors', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    for (const search of [theirs.guarantor.full_name, theirs.national_id]) {
+      const own = await h.call('GET', '/api/guarantors', {
+        token: a.accessToken,
+        query: 'status=all&search=' + encodeURIComponent(search),
+      });
+      h.expect(own.res.status).toBe(200);
+      h.expect((own.res.body as { total: number }).total).toBe(0);
+    }
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/guarantors/:id',
+  name: "guarantor read rejects another shop's id, a foreign header and an org query key",
+  async run(h) {
+    const theirs = await shopBGuarantor(h, 'get');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', `/api/guarantors/${theirs.guarantor.id}`, {
+      token: a.accessToken,
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('GUARANTOR_NOT_FOUND');
+    const header = await h.call('GET', `/api/guarantors/${theirs.guarantor.id}`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('GET', `/api/guarantors/${theirs.guarantor.id}`, {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/guarantors',
+  name: "guarantor create rejects foreign header and tenant body; shop B's ID is free in shop A; shop B's customer can not be linked",
+  async run(h) {
+    const theirs = await shopBGuarantor(h, 'create');
+    const a = await h.login(OWNER_A);
+    const body = {
+      full_name: `Cross-shop new guarantor ${Date.now()}`,
+      phone: '01000000094',
+      national_id: freshNationalId(),
+    };
+    const foreign = await h.call('POST', '/api/guarantors', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/guarantors', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_A, injected.ip)).toBe(0);
+    // A link to shop B's customer: not found, and the guarantor is not created either (one transaction).
+    const linked = await h.call('POST', '/api/guarantors', {
+      token: a.accessToken,
+      body: { ...body, link: { customer_id: theirs.customer.id, relation: 'friend' } },
+    });
+    h.expect(linked.res.status).toBe(404);
+    h.expect(h.code(linked.res)).toBe('CUSTOMER_NOT_FOUND');
+    const none = await h.call('GET', '/api/guarantors', {
+      token: a.accessToken,
+      query: 'status=all&search=' + body.national_id,
+    });
+    h.expect((none.res.body as { total: number }).total).toBe(0);
+    // The ID is unique per shop: the duplicate check must not see (or reveal) shop B's guarantor.
+    const same = await h.call('POST', '/api/guarantors', {
+      token: a.accessToken,
+      body: { ...body, national_id: theirs.national_id },
+    });
+    h.expect(same.res.status, JSON.stringify(same.res.body)).toBe(201);
+    h.expect((same.res.body as { id: string }).id).not.toBe(theirs.guarantor.id);
+  },
+});
+
+for (const [method, suffix] of [
+  ['PATCH', ''],
+  ['POST', '/archive'],
+  ['POST', '/restore'],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/guarantors/:id${suffix}`,
+    name: `${method} guarantor${suffix} rejects another shop's id and leaves it unchanged`,
+    async run(h) {
+      const theirs = await shopBGuarantor(h, method.toLowerCase() + suffix.replace('/', '-'));
+      const a = await h.login(OWNER_A);
+      const body = method === 'PATCH' ? { body: { job: 'Foreign' } } : {};
+      const foreign = await h.call(method, `/api/guarantors/${theirs.guarantor.id}${suffix}`, {
+        token: a.accessToken,
+        ...body,
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('GUARANTOR_NOT_FOUND');
+      const header = await h.call(method, `/api/guarantors/${theirs.guarantor.id}${suffix}`, {
+        token: a.accessToken,
+        orgId: SHOP_B,
+        ...body,
+      });
+      h.expect(header.res.status).toBe(403);
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_A, foreign.ip)).toBe(0);
+      const after = await h.call('GET', `/api/guarantors/${theirs.guarantor.id}`, {
+        token: theirs.token,
+      });
+      h.expect(after.res.body).toMatchObject({
+        job: null,
+        archived_at: null,
+        updated_at: theirs.guarantor.updated_at,
+      });
+    },
+  });
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/customers/:id/guarantors',
+  name: "a customer's guarantor list rejects another shop's customer, a foreign header and an org query key",
+  async run(h) {
+    const theirs = await shopBGuarantor(h, 'cust-list');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', `/api/customers/${theirs.customer.id}/guarantors`, {
+      token: a.accessToken,
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('CUSTOMER_NOT_FOUND');
+    const header = await h.call('GET', `/api/customers/${theirs.customer.id}/guarantors`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('GET', `/api/customers/${theirs.customer.id}/guarantors`, {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/customers/:id/guarantors',
+  name: "linking rejects shop B's customer and shop B's guarantor, a foreign header and a tenant body",
+  async run(h) {
+    const theirs = await shopBGuarantor(h, 'link');
+    const mine = await shopACustomer(h, 'link');
+    const mineG = await shopAGuarantor(h, 'link');
+    const customerForeign = await h.call(
+      'POST',
+      `/api/customers/${theirs.customer.id}/guarantors`,
+      {
+        token: mine.token,
+        body: { guarantor_id: mineG.id, relation: 'friend' },
+      },
+    );
+    h.expect(customerForeign.res.status).toBe(404);
+    h.expect(h.code(customerForeign.res)).toBe('CUSTOMER_NOT_FOUND');
+    const guarantorForeign = await h.call('POST', `/api/customers/${mine.id}/guarantors`, {
+      token: mine.token,
+      body: { guarantor_id: theirs.guarantor.id, relation: 'friend' },
+    });
+    h.expect(guarantorForeign.res.status).toBe(404);
+    h.expect(h.code(guarantorForeign.res)).toBe('GUARANTOR_NOT_FOUND');
+    const header = await h.call('POST', `/api/customers/${mine.id}/guarantors`, {
+      token: mine.token,
+      orgId: SHOP_B,
+      body: { guarantor_id: mineG.id, relation: 'friend' },
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('POST', `/api/customers/${mine.id}/guarantors`, {
+      token: mine.token,
+      body: { guarantor_id: mineG.id, relation: 'friend', organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, customerForeign.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_A, customerForeign.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, guarantorForeign.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_A, guarantorForeign.ip)).toBe(0);
+    const still = await h.call('GET', `/api/customers/${theirs.customer.id}/guarantors`, {
+      token: theirs.token,
+    });
+    h.expect((still.res.body as unknown[]).length).toBe(1);
+  },
+});
+
+for (const [method, suffix] of [
+  ['PATCH', ''],
+  ['POST', '/unlink'],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/customers/:id/guarantors/:guarantorId${suffix}`,
+    name: `${method} customer guarantor${suffix} rejects shop B's customer and guarantor and leaves the link unchanged`,
+    async run(h) {
+      const theirs = await shopBGuarantor(h, 'link-' + method.toLowerCase());
+      const mine = await shopACustomer(h, 'link-' + method.toLowerCase());
+      const mineG = await shopAGuarantor(h, 'link-' + method.toLowerCase());
+      const body = method === 'PATCH' ? { body: { relation: 'other' } } : {};
+      const customerForeign = await h.call(
+        method,
+        `/api/customers/${theirs.customer.id}/guarantors/${theirs.guarantor.id}${suffix}`,
+        { token: mine.token, ...body },
+      );
+      h.expect(customerForeign.res.status).toBe(404);
+      h.expect(h.code(customerForeign.res)).toBe('CUSTOMER_NOT_FOUND');
+      const guarantorForeign = await h.call(
+        method,
+        `/api/customers/${mine.id}/guarantors/${theirs.guarantor.id}${suffix}`,
+        { token: mine.token, ...body },
+      );
+      h.expect(guarantorForeign.res.status).toBe(404);
+      h.expect(h.code(guarantorForeign.res)).toBe('GUARANTOR_NOT_FOUND');
+      const header = await h.call(
+        method,
+        `/api/customers/${mine.id}/guarantors/${mineG.id}${suffix}`,
+        { token: mine.token, orgId: SHOP_B, ...body },
+      );
+      h.expect(header.res.status).toBe(403);
+      h.expect(await h.auditRowsFrom(SHOP_B, customerForeign.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_A, customerForeign.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, guarantorForeign.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_A, guarantorForeign.ip)).toBe(0);
+      const still = await h.call('GET', `/api/customers/${theirs.customer.id}/guarantors`, {
+        token: theirs.token,
+      });
+      h.expect(still.res.body).toMatchObject([{ relation: 'friend' }]);
+    },
+  });
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/customers/:id/guarantor-requirement',
+  name: "the guarantor requirement rejects another shop's customer, a foreign header and an org query key",
+  async run(h) {
+    const theirs = await shopBGuarantor(h, 'req');
+    const a = await h.login(OWNER_A);
+    const url = `/api/customers/${theirs.customer.id}/guarantor-requirement`;
+    const foreign = await h.call('GET', url, {
+      token: a.accessToken,
+      query: 'financed_amount=1000.00',
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('CUSTOMER_NOT_FOUND');
+    const header = await h.call('GET', url, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      query: 'financed_amount=1000.00',
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('GET', url, {
+      token: a.accessToken,
+      query: 'financed_amount=1000.00&organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
 // U02 purchase invoices: shop B's supplier, product and draft invoice are made the real way.
 async function shopBPurchase(h: CrossShopHarness, tag: string) {
   const supplier = await shopBSupplier(h, 'pi-' + tag);

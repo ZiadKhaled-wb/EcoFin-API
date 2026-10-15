@@ -1313,6 +1313,128 @@ export const openApiSpec = {
                 responses: { 200: { description: 'Customer' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/guarantors': {
+            get: {
+                tags: ['Guarantors'],
+                summary: 'List guarantors (any customer read key)',
+                description: 'R04 (D71). Readable with the customer read keys of D63 (customer.create, customer.edit, customer.view_pii, credit.approve, guarantor.manage, sale.create, ...); needs the plan module customers; works in an expired shop. PII like customers: national_id (and the birth_date and gender read from it) only with customer.view_pii, otherwise null next to national_id_masked. search matches the name, a phone, or the national ID (all 14 digits for everyone, a prefix of 4+ digits only with customer.view_pii). status: active (default) | archived | all. Ordered by name. Schema: GuarantorListQuery → GuarantorList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'search', in: 'query', schema: { type: 'string', maxLength: 100 } },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['active', 'archived', 'all'], default: 'active' } },
+                    { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 } },
+                ],
+                responses: { 200: { description: 'GuarantorList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Guarantors'],
+                summary: 'Create a guarantor (guarantor.manage or customer.create)',
+                description: 'R04 (D71). full_name 2-150, phone (one number, stored like customer phones), national_id (required: 14 digits that parse, Arabic digits accepted, birth date not in the future) are required; address up to 300, job up to 100, monthly_income (decimal string, 0 or more) are optional. The national ID is unique per shop: GUARANTOR_NATIONAL_ID_TAKEN (409, details guarantor_id and full_name of the guarantor who has it, so the screen can offer to link the existing one). With link {customer_id, relation} the guarantor is created and linked to that customer in one transaction (nothing is created when the link fails). Authorised in the database: either key works, anyone else gets PERMISSION_DENIED. The answer is masked like every read. Audited as guarantor.created (+ customer.guarantor_linked); the ID never reaches the audit log, only its mask. Schema: GuarantorCreateBody → Guarantor.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 201: { description: 'Guarantor' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/guarantors/{id}': {
+            get: {
+                tags: ['Guarantors'],
+                summary: 'Read a guarantor with their customers and contracts (any customer read key)',
+                description: 'R04 (D71). Archived guarantors stay readable. customers: who they back and with which relation; contracts: the installment contracts they are on (empty until the installment sale exists). national_id only with customer.view_pii; id_photos_count for everyone (the photos: GET /api/files with entityType guarantor, which needs customer.view_pii). Another shop answers GUARANTOR_NOT_FOUND. Schema: GuarantorDetails.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'GuarantorDetails' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            patch: {
+                tags: ['Guarantors'],
+                summary: 'Update a guarantor (guarantor.manage)',
+                description: 'R04 (D71). Any create field except link, at least one; an empty string (or null for the income) clears an optional field; phone, national_id and full_name can not be cleared. Sending national_id also needs customer.view_pii, whatever the value (PERMISSION_DENIED); a duplicate is GUARANTOR_NATIONAL_ID_TAKEN. Audited as guarantor.updated with the changed keys only (an ID change shows as its masks plus national_id_changed, severity warning); no change, no audit row. Schema: GuarantorUpdateBody → Guarantor.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Guarantor' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/guarantors/{id}/archive': {
+            post: {
+                tags: ['Guarantors'],
+                summary: 'Archive a guarantor (guarantor.manage)',
+                description: 'R04 (D71). Refused while the guarantor is on an active contract (GUARANTOR_ON_ACTIVE_CONTRACT). An archived guarantor stays readable and keeps its links and contract history but can not be linked or attached anew (GUARANTOR_ARCHIVED). The same state again changes nothing and writes no audit row. Audited as guarantor.archived (warning). Schema: Guarantor.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Guarantor' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/guarantors/{id}/restore': {
+            post: {
+                tags: ['Guarantors'],
+                summary: 'Restore an archived guarantor (guarantor.manage)',
+                description: 'R04 (D71). The same state again changes nothing and writes no audit row. Audited as guarantor.restored. Schema: Guarantor.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Guarantor' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}/guarantors': {
+            get: {
+                tags: ['Guarantors'],
+                summary: "A customer's guarantors (any customer read key)",
+                description: 'R04 (D71). At most 5, oldest link first, no paging. Each carries its relation, when it was linked and on_active_contract (the guarantor is on an active contract of this customer, so it can not be unlinked). Editing a customer never changes this list. Another shop\'s customer answers CUSTOMER_NOT_FOUND. Schema: CustomerGuarantorList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'CustomerGuarantorList' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Guarantors'],
+                summary: 'Link an existing guarantor to a customer (guarantor.manage or customer.create)',
+                description: 'R04 (D71). One guarantor at a time with a relation (father, mother, brother, sister, spouse, son, daughter, relative, friend, colleague, employer, neighbour, other). At most 5 per customer (GUARANTOR_LIMIT_REACHED); the same pair again is GUARANTOR_ALREADY_LINKED; an archived guarantor is GUARANTOR_ARCHIVED; a blocked or archived customer is CUSTOMER_BLOCKED; a guarantor can not back themselves (GUARANTOR_IS_CUSTOMER). Authorised in the database: either key works. Audited as customer.guarantor_linked. Schema: CustomerGuarantorLinkBody → CustomerGuarantorList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 201: { description: 'CustomerGuarantorList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}/guarantors/{guarantorId}': {
+            patch: {
+                tags: ['Guarantors'],
+                summary: 'Change the relation of a link (guarantor.manage)',
+                description: 'R04 (D71). The same relation again changes nothing and writes no audit row. GUARANTOR_NOT_LINKED when the pair is not linked. Audited as customer.guarantor_relation_set (old and new relation). Schema: CustomerGuarantorRelationBody → CustomerGuarantorList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'guarantorId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'CustomerGuarantorList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}/guarantors/{guarantorId}/unlink': {
+            post: {
+                tags: ['Guarantors'],
+                summary: 'Unlink a guarantor from a customer (guarantor.manage)',
+                description: 'R04 (D71). Refused while the guarantor is on an active contract of that customer (GUARANTOR_ON_ACTIVE_CONTRACT). The guarantor record stays. Audited as customer.guarantor_unlinked (warning, with the relation). There is no DELETE route in this API. Schema: CustomerGuarantorList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'guarantorId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'CustomerGuarantorList' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}/guarantor-requirement': {
+            get: {
+                tags: ['Guarantors'],
+                summary: 'Does the customer meet the policy for a financed amount? (any customer read key)',
+                description: 'R04 (D71). Against the shop\'s current installment policy version: required_count is 0 when no guarantor is needed (guarantor_required_above empty, or the financed amount, cash price minus down payment, is not above it), else guarantors_required_count; linked_active_count counts the customer\'s linked guarantors that are not archived; met = linked_active_count >= required_count. The database also refuses a contract that needs guarantors and has fewer, at commit. Schema: GuarantorRequirementQuery → GuarantorRequirement.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'financed_amount', in: 'query', required: true, schema: { type: 'string', example: '15000.00' } },
+                ],
+                responses: { 200: { description: 'GuarantorRequirement' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/suppliers': {
             get: {
                 tags: ['Purchasing'],

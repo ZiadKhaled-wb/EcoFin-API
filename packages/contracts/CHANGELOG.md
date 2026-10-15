@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.41.0
+
+- R04 guarantors: GUARANTOR_RELATIONS, GuarantorRelation, MAX_GUARANTORS_PER_CUSTOMER, MAX_GUARANTORS_PER_CONTRACT, Guarantor, GuarantorDetails, CustomerGuarantor, CustomerGuarantorList, GuarantorListQuery, GuarantorList, GuarantorCreateBody, GuarantorUpdateBody, GuarantorIdParams, CustomerGuarantorParams, CustomerGuarantorLinkBody, CustomerGuarantorRelationBody, GuarantorRequirementQuery, GuarantorRequirement, GuarantorNationalIdTakenDetail, GuarantorRequiredDetail. InstallmentPolicy and InstallmentPolicyBody gain `guarantors_required_count` (1-3). Error codes GUARANTOR_NOT_FOUND (404), GUARANTOR_NATIONAL_ID_TAKEN, GUARANTOR_ALREADY_LINKED, GUARANTOR_NOT_LINKED, GUARANTOR_LIMIT_REACHED, GUARANTOR_IS_CUSTOMER, GUARANTOR_ARCHIVED, GUARANTOR_ON_ACTIVE_CONTRACT, GUARANTOR_REQUIRED, CUSTOMER_BLOCKED (409).
+
 ## 0.40.1
 
 - EC-147: ShiftForceCloseBody and optional device_revoked state on shift answers. DEVICE_REVOKED remains 403; DEVICE_MISMATCH remains 409.
