@@ -29,6 +29,31 @@ const BR2 = 'd2000000-0000-0000-0000-000000000012';
 const OWNER_ONE = 'd3000000-0000-0000-0000-000000000011';
 const STAMP = Date.now();
 const TEMP_PASSWORD = `F07-${STAMP}!`;
+/** R05: every criterion, every checklist item and a fresh GPS fix. */
+const SURVEY_ANSWERS = () => ({
+  scores: {
+    housing_quality: 7,
+    neighbourhood: 7,
+    income_stability: 7,
+    job_status: 7,
+    property_ownership: 7,
+    overall_impression: 7,
+  },
+  checklist: {
+    met_customer: true,
+    address_matches: true,
+    id_original_seen: true,
+    neighbours_confirm: true,
+    utility_bill_seen: true,
+    workplace_confirmed: true,
+  },
+  gps: {
+    lat: 30.0444,
+    lng: 31.2357,
+    gps_accuracy_m: 12,
+    client_captured_at: new Date().toISOString(),
+  },
+});
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...Array(64).fill(7)]);
 
 // 198.18.2.0/24; the other integration files use other ranges.
@@ -184,6 +209,35 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       body: { guarantor_id: guarantorId, relation: 'friend' },
     });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
+  }
+  /** R05: a survey of a new customer assigned to the owner (so the owner can fill it). */
+  async function newSurvey(token: string) {
+    const customerId = await newCustomer(token);
+    const { res } = await send('post', '/api/surveys', {
+      token,
+      body: { customer_id: customerId, assigned_to: OWNER_ONE },
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return (res.body as { id: string }).id;
+  }
+  /** R05: complete answers and one photo, then submit (the owner is the assignee). */
+  async function submittedSurvey(token: string) {
+    const id = await newSurvey(token);
+    const photo = await request(app)
+      .post('/api/files')
+      .set('X-Forwarded-For', nextIp())
+      .set('Authorization', `Bearer ${token}`)
+      .field('purpose', 'survey_photo')
+      .field('entityType', 'field_survey')
+      .field('entityId', id)
+      .attach('file', PNG, { filename: 'visit.png', contentType: 'image/png' });
+    expect(photo.status, JSON.stringify(photo.body)).toBe(201);
+    const { res } = await send('post', `/api/surveys/${id}/submit`, {
+      token,
+      body: SURVEY_ANSWERS(),
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    return id;
   }
   /** R03: a pending credit exception for a new customer (limit 0, so any amount needs one). */
   async function newCreditException(token: string) {
@@ -1787,6 +1841,94 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         sent: await send('put', `/api/employees/${targetId}/branches`, {
           token: owner.accessToken,
           body: { branchIds: [BR1], reason: 'audit test' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/surveys': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const customerId = await newCustomer(owner.accessToken);
+      return {
+        sent: await send('post', '/api/surveys', {
+          token: owner.accessToken,
+          body: { customer_id: customerId, assigned_to: OWNER_ONE, visit_type: 'home' },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'POST /api/surveys/:id/reassign': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newSurvey(owner.accessToken);
+      // Shop one's seed has no other employee with survey.submit: a collector without a login.
+      const collector = await service
+        .from('employees')
+        .insert({
+          organization_id: SHOP_ONE,
+          full_name: `R05 collector ${STAMP}-${ipCounter}`,
+          role: 'COLLECTOR',
+          default_branch_id: BR1,
+        })
+        .select('id')
+        .single();
+      if (collector.error) throw new Error(collector.error.message);
+      return {
+        sent: await send('post', `/api/surveys/${id}/reassign`, {
+          token: owner.accessToken,
+          body: { assigned_to: collector.data.id as string },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/surveys/:id/cancel': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newSurvey(owner.accessToken);
+      return {
+        sent: await send('post', `/api/surveys/${id}/cancel`, {
+          token: owner.accessToken,
+          body: { reason: `R05 ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'PATCH /api/surveys/:id': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newSurvey(owner.accessToken);
+      return {
+        sent: await send('patch', `/api/surveys/${id}`, {
+          token: owner.accessToken,
+          body: { notes: `R05 ${STAMP}-${ipCounter}`, scores: { housing_quality: 6 } },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/surveys/:id/submit': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newSurvey(owner.accessToken);
+      const photo = await request(app)
+        .post('/api/files')
+        .set('X-Forwarded-For', nextIp())
+        .set('Authorization', `Bearer ${owner.accessToken}`)
+        .field('purpose', 'survey_photo')
+        .field('entityType', 'field_survey')
+        .field('entityId', id)
+        .attach('file', PNG, { filename: 'visit.png', contentType: 'image/png' });
+      expect(photo.status, JSON.stringify(photo.body)).toBe(201);
+      return {
+        sent: await send('post', `/api/surveys/${id}/submit`, {
+          token: owner.accessToken,
+          body: SURVEY_ANSWERS(),
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/surveys/:id/decide': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await submittedSurvey(owner.accessToken);
+      return {
+        sent: await send('post', `/api/surveys/${id}/decide`, {
+          token: owner.accessToken,
+          body: { decision: 'approve' },
         }),
         org: SHOP_ONE,
       };

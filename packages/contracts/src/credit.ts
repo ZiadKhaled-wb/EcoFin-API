@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CreditLatestSurvey } from './surveys.js';
 import { IsoTimestamp, Money, Uuid } from './common.js';
 import { CustomerStatus } from './customers.js';
 
@@ -81,6 +82,8 @@ export const CreditProfile = z.object({
   store_credit: Money,
   /** The last 10 changes, newest first. */
   limit_history: z.array(CreditLimitChange).max(10),
+  /** R05: the newest field survey of the customer, any status (null when there is none). */
+  latest_survey: CreditLatestSurvey.nullable(),
 });
 export type CreditProfile = z.infer<typeof CreditProfile>;
 

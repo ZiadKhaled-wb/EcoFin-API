@@ -175,6 +175,10 @@ describe('purpose to permission map', () => {
     expect(ENTITY_TABLES.guarantor).toBe('guarantors');
     expect(ENTITY_TYPES).toContain('guarantor');
   });
+  it('a field survey can carry photos (R05)', () => {
+    expect(ENTITY_TABLES.field_survey).toBe('field_surveys');
+    expect(ENTITY_TYPES).toContain('field_survey');
+  });
 });
 
 describe('sanitizeOriginalName', () => {

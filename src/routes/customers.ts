@@ -14,6 +14,7 @@ import {
   CustomerStatusBody,
   CustomerUpdateBody,
   GuarantorRequirementQuery,
+  SurveyRequirementQuery,
 } from '@ziadkhaled-wb/contracts';
 import { authenticate } from '../middleware/auth';
 import { loadRequestContext } from '../middleware/requestContext';
@@ -24,6 +25,7 @@ import * as controller from '../controllers/customers.controller';
 import * as guarantors from '../controllers/guarantors.controller';
 import * as credit from '../controllers/credit.controller';
 import * as account from '../controllers/customerAccount.controller';
+import * as surveys from '../controllers/surveys.controller';
 const router = Router();
 // Reads: any customer read key (D63 rule 6) and the plan module, both checked in SQL, so they are
 // authenticatedOnly() here. The national ID is masked in SQL unless the caller has customer.view_pii.
@@ -109,6 +111,24 @@ router.get(
   authenticatedOnly(),
   validate({ params: CustomerIdParams, query: GuarantorRequirementQuery }),
   asyncHandler(guarantors.requirement),
+);
+// R05 (D75): a customer's field surveys and the survey requirement. The customer read guard in SQL;
+// a collector (survey.submit only) gets only their own surveys.
+router.get(
+  '/:id/surveys',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ params: CustomerIdParams }),
+  asyncHandler(surveys.listForCustomer),
+);
+router.get(
+  '/:id/survey-requirement',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ params: CustomerIdParams, query: SurveyRequirementQuery }),
+  asyncHandler(surveys.requirement),
 );
 // R03 (D72): a customer's credit. Reads: the customer read guard in SQL. Setting the limit:
 // credit.approve. An exception request is sale.create OR credit.approve (no any-of marker, so

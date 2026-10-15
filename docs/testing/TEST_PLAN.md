@@ -331,6 +331,10 @@ See [R03 plan](plans/R03.md). Covers the Done when (the server blocks an install
 
 See [R04 plan](plans/R04.md). Covers the Done when (editing a customer never deletes their guarantors; a contract that needs a guarantor can't be created without one, whoever writes it) and the D71 rules (national ID and masking as customers, who may, links and limits, archive, the policy count, the contract helpers and the commit-time trigger, ID photos, the 11 routes).
 
+## R05 — field surveys (EC-67)
+
+See [R05 plan](plans/R05.md). Covers the Done when (photos are private; a required survey blocks the installment sale until approved, whoever writes the contract) and the D75 rules (assign / save / submit / decide / reassign / cancel, the answers' validation, photos tied to an assigned survey of the caller, who may and the collector who sees only their own, the residence part of the credit score and the profile's latest survey, the requirement read, the 10 routes).
+
 ## S02 — split payments (EC-69)
 
 See [S02 plan](plans/S02.md). Covers the Done when (a sale paid half cash, half bank transfer posts each amount to the right place and the shift shows both) and the D64 rules (exact total, cash with change, bank reference, store credit, nothing left behind on a refusal, names-only account list, replays).

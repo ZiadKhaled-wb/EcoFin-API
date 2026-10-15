@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.45.0
+
+- R05 field surveys: SURVEY_CRITERIA, SURVEY_CHECKLIST, SURVEY_STATUSES, SURVEY_MAX_PHOTOS, SURVEY_VALID_DAYS, SURVEY_LOW_ACCURACY_M, SurveyCriterion, SurveyChecklistItem, SurveyStatus, SurveyVisitType, SurveyScores, SurveyScoresComplete, SurveyChecklist, SurveyChecklistComplete, SurveyGps, Survey, SurveyArray, SurveyListQuery, SurveyList, SurveyIdParams, SurveyCreateBody, SurveyReassignBody, SurveyCancelBody, SurveyAnswersBody, SurveySubmitBody, SurveyDecisionBody, SurveyRequirementQuery, SurveyRequirement, CreditLatestSurvey, SurveyAlreadyOpenDetail, SurveyAssigneeInvalidDetail, SurveyRequiredDetail. `CreditProfile.latest_survey` (nullable). Error codes SURVEY_NOT_FOUND (404), SURVEY_NOT_ASSIGNEE (403), SURVEY_ALREADY_OPEN, SURVEY_ASSIGNEE_INVALID, SURVEY_WRONG_STATUS, SURVEY_PHOTO_REQUIRED, SURVEY_SELF_DECISION, SURVEY_REQUIRED (409).
+
 ## 0.44.0
 
 - R02 customer account: CUSTOMER_STATEMENT_MAX_YEARS, CustomerAccountHead, CustomerOpenBalance, CustomerAccountBalance, CustomerAging, CustomerOverdue, CustomerAccountTotals, ContractStatus, CustomerContractSummary, PaymentDirection, PaymentAllocationKind, CustomerPaymentSummary, CustomerReturnSummary, CustomerAccount, ScheduleLineStatus, CustomerScheduleLine, CustomerContractCharge, CustomerContractSchedule, CustomerContractParams, CustomerStatementQuery, CustomerStatementKind, CustomerStatementRow, CustomerStatement. Error code CONTRACT_NOT_FOUND (404). (0.43.0 is S09's.)

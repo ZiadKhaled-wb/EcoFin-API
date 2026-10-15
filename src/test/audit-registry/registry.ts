@@ -52,6 +52,12 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/customers/:id/guarantors/:guarantorId/unlink': {
     action: 'customer.guarantor_unlinked',
   },
+  'POST /api/surveys': { action: 'survey.assigned' },
+  'POST /api/surveys/:id/reassign': { action: 'survey.reassigned' },
+  'POST /api/surveys/:id/cancel': { action: 'survey.cancelled' },
+  'PATCH /api/surveys/:id': { action: 'survey.saved' },
+  'POST /api/surveys/:id/submit': { action: 'survey.submitted' },
+  'POST /api/surveys/:id/decide': { action: 'survey.approved' },
   'POST /api/purchase-invoices': { action: 'purchase_invoice.created' },
   'PUT /api/purchase-invoices/:id': { action: 'purchase_invoice.updated' },
   'POST /api/purchase-invoices/:id/approve': { action: 'purchase_invoice.approved' },

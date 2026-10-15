@@ -80,6 +80,7 @@ export const ENTITY_TABLES = {
   delivery: 'deliveries',
   warranty_claim: 'warranty_claims',
   guarantor: 'guarantors',
+  field_survey: 'field_surveys',
 } as const satisfies Record<string, SameOrgTable>;
 
 export type EntityType = keyof typeof ENTITY_TABLES;

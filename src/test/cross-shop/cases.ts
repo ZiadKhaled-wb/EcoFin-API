@@ -4937,3 +4937,190 @@ crossShopCase({
     h.expect(injected.res.status).toBe(403);
   },
 });
+
+// R05 field surveys: shop B's survey (on shop B's customer, assigned to shop B's owner) is made the
+// real way, then shop A aims at it. Shop A's own survey goes to shop A's owner.
+const OWNER_A_EMPLOYEE_ID = 'd3000000-0000-0000-0000-000000000011';
+
+async function shopBSurvey(h: CrossShopHarness, tag: string) {
+  const customer = await shopBCustomer(h, 's-' + tag);
+  const created = await h.call('POST', '/api/surveys', {
+    token: customer.token,
+    body: { customer_id: customer.id, assigned_to: OWNER_B_EMPLOYEE_ID },
+  });
+  h.expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+  const survey = created.res.body as { id: string; updated_at: string };
+  return { survey, customer, token: customer.token };
+}
+
+async function surveyUnchanged(
+  h: CrossShopHarness,
+  theirs: Awaited<ReturnType<typeof shopBSurvey>>,
+) {
+  const after = await h.call('GET', `/api/surveys/${theirs.survey.id}`, { token: theirs.token });
+  h.expect(after.res.body).toMatchObject({
+    status: 'assigned',
+    notes: null,
+    assigned_to: { id: OWNER_B_EMPLOYEE_ID },
+    updated_at: theirs.survey.updated_at,
+  });
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/surveys',
+  name: "surveys list refuses a foreign header and an org query key, and never shows shop B's",
+  async run(h) {
+    const theirs = await shopBSurvey(h, 'list');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/surveys', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/surveys', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const byCustomer = await h.call('GET', '/api/surveys', {
+      token: a.accessToken,
+      query: 'customer_id=' + theirs.customer.id,
+    });
+    h.expect(byCustomer.res.status).toBe(200);
+    h.expect((byCustomer.res.body as { total: number }).total).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/surveys/:id',
+  name: "survey read rejects another shop's id, a foreign header and an org query key",
+  async run(h) {
+    const theirs = await shopBSurvey(h, 'get');
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', `/api/surveys/${theirs.survey.id}`, {
+      token: a.accessToken,
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('SURVEY_NOT_FOUND');
+    const header = await h.call('GET', `/api/surveys/${theirs.survey.id}`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('GET', `/api/surveys/${theirs.survey.id}`, {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/surveys',
+  name: "survey assign refuses shop B's customer, shop B's employee, a foreign header and a tenant body",
+  async run(h) {
+    const theirs = await shopBCustomer(h, 's-assign');
+    const mine = await shopACustomer(h, 's-assign');
+    const a = await h.login(OWNER_A);
+    const customer = await h.call('POST', '/api/surveys', {
+      token: a.accessToken,
+      body: { customer_id: theirs.id, assigned_to: OWNER_A_EMPLOYEE_ID },
+    });
+    h.expect(customer.res.status).toBe(404);
+    h.expect(h.code(customer.res)).toBe('CUSTOMER_NOT_FOUND');
+    const employee = await h.call('POST', '/api/surveys', {
+      token: a.accessToken,
+      body: { customer_id: mine.id, assigned_to: OWNER_B_EMPLOYEE_ID },
+    });
+    h.expect(employee.res.status).toBe(409);
+    h.expect(h.code(employee.res)).toBe('SURVEY_ASSIGNEE_INVALID');
+    const header = await h.call('POST', '/api/surveys', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: { customer_id: theirs.id, assigned_to: OWNER_B_EMPLOYEE_ID },
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/surveys', {
+      token: a.accessToken,
+      body: { customer_id: mine.id, assigned_to: OWNER_A_EMPLOYEE_ID, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, customer.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_A, customer.ip)).toBe(0);
+    const theirList = await h.call('GET', `/api/customers/${theirs.id}/surveys`, {
+      token: theirs.token,
+    });
+    h.expect(theirList.res.body).toEqual([]);
+  },
+});
+
+for (const [method, suffix, body] of [
+  ['POST', '/reassign', { assigned_to: OWNER_A_EMPLOYEE_ID }],
+  ['POST', '/cancel', { reason: 'Foreign cancel' }],
+  ['PATCH', '', { notes: 'Foreign' }],
+  ['POST', '/submit', {}],
+  ['POST', '/decide', { decision: 'approve' }],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/surveys/:id${suffix}`,
+    name: `${method} survey${suffix} rejects another shop's id and leaves it unchanged`,
+    async run(h) {
+      const theirs = await shopBSurvey(h, method.toLowerCase() + suffix.replace('/', '-'));
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call(method, `/api/surveys/${theirs.survey.id}${suffix}`, {
+        token: a.accessToken,
+        body,
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('SURVEY_NOT_FOUND');
+      const header = await h.call(method, `/api/surveys/${theirs.survey.id}${suffix}`, {
+        token: a.accessToken,
+        orgId: SHOP_B,
+        body,
+      });
+      h.expect(header.res.status).toBe(403);
+      const injected = await h.call(method, `/api/surveys/${theirs.survey.id}${suffix}`, {
+        token: a.accessToken,
+        body: { ...body, organization_id: SHOP_B },
+      });
+      h.expect(injected.res.status).toBe(400);
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_A, foreign.ip)).toBe(0);
+      await surveyUnchanged(h, theirs);
+    },
+  });
+}
+
+for (const [path, query] of [
+  ['surveys', ''],
+  ['survey-requirement', 'financed_amount=1000.00'],
+] as const) {
+  crossShopCase({
+    method: 'GET',
+    path: `/api/customers/:id/${path}`,
+    name: `customer ${path} rejects another shop's customer, a foreign header and an org query key`,
+    async run(h) {
+      const theirs = await shopBSurvey(h, path);
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call('GET', `/api/customers/${theirs.customer.id}/${path}`, {
+        token: a.accessToken,
+        query,
+      });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('CUSTOMER_NOT_FOUND');
+      const header = await h.call('GET', `/api/customers/${theirs.customer.id}/${path}`, {
+        token: a.accessToken,
+        orgId: SHOP_B,
+        query,
+      });
+      h.expect(header.res.status).toBe(403);
+      const injected = await h.call('GET', `/api/customers/${theirs.customer.id}/${path}`, {
+        token: a.accessToken,
+        query: (query ? query + '&' : '') + 'organization_id=' + SHOP_B,
+      });
+      h.expect(injected.res.status).toBe(400);
+    },
+  });
+}
