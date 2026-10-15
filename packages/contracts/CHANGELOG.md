@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.0
+
+- R02 customer account: CUSTOMER_STATEMENT_MAX_YEARS, CustomerAccountHead, CustomerOpenBalance, CustomerAccountBalance, CustomerAging, CustomerOverdue, CustomerAccountTotals, ContractStatus, CustomerContractSummary, PaymentDirection, PaymentAllocationKind, CustomerPaymentSummary, CustomerReturnSummary, CustomerAccount, ScheduleLineStatus, CustomerScheduleLine, CustomerContractCharge, CustomerContractSchedule, CustomerContractParams, CustomerStatementQuery, CustomerStatementKind, CustomerStatementRow, CustomerStatement. Error code CONTRACT_NOT_FOUND (404). (0.43.0 is S09's.)
+
 ## 0.42.0
 
 - R03 credit profile and limit: CREDIT_AMOUNT_MAX, CREDIT_EXCEPTION_VALID_HOURS, CreditReason, CreditScoreKey, CreditScoreComponent, CreditBehaviour, CreditLimitChange, CreditProfile, CreditLimitBody, CreditCheckQuery, CreditCheck, CreditExceptionRequestBody, CreditExceptionDecideBody, CreditExceptionStatus, CreditExceptionSnapshot, CreditException, CreditExceptionList, CreditExceptionListQuery, CreditExceptionIdParams, CreditLimitExceededDetail. Error codes CREDIT_LIMIT_EXCEEDED, CREDIT_SCORE_TOO_LOW, CREDIT_CUSTOMER_WATCH, CREDIT_APPROVAL_INVALID (409), CREDIT_REASON_REQUIRED (400); the first three carry CreditLimitExceededDetail.

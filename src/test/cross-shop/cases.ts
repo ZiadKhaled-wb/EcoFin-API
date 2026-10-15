@@ -7,6 +7,7 @@
 // id), expect 403/404, then prove shop B didn't change (no audit row from this call's IP, B's
 // session still works, A's password unchanged...).
 
+import { randomUUID } from 'node:crypto';
 import { crossShopCase, SHOP_A, SHOP_B, type CrossShopHarness } from './harness';
 
 const OWNER_A = 'owner.one@ecotech.test';
@@ -2275,6 +2276,56 @@ crossShopCase({
   },
 });
 
+// R02 customer account: three reads of shop B's customer from shop A, a foreign header and a tenant key.
+for (const [path, suffix, tag] of [
+  ['/api/customers/:id/account', 'account', 'acct'],
+  ['/api/customers/:id/statement', 'statement', 'stmt'],
+] as const) {
+  crossShopCase({
+    method: 'GET',
+    path,
+    name: `the customer ${suffix} rejects another shop's customer, a foreign header and an org query key`,
+    async run(h) {
+      const theirs = await shopBCustomer(h, tag);
+      const a = await h.login(OWNER_A);
+      const url = `/api/customers/${theirs.id}/${suffix}`;
+      const foreign = await h.call('GET', url, { token: a.accessToken });
+      h.expect(foreign.res.status).toBe(404);
+      h.expect(h.code(foreign.res)).toBe('CUSTOMER_NOT_FOUND');
+      const header = await h.call('GET', url, { token: a.accessToken, orgId: SHOP_B });
+      h.expect(header.res.status).toBe(403);
+      const injected = await h.call('GET', url, {
+        token: a.accessToken,
+        query: 'organization_id=' + SHOP_B,
+      });
+      h.expect(injected.res.status).toBe(400);
+      const mine = await h.call('GET', url, { token: theirs.token });
+      h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+      h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    },
+  });
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/customers/:id/contracts/:contractId/schedule',
+  name: "a contract schedule rejects another shop's customer and a foreign header",
+  async run(h) {
+    const theirs = await shopBCustomer(h, 'sched');
+    const a = await h.login(OWNER_A);
+    // No route writes contracts yet (N02): any id is enough, the customer is checked first.
+    const url = `/api/customers/${theirs.id}/contracts/${randomUUID()}/schedule`;
+    const foreign = await h.call('GET', url, { token: a.accessToken });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('CUSTOMER_NOT_FOUND');
+    const header = await h.call('GET', url, { token: a.accessToken, orgId: SHOP_B });
+    h.expect(header.res.status).toBe(403);
+    const mine = await h.call('GET', url, { token: theirs.token });
+    h.expect(mine.res.status).toBe(404);
+    h.expect(h.code(mine.res)).toBe('CONTRACT_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
 // U02 purchase invoices: shop B's supplier, product and draft invoice are made the real way.
 async function shopBPurchase(h: CrossShopHarness, tag: string) {
   const supplier = await shopBSupplier(h, 'pi-' + tag);

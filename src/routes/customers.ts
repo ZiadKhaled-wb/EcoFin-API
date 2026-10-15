@@ -3,12 +3,14 @@ import {
   CreditCheckQuery,
   CreditExceptionRequestBody,
   CreditLimitBody,
+  CustomerContractParams,
   CustomerCreateBody,
   CustomerGuarantorLinkBody,
   CustomerGuarantorParams,
   CustomerGuarantorRelationBody,
   CustomerIdParams,
   CustomerListQuery,
+  CustomerStatementQuery,
   CustomerStatusBody,
   CustomerUpdateBody,
   GuarantorRequirementQuery,
@@ -21,6 +23,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 import * as controller from '../controllers/customers.controller';
 import * as guarantors from '../controllers/guarantors.controller';
 import * as credit from '../controllers/credit.controller';
+import * as account from '../controllers/customerAccount.controller';
 const router = Router();
 // Reads: any customer read key (D63 rule 6) and the plan module, both checked in SQL, so they are
 // authenticatedOnly() here. The national ID is masked in SQL unless the caller has customer.view_pii.
@@ -141,5 +144,31 @@ router.post(
   authenticatedOnly(),
   validate({ params: CustomerIdParams, body: CreditExceptionRequestBody }),
   asyncHandler(credit.requestException),
+);
+// R02 (D74): the customer account, a contract's schedule and the statement. Read only; the
+// customer read guard and the plan module are checked in SQL, so authenticatedOnly() here.
+router.get(
+  '/:id/account',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ params: CustomerIdParams }),
+  asyncHandler(account.account),
+);
+router.get(
+  '/:id/contracts/:contractId/schedule',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ params: CustomerContractParams }),
+  asyncHandler(account.schedule),
+);
+router.get(
+  '/:id/statement',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ params: CustomerIdParams, query: CustomerStatementQuery }),
+  asyncHandler(account.statement),
 );
 export default router;

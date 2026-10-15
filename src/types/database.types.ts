@@ -8298,6 +8298,10 @@ export type Database = {
         };
         Returns: string;
       };
+      customer_statement: {
+        Args: { p_customer_id: string; p_from?: string; p_to?: string };
+        Returns: Json;
+      };
       decide_credit_exception: {
         Args: { p_approval_id: string; p_approve: boolean; p_note?: string };
         Returns: Json;
@@ -8413,6 +8417,11 @@ export type Database = {
       get_credit_exception: { Args: { p_id: string }; Returns: Json };
       get_current_shift: { Args: Record<PropertyKey, never>; Returns: Json };
       get_customer: { Args: { p_id: string }; Returns: Json };
+      get_customer_account: { Args: { p_customer_id: string }; Returns: Json };
+      get_customer_contract_schedule: {
+        Args: { p_contract_id: string; p_customer_id: string };
+        Returns: Json;
+      };
       get_customer_credit_check: {
         Args: { p_customer_id: string; p_financed_amount: string };
         Returns: Json;
