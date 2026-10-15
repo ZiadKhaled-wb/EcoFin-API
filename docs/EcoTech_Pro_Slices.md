@@ -713,6 +713,7 @@ The shop lends its own money. Rules are built new on the server; nothing is reus
 **Includes:**
 - Daily job (shop timezone): installments past due + grace days become overdue
 - Late fee per the policy (fixed amount or %, once or per period, with a cap); recorded as a separate charge, not added into principal
+- **Islamic finance (owner, 15 Oct; `docs/ISLAMIC_FINANCE_RULES.md` rule 4):** no late fee by default; the only other option is a late-payment penalty given to charity, kept in its own charity balance and never counted as the shop's income
 - Waive a fee with permission and reason
 - Overdue list with days late and amounts; feeds the aging report (D03)
 
@@ -724,6 +725,7 @@ The shop lends its own money. Rules are built new on the server; nothing is reus
 **Includes:**
 - **Early settlement:** calculate the payoff amount (remaining principal + any rule on remaining markup from the policy), take payment, close the contract
 - **Rescheduling:** new schedule for the remaining balance; needs `schedule.change` and a reason; the old schedule is kept and linked
+- **Islamic finance (owner, 15 Oct; `docs/ISLAMIC_FINANCE_RULES.md` rules 5-6):** a reschedule never increases the total owed; an early-settlement discount is a manager's voluntary waiver at settlement time (the policy rule is only a suggestion), never promised in the contract
 - **Write-off:** mark a remaining balance as lost; needs the owner; reason required; shows in reports
 - All changes create new linked records; nothing is overwritten
 
