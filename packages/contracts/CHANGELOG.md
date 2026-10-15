@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.42.0
+
+- R03 credit profile and limit: CREDIT_AMOUNT_MAX, CREDIT_EXCEPTION_VALID_HOURS, CreditReason, CreditScoreKey, CreditScoreComponent, CreditBehaviour, CreditLimitChange, CreditProfile, CreditLimitBody, CreditCheckQuery, CreditCheck, CreditExceptionRequestBody, CreditExceptionDecideBody, CreditExceptionStatus, CreditExceptionSnapshot, CreditException, CreditExceptionList, CreditExceptionListQuery, CreditExceptionIdParams, CreditLimitExceededDetail. Error codes CREDIT_LIMIT_EXCEEDED, CREDIT_SCORE_TOO_LOW, CREDIT_CUSTOMER_WATCH, CREDIT_APPROVAL_INVALID (409), CREDIT_REASON_REQUIRED (400); the first three carry CreditLimitExceededDetail.
+
 ## 0.41.0
 
 - R04 guarantors: GUARANTOR_RELATIONS, GuarantorRelation, MAX_GUARANTORS_PER_CUSTOMER, MAX_GUARANTORS_PER_CONTRACT, Guarantor, GuarantorDetails, CustomerGuarantor, CustomerGuarantorList, GuarantorListQuery, GuarantorList, GuarantorCreateBody, GuarantorUpdateBody, GuarantorIdParams, CustomerGuarantorParams, CustomerGuarantorLinkBody, CustomerGuarantorRelationBody, GuarantorRequirementQuery, GuarantorRequirement, GuarantorNationalIdTakenDetail, GuarantorRequiredDetail. InstallmentPolicy and InstallmentPolicyBody gain `guarantors_required_count` (1-3). Error codes GUARANTOR_NOT_FOUND (404), GUARANTOR_NATIONAL_ID_TAKEN, GUARANTOR_ALREADY_LINKED, GUARANTOR_NOT_LINKED, GUARANTOR_LIMIT_REACHED, GUARANTOR_IS_CUSTOMER, GUARANTOR_ARCHIVED, GUARANTOR_ON_ACTIVE_CONTRACT, GUARANTOR_REQUIRED, CUSTOMER_BLOCKED (409).

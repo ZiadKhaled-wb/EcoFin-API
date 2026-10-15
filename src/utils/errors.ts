@@ -24,6 +24,7 @@ import {
   CustomerNationalIdTakenDetail,
   GuarantorNationalIdTakenDetail,
   GuarantorRequiredDetail,
+  CreditLimitExceededDetail,
   DiscountAboveCapDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
@@ -105,6 +106,9 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   CUSTOMER_NATIONAL_ID_TAKEN: CustomerNationalIdTakenDetail,
   GUARANTOR_NATIONAL_ID_TAKEN: GuarantorNationalIdTakenDetail,
   GUARANTOR_REQUIRED: GuarantorRequiredDetail,
+  CREDIT_LIMIT_EXCEEDED: CreditLimitExceededDetail,
+  CREDIT_SCORE_TOO_LOW: CreditLimitExceededDetail,
+  CREDIT_CUSTOMER_WATCH: CreditLimitExceededDetail,
   DISCOUNT_ABOVE_CAP: DiscountAboveCapDetail,
 };
 

@@ -1435,6 +1435,93 @@ export const openApiSpec = {
                 responses: { 200: { description: 'GuarantorRequirement' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/customers/{id}/credit': {
+            get: {
+                tags: ['Credit'],
+                summary: "A customer's credit profile (any customer read key)",
+                description: 'R03 (D72). Readable with the customer read keys of D63; needs the plan module customers; works in an expired shop. credit_limit is the only limit the server uses; suggested_limit (monthly income x the shop multiple, rounded down to the pound, null when either is missing) is only a hint. exposure = the unpaid principal of the customer\'s active and rescheduled contracts; available = limit - exposure, never below 0, with the excess in over_limit_by. score is 0-100 from the shop weights (guarantors, income, residence, identity) with each component and its points; min_score is the shop minimum. behaviour: on-time share, days late and the overdue amount of the due schedule lines, and the contract counts (null/zero until installments exist). limit_history: the last 10 limit changes. Nothing is stored for the score. Another shop\'s customer answers CUSTOMER_NOT_FOUND. Schema: CreditProfile.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'CreditProfile' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}/credit-limit': {
+            put: {
+                tags: ['Credit'],
+                summary: "Set a customer's credit limit (credit.approve)",
+                description: 'R03 (D72). credit_limit from 0 to 99 999 999.99 (a decimal string); a reason of 3-300 characters is required when the limit goes up (CREDIT_REASON_REQUIRED), optional when it goes down. A limit below the current exposure is allowed (the customer just can not take more). The same value again changes nothing and writes no audit row. Archived customers are refused (CUSTOMER_BLOCKED). Audited as customer.credit_limit_set (before, after, reason; a warning when it goes up). Needs the plan module customers. Schema: CreditLimitBody → CreditProfile.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'CreditProfile' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}/credit-check': {
+            get: {
+                tags: ['Credit'],
+                summary: 'Would an installment sale of this financed amount pass? (any customer read key)',
+                description: 'R03 (D72). financed_amount = cash price - down payment. Answers instead of raising for the credit reasons: allowed, reasons (limit: above the available credit; score: below the shop minimum; watch: the customer is on watch), needs_approval, the numbers, pending_approval_id (the newest pending request covering the amount) and approved_approval_id (the newest approved, unused, unexpired exception covering it). A customer who is not found (CUSTOMER_NOT_FOUND) or is blocked or archived (CUSTOMER_BLOCKED, never overridable) is an error. The decision itself is made in the database when the contract is created (N02) and again at commit. Schema: CreditCheckQuery → CreditCheck.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'financed_amount', in: 'query', required: true, schema: { type: 'string', example: '8000.00' } },
+                ],
+                responses: { 200: { description: 'CreditCheck' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}/credit-exceptions': {
+            post: {
+                tags: ['Credit'],
+                summary: 'Ask for a credit exception (sale.create or credit.approve)',
+                description: 'R03 (D72). An approval on the spot, like the S03 discount approvals: the cashier asks for an exception for this customer and financed amount with a reason (3-300, CREDIT_REASON_REQUIRED); the server stores what it knew (limit, exposure, available, score, reasons). APPROVAL_NOT_NEEDED when the sale would pass anyway; CUSTOMER_BLOCKED for a blocked or archived customer. Authorised in the database: either key works. Audited as credit_exception.requested. Schema: CreditExceptionRequestBody → CreditException.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 201: { description: 'CreditException' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/credit-exceptions': {
+            get: {
+                tags: ['Credit'],
+                summary: 'List credit exceptions (any customer read key)',
+                description: 'R03 (D72). status: pending (default) | approved | rejected | cancelled | all. Pending first, then newest, at most 100. mine marks the caller\'s own requests (only they can cancel). Works in an expired shop. Schema: CreditExceptionListQuery → CreditExceptionList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'status', in: 'query', schema: { type: 'string', enum: ['pending', 'approved', 'rejected', 'cancelled', 'all'], default: 'pending' } },
+                ],
+                responses: { 200: { description: 'CreditExceptionList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/credit-exceptions/{id}': {
+            get: {
+                tags: ['Credit'],
+                summary: 'Read a credit exception (any customer read key)',
+                description: 'R03 (D72). approved: valid for 24 hours after the decision (expires_at) and for one contract (used). Another shop\'s id, or an approval of another kind, answers APPROVAL_NOT_FOUND. Schema: CreditException.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'CreditException' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/credit-exceptions/{id}/decide': {
+            post: {
+                tags: ['Credit'],
+                summary: 'Approve or reject a credit exception (credit.approve)',
+                description: 'R03 (D72). Rejecting needs a note (APPROVAL_NOTE_REQUIRED). The requester can not decide their own request (APPROVAL_SELF), except the shop OWNER (to confirm with the owner). Only a pending request can be decided (APPROVAL_NOT_PENDING); approving a customer who was blocked or archived meanwhile is CUSTOMER_BLOCKED. Audited as credit_exception.approved (warning) or credit_exception.rejected. Schema: CreditExceptionDecideBody → CreditException.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'CreditException' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/credit-exceptions/{id}/cancel': {
+            post: {
+                tags: ['Credit'],
+                summary: 'Cancel your own pending credit exception (sale.create or credit.approve)',
+                description: 'R03 (D72). Only the requester, while the request is pending (someone else\'s request answers APPROVAL_NOT_FOUND; a decided one APPROVAL_NOT_PENDING). Authorised in the database: either key works. Audited as credit_exception.cancelled. Schema: CreditException.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'CreditException' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/suppliers': {
             get: {
                 tags: ['Purchasing'],

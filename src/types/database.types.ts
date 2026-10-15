@@ -8180,6 +8180,7 @@ export type Database = {
       auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_password_change: { Args: Record<PropertyKey, never>; Returns: undefined };
       branch_deactivation_check: { Args: { p_branch_id: string }; Returns: Json };
+      cancel_credit_exception: { Args: { p_approval_id: string }; Returns: Json };
       cancel_discount_approval: { Args: { p_approval_id: string }; Returns: Json };
       cancel_purchase_order: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_stock_count: { Args: { p_count_id: string }; Returns: Json };
@@ -8239,6 +8240,7 @@ export type Database = {
         Returns: Json;
       };
       create_expense_category: { Args: { p_name: string }; Returns: Json };
+      create_guarantor: { Args: { p_body: Json }; Returns: Json };
       create_invoice_from_po: {
         Args: { p_idempotency_key: string; p_lines?: Json; p_po_id: string };
         Returns: Json;
@@ -8295,6 +8297,10 @@ export type Database = {
           p_rate: number;
         };
         Returns: string;
+      };
+      decide_credit_exception: {
+        Args: { p_approval_id: string; p_approve: boolean; p_note?: string };
+        Returns: Json;
       };
       decide_discount_approval: {
         Args: { p_approval_id: string; p_approve: boolean; p_note?: string };
@@ -8404,11 +8410,22 @@ export type Database = {
       };
       get_cash_account: { Args: { p_id: string }; Returns: Json };
       get_cash_transfer: { Args: { p_id: string }; Returns: Json };
+      get_credit_exception: { Args: { p_id: string }; Returns: Json };
       get_current_shift: { Args: Record<PropertyKey, never>; Returns: Json };
       get_customer: { Args: { p_id: string }; Returns: Json };
+      get_customer_credit_check: {
+        Args: { p_customer_id: string; p_financed_amount: string };
+        Returns: Json;
+      };
+      get_customer_credit_profile: { Args: { p_customer_id: string }; Returns: Json };
       get_discount_approval: { Args: { p_approval_id: string }; Returns: Json };
       get_eta_settings: { Args: Record<PropertyKey, never>; Returns: Json };
       get_expense: { Args: { p_id: string }; Returns: Json };
+      get_guarantor: { Args: { p_id: string }; Returns: Json };
+      get_guarantor_requirement: {
+        Args: { p_customer_id: string; p_financed_amount: string };
+        Returns: Json;
+      };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
       get_purchase_order: { Args: { p_id: string }; Returns: Json };
@@ -8483,6 +8500,10 @@ export type Database = {
         }[];
       };
       jobs_succeed: { Args: { p_job_id: string; p_worker: string }; Returns: boolean };
+      link_customer_guarantor: {
+        Args: { p_customer_id: string; p_guarantor_id: string; p_relation: string };
+        Returns: Json;
+      };
       list_branch_min_levels: { Args: { p_product_id: string }; Returns: Json };
       list_cash_account_movements: {
         Args: { p_from?: string; p_id: string; p_limit?: number; p_offset?: number; p_to?: string };
@@ -8503,6 +8524,8 @@ export type Database = {
         Returns: Json;
       };
       list_categories: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_credit_exceptions: { Args: { p_status?: string }; Returns: Json };
+      list_customer_guarantors: { Args: { p_customer_id: string }; Returns: Json };
       list_customers: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string; p_status?: string };
         Returns: Json;
@@ -8544,6 +8567,10 @@ export type Database = {
           p_offset?: number;
           p_to?: string;
         };
+        Returns: Json;
+      };
+      list_guarantors: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string; p_status?: string };
         Returns: Json;
       };
       list_installment_policies: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -8814,31 +8841,6 @@ export type Database = {
         Returns: Json;
       };
       receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
-      create_guarantor: { Args: { p_body: Json }; Returns: Json };
-      get_guarantor: { Args: { p_id: string }; Returns: Json };
-      get_guarantor_requirement: {
-        Args: { p_customer_id: string; p_financed_amount: string };
-        Returns: Json;
-      };
-      link_customer_guarantor: {
-        Args: { p_customer_id: string; p_guarantor_id: string; p_relation: string };
-        Returns: Json;
-      };
-      list_customer_guarantors: { Args: { p_customer_id: string }; Returns: Json };
-      list_guarantors: {
-        Args: { p_limit?: number; p_offset?: number; p_search?: string; p_status?: string };
-        Returns: Json;
-      };
-      set_customer_guarantor_relation: {
-        Args: { p_customer_id: string; p_guarantor_id: string; p_relation: string };
-        Returns: Json;
-      };
-      set_guarantor_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
-      unlink_customer_guarantor: {
-        Args: { p_customer_id: string; p_guarantor_id: string };
-        Returns: Json;
-      };
-      update_guarantor: { Args: { p_body: Json; p_id: string }; Returns: Json };
       record_sale_receipt_print: { Args: { p_sale_id: string }; Returns: Json };
       register_file: {
         Args: {
@@ -8869,6 +8871,10 @@ export type Database = {
       rename_cash_account: { Args: { p_id: string; p_name: string }; Returns: Json };
       rename_expense_category: { Args: { p_id: string; p_name: string }; Returns: Json };
       request_claim_refund: { Args: { p_claim_id: string }; Returns: undefined };
+      request_credit_exception: {
+        Args: { p_customer_id: string; p_financed_amount: string; p_reason: string };
+        Returns: Json;
+      };
       request_discount_approval: {
         Args: { p_branch_id: string; p_lines: Json; p_reason: string; p_sale_discount: Json };
         Returns: Json;
@@ -8963,6 +8969,14 @@ export type Database = {
         Args: { p_archived: boolean; p_id: string; p_move_to?: string };
         Returns: undefined;
       };
+      set_customer_credit_limit: {
+        Args: { p_customer_id: string; p_limit: string; p_reason?: string };
+        Returns: Json;
+      };
+      set_customer_guarantor_relation: {
+        Args: { p_customer_id: string; p_guarantor_id: string; p_relation: string };
+        Returns: Json;
+      };
       set_customer_status: {
         Args: { p_id: string; p_reason?: string; p_status: string };
         Returns: Json;
@@ -9020,10 +9034,15 @@ export type Database = {
         Returns: Json;
       };
       set_expense_category_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
+      set_guarantor_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
       set_product_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
       set_supplier_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
       set_tax_class_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
       supplier_statement: { Args: { p_from?: string; p_id: string; p_to?: string }; Returns: Json };
+      unlink_customer_guarantor: {
+        Args: { p_customer_id: string; p_guarantor_id: string };
+        Returns: Json;
+      };
       unpair_device: { Args: { p_device_id: string }; Returns: Json };
       update_branch: {
         Args: {
@@ -9057,6 +9076,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      update_guarantor: { Args: { p_body: Json; p_id: string }; Returns: Json };
       update_org_profile: { Args: { p_changes: Json }; Returns: undefined };
       update_org_settings: { Args: { p_changes: Json }; Returns: undefined };
       update_org_settings_p03: { Args: { p_changes: Json }; Returns: undefined };

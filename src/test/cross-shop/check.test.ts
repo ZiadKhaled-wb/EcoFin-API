@@ -198,6 +198,14 @@ describe('cross-shop route check (D19)', () => {
         'PATCH /api/customers/:id/guarantors/:guarantorId',
         'POST /api/customers/:id/guarantors/:guarantorId/unlink',
         'GET /api/customers/:id/guarantor-requirement',
+        'GET /api/customers/:id/credit',
+        'PUT /api/customers/:id/credit-limit',
+        'GET /api/customers/:id/credit-check',
+        'POST /api/customers/:id/credit-exceptions',
+        'GET /api/credit-exceptions',
+        'GET /api/credit-exceptions/:id',
+        'POST /api/credit-exceptions/:id/decide',
+        'POST /api/credit-exceptions/:id/cancel',
         'GET /api/eta/settings',
         'PUT /api/eta/settings',
         'POST /api/eta/settings/test',
@@ -222,7 +230,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/fiscal/retry-many',
       ]),
     );
-    expect(keys).toHaveLength(213);
+    expect(keys).toHaveLength(221);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {
