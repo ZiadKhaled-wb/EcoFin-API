@@ -29,6 +29,8 @@ import {
   SurveyAlreadyOpenDetail,
   SurveyAssigneeInvalidDetail,
   SurveyRequiredDetail,
+  PolicyChangedDetail,
+  InstallmentTermsInvalidDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 import type { ZodTypeAny } from 'zod';
@@ -116,6 +118,8 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   SURVEY_ALREADY_OPEN: SurveyAlreadyOpenDetail,
   SURVEY_ASSIGNEE_INVALID: SurveyAssigneeInvalidDetail,
   SURVEY_REQUIRED: SurveyRequiredDetail,
+  POLICY_CHANGED: PolicyChangedDetail,
+  INSTALLMENT_TERMS_INVALID: InstallmentTermsInvalidDetail,
 };
 
 /**

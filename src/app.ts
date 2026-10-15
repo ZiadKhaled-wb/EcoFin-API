@@ -34,6 +34,7 @@ import approvalsRoutes from './routes/approvals.js';
 import customersRoutes from './routes/customers.js';
 import guarantorsRoutes from './routes/guarantors.js';
 import surveysRoutes from './routes/surveys.js';
+import installmentsRoutes from './routes/installments.js';
 import creditRoutes from './routes/credit.js';
 import cashAccountsRoutes from './routes/cashAccounts.js';
 import cashTransfersRoutes from './routes/cashTransfers.js';
@@ -101,6 +102,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/customers', customersRoutes);
   mountRouter(app, '/api/guarantors', guarantorsRoutes);
   mountRouter(app, '/api/surveys', surveysRoutes);
+  mountRouter(app, '/api/installments', installmentsRoutes);
   mountRouter(app, '/api/credit-exceptions', creditRoutes);
   mountRouter(app, '/api/cash-accounts', cashAccountsRoutes);
   mountRouter(app, '/api/cash-transfers', cashTransfersRoutes);

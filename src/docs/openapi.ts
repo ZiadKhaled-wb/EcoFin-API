@@ -2095,6 +2095,16 @@ export const openApiSpec = {
                 responses: { 200: { description: 'Expense' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/installments/preview': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Preview the terms of an installment sale (installment.create)',
+                description: 'N01 (D76). The terms under the shop\'s current installment policy version: financed amount (cash price - down payment), the profit for the whole term (markup_pct is the whole-term profit %, never a rate per period; docs/ISLAMIC_FINANCE_RULES.md), the installment price (total_payable) and the schedule lines, each split into principal and profit, adding up exactly. Broken policy rules come back in violations (frequency_not_allowed, sale_below_minimum, down_payment_too_high, down_payment_too_low, too_many_months, installment_below_minimum, rounding, first_due_date_out_of_range), not as an error. With customer_id the answer adds the R03 credit check, the R04 guarantor requirement (selected / selected_met for guarantor_ids) and the R05 survey requirement; can_confirm is true only with a customer and nothing failing. Needs the installments module and the shop\'s installments switch (INSTALLMENTS_DISABLED) and a policy (POLICY_NOT_SET). Nothing is written; works in an expired shop. Other codes: CUSTOMER_NOT_FOUND, CUSTOMER_BLOCKED, VALIDATION_FAILED. Schema: InstallmentPreviewBody → InstallmentPreview.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'InstallmentPreview' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/sales/quote': {
             post: {
                 tags: ['Sales'],
