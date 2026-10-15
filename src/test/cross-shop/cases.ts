@@ -2060,6 +2060,221 @@ crossShopCase({
   },
 });
 
+// R03 credit: shop B's customer gets an exception request the real way, then shop A aims at both.
+async function shopBCreditException(h: CrossShopHarness, tag: string) {
+  const customer = await shopBCustomer(h, 'cr-' + tag);
+  const created = await h.call('POST', `/api/customers/${customer.id}/credit-exceptions`, {
+    token: customer.token,
+    body: { financed_amount: '500.00', reason: `Cross-shop credit ${tag}` },
+  });
+  h.expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+  return { customer, exception: created.res.body as { id: string }, token: customer.token };
+}
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/customers/:id/credit',
+  name: "the credit profile rejects another shop's customer, a foreign header and an org query key",
+  async run(h) {
+    const theirs = await shopBCustomer(h, 'cr-profile');
+    const a = await h.login(OWNER_A);
+    const url = `/api/customers/${theirs.id}/credit`;
+    const foreign = await h.call('GET', url, { token: a.accessToken });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('CUSTOMER_NOT_FOUND');
+    const header = await h.call('GET', url, { token: a.accessToken, orgId: SHOP_B });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('GET', url, {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'PUT',
+  path: '/api/customers/:id/credit-limit',
+  name: "setting a limit rejects another shop's customer, a foreign header and a tenant body, and shop B's limit does not move",
+  async run(h) {
+    const theirs = await shopBCustomer(h, 'cr-limit');
+    const a = await h.login(OWNER_A);
+    const url = `/api/customers/${theirs.id}/credit-limit`;
+    const body = { credit_limit: '50000.00', reason: 'Cross-shop attempt' };
+    const foreign = await h.call('PUT', url, { token: a.accessToken, body });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('CUSTOMER_NOT_FOUND');
+    const header = await h.call('PUT', url, { token: a.accessToken, orgId: SHOP_B, body });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('PUT', url, {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const mine = await h.call('GET', `/api/customers/${theirs.id}/credit`, { token: theirs.token });
+    h.expect(mine.res.status).toBe(200);
+    h.expect((mine.res.body as { credit_limit: string }).credit_limit).toBe('0.00');
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_A, injected.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/customers/:id/credit-check',
+  name: "the credit check rejects another shop's customer, a foreign header and an org query key",
+  async run(h) {
+    const theirs = await shopBCustomer(h, 'cr-check');
+    const a = await h.login(OWNER_A);
+    const url = `/api/customers/${theirs.id}/credit-check`;
+    const foreign = await h.call('GET', url, {
+      token: a.accessToken,
+      query: 'financed_amount=1000.00',
+    });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('CUSTOMER_NOT_FOUND');
+    const header = await h.call('GET', url, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      query: 'financed_amount=1000.00',
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('GET', url, {
+      token: a.accessToken,
+      query: 'financed_amount=1000.00&organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/customers/:id/credit-exceptions',
+  name: "asking for an exception rejects another shop's customer, a foreign header and a tenant body",
+  async run(h) {
+    const theirs = await shopBCustomer(h, 'cr-request');
+    const a = await h.login(OWNER_A);
+    const url = `/api/customers/${theirs.id}/credit-exceptions`;
+    const body = { financed_amount: '500.00', reason: 'Cross-shop attempt' };
+    const foreign = await h.call('POST', url, { token: a.accessToken, body });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('CUSTOMER_NOT_FOUND');
+    const header = await h.call('POST', url, { token: a.accessToken, orgId: SHOP_B, body });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('POST', url, {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_A, injected.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/credit-exceptions',
+  name: "the exception list never shows shop B's requests, and refuses a foreign header and an org query key",
+  async run(h) {
+    const theirs = await shopBCreditException(h, 'list');
+    const a = await h.login(OWNER_A);
+    const own = await h.call('GET', '/api/credit-exceptions', {
+      token: a.accessToken,
+      query: 'status=all',
+    });
+    h.expect(own.res.status).toBe(200);
+    const items = (own.res.body as { items: Array<{ id: string }> }).items;
+    h.expect(items.some((i) => i.id === theirs.exception.id)).toBe(false);
+    const foreign = await h.call('GET', '/api/credit-exceptions', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/credit-exceptions', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'GET',
+  path: '/api/credit-exceptions/:id',
+  name: "an exception read rejects another shop's id, a foreign header and an org query key",
+  async run(h) {
+    const theirs = await shopBCreditException(h, 'get');
+    const a = await h.login(OWNER_A);
+    const url = `/api/credit-exceptions/${theirs.exception.id}`;
+    const foreign = await h.call('GET', url, { token: a.accessToken });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('APPROVAL_NOT_FOUND');
+    const header = await h.call('GET', url, { token: a.accessToken, orgId: SHOP_B });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('GET', url, {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/credit-exceptions/:id/decide',
+  name: "deciding rejects another shop's exception, a foreign header and a tenant body, and it stays pending",
+  async run(h) {
+    const theirs = await shopBCreditException(h, 'decide');
+    const a = await h.login(OWNER_A);
+    const url = `/api/credit-exceptions/${theirs.exception.id}/decide`;
+    const foreign = await h.call('POST', url, { token: a.accessToken, body: { approve: true } });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('APPROVAL_NOT_FOUND');
+    const header = await h.call('POST', url, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: { approve: true },
+    });
+    h.expect(header.res.status).toBe(403);
+    const injected = await h.call('POST', url, {
+      token: a.accessToken,
+      body: { approve: true, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const still = await h.call('GET', `/api/credit-exceptions/${theirs.exception.id}`, {
+      token: theirs.token,
+    });
+    h.expect((still.res.body as { status: string }).status).toBe('pending');
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_A, injected.ip)).toBe(0);
+  },
+});
+
+crossShopCase({
+  method: 'POST',
+  path: '/api/credit-exceptions/:id/cancel',
+  name: "cancelling rejects another shop's exception and a foreign header, and it stays pending",
+  async run(h) {
+    const theirs = await shopBCreditException(h, 'cancel');
+    const a = await h.login(OWNER_A);
+    const url = `/api/credit-exceptions/${theirs.exception.id}/cancel`;
+    const foreign = await h.call('POST', url, { token: a.accessToken });
+    h.expect(foreign.res.status).toBe(404);
+    h.expect(h.code(foreign.res)).toBe('APPROVAL_NOT_FOUND');
+    const header = await h.call('POST', url, { token: a.accessToken, orgId: SHOP_B });
+    h.expect(header.res.status).toBe(403);
+    const still = await h.call('GET', `/api/credit-exceptions/${theirs.exception.id}`, {
+      token: theirs.token,
+    });
+    h.expect((still.res.body as { status: string }).status).toBe('pending');
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+
 // U02 purchase invoices: shop B's supplier, product and draft invoice are made the real way.
 async function shopBPurchase(h: CrossShopHarness, tag: string) {
   const supplier = await shopBSupplier(h, 'pi-' + tag);

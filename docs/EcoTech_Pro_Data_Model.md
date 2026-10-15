@@ -251,7 +251,7 @@ erDiagram
 | `supplier_payment_allocations` | `supplier_payment_id`, `purchase_invoice_id`, `amount > 0` | The function blocks paying more than is outstanding |
 | `purchase_returns` | `number`, `purchase_invoice_id`, `supplier_id`, `branch_id`, `refund_mode` (credit/cash), `cash_account_id`, `total`, `reason`, `idempotency_key` | U04 |
 | `purchase_return_lines` | `return_id`, `invoice_line_id`, `product_id`, `unit_id`, `quantity > 0`, `unit_cost` | Quantity can't exceed what was bought minus what's already returned |
-| `approvals` | `entity_type`, `entity_id`, `kind approval_kind`, `status approval_status`, `requested_by`, `decided_by/at`, `reason` | U06, plus price override, credit exception and over-cap discount |
+| `approvals` | `entity_type`, `entity_id`, `kind approval_kind`, `status approval_status`, `requested_by`, `decided_by/at`, `reason` | U06, plus price override, credit exception and over-cap discount. R03 (D72): `credit_exception` rows (`entity_type` contract, `amount` = financed amount, `payload` = customer id and the numbers at request time, `entity_id` = the contract that used it, once; valid 24 hours after the decision); the no-self-approval check exempts this kind (the OWNER may decide their own). |
 
 ---
 
@@ -319,7 +319,7 @@ erDiagram
 
 | Table | Columns | Notes |
 |---|---|---|
-| `customers` | `full_name`, `phones text[]`, `national_id` (PII, UK per org), `birth_date`, `gender`, `address`, `job`, `monthly_income`, `credit_limit`, `status customer_status`, `is_business`, `tax_registration_no`, `notes`, `archived_at` | R01, R03. Exposure comes from a view. |
+| `customers` | `full_name`, `phones text[]`, `national_id` (PII, UK per org), `birth_date`, `gender`, `address`, `job`, `monthly_income`, `credit_limit`, `status customer_status`, `is_business`, `tax_registration_no`, `notes`, `archived_at` | R01, R03 (D72). `credit_limit` is the only limit the server uses and is written only by `set_customer_credit_limit` (`credit.approve`; `update_customer` refuses it); exposure comes from `v_contract_balances`. |
 | `guarantors` | `full_name`, `phone`, `national_id` (PII, UK per org), `address`, `job`, `monthly_income`, `customer_id` (nullable: set if the guarantor is also a customer), `archived_at` | R04 (D71). **Open point closed:** a separate table plus the optional `customer_id` link, no shared persons table. Phone and national ID are required by the R04 functions. |
 | `customer_guarantors` | `customer_id`, `guarantor_id`, `relation` | R04: one link at a time, at most 5 per customer; deletable (unlink is audited). Editing a customer never touches it. |
 | `field_surveys` | `customer_id`, `assigned_to`, `status survey_status`, `scores jsonb`, `notes`, `lat`, `lng`, `gps_accuracy`, `submitted_at`, `decided_by/at` | R05. Photos live in `files`. |

@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import {
+  CreditCheckQuery,
+  CreditExceptionRequestBody,
+  CreditLimitBody,
   CustomerCreateBody,
   CustomerGuarantorLinkBody,
   CustomerGuarantorParams,
@@ -17,6 +20,7 @@ import { validate } from '../middleware/validate';
 import { asyncHandler } from '../utils/asyncHandler';
 import * as controller from '../controllers/customers.controller';
 import * as guarantors from '../controllers/guarantors.controller';
+import * as credit from '../controllers/credit.controller';
 const router = Router();
 // Reads: any customer read key (D63 rule 6) and the plan module, both checked in SQL, so they are
 // authenticatedOnly() here. The national ID is masked in SQL unless the caller has customer.view_pii.
@@ -102,5 +106,40 @@ router.get(
   authenticatedOnly(),
   validate({ params: CustomerIdParams, query: GuarantorRequirementQuery }),
   asyncHandler(guarantors.requirement),
+);
+// R03 (D72): a customer's credit. Reads: the customer read guard in SQL. Setting the limit:
+// credit.approve. An exception request is sale.create OR credit.approve (no any-of marker, so
+// authenticatedOnly() and the database function asks for either key).
+router.get(
+  '/:id/credit',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ params: CustomerIdParams }),
+  asyncHandler(credit.profile),
+);
+router.put(
+  '/:id/credit-limit',
+  authenticate,
+  loadRequestContext,
+  requirePermission('credit.approve'),
+  validate({ params: CustomerIdParams, body: CreditLimitBody }),
+  asyncHandler(credit.setLimit),
+);
+router.get(
+  '/:id/credit-check',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ params: CustomerIdParams, query: CreditCheckQuery }),
+  asyncHandler(credit.check),
+);
+router.post(
+  '/:id/credit-exceptions',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ params: CustomerIdParams, body: CreditExceptionRequestBody }),
+  asyncHandler(credit.requestException),
 );
 export default router;

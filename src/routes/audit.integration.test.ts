@@ -185,6 +185,16 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
   }
+  /** R03: a pending credit exception for a new customer (limit 0, so any amount needs one). */
+  async function newCreditException(token: string) {
+    const customerId = await newCustomer(token);
+    const { res } = await send('post', `/api/customers/${customerId}/credit-exceptions`, {
+      token,
+      body: { financed_amount: '500.00', reason: `R03 ${STAMP}-${ipCounter}` },
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return (res.body as { id: string }).id;
+  }
   /** K01: a new shop-wide bank (balance 0, not a branch default). */
   async function newCashAccount(token: string) {
     const { res } = await send('post', '/api/cash-accounts', {
@@ -997,6 +1007,50 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         sent: await send('post', `/api/customers/${id}/status`, {
           token: owner.accessToken,
           body: { status: 'blocked', reason: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'PUT /api/customers/:id/credit-limit': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const customerId = await newCustomer(owner.accessToken);
+      return {
+        sent: await send('put', `/api/customers/${customerId}/credit-limit`, {
+          token: owner.accessToken,
+          body: { credit_limit: '10000.00', reason: `R03 ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/customers/:id/credit-exceptions': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const customerId = await newCustomer(owner.accessToken);
+      return {
+        sent: await send('post', `/api/customers/${customerId}/credit-exceptions`, {
+          token: owner.accessToken,
+          body: { financed_amount: '500.00', reason: `R03 ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'POST /api/credit-exceptions/:id/decide': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newCreditException(owner.accessToken);
+      return {
+        sent: await send('post', `/api/credit-exceptions/${id}/decide`, {
+          token: owner.accessToken,
+          body: { approve: true },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/credit-exceptions/:id/cancel': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newCreditException(owner.accessToken);
+      return {
+        sent: await send('post', `/api/credit-exceptions/${id}/cancel`, {
+          token: owner.accessToken,
         }),
         org: SHOP_ONE,
       };

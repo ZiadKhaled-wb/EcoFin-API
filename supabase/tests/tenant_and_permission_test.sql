@@ -596,6 +596,19 @@ INSERT INTO t.denial VALUES
  ('get_guarantor_requirement','zz_r04_8_requirement','customer.create',$$SELECT public.get_guarantor_requirement((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R04 customer'),'1000.00')$$),
  ('unlink_customer_guarantor','zz_r04_9_unlink','guarantor.manage',$$SELECT public.unlink_customer_guarantor((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R04 customer'),(SELECT id FROM public.guarantors WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial guarantor'))$$),
  ('set_guarantor_archived','zz_r04_a_archive','guarantor.manage',$$SELECT public.set_guarantor_archived((SELECT id FROM public.guarantors WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial guarantor'),true)$$);
+-- R03: a customer of the denial shop for the credit calls, in the order the case names sort: set the limit,
+-- ask for two exceptions (5 000 and 6 000: the owner decides the first and cancels the second), then the reads.
+INSERT INTO public.customers (organization_id, full_name, phones)
+VALUES ('d1000000-0000-0000-0000-000000000001', 'TEST-1 denial R03 customer', ARRAY['01000000004']);
+INSERT INTO t.denial VALUES
+ ('set_customer_credit_limit','zz_r03_1_limit','credit.approve',$$SELECT public.set_customer_credit_limit((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'),'1000.00','Denial test')$$),
+ ('request_credit_exception','zz_r03_2_request','sale.create|credit.approve',$$SELECT public.request_credit_exception((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'),'5000.00','Denial test'), public.request_credit_exception((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'),'6000.00','Denial test 2')$$),
+ ('get_credit_exception','zz_r03_3_get','customer.create',$$SELECT public.get_credit_exception((SELECT id FROM public.approvals WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND kind='credit_exception' AND amount=5000))$$),
+ ('list_credit_exceptions','zz_r03_4_list','customer.create',$$SELECT public.list_credit_exceptions()$$),
+ ('get_customer_credit_profile','zz_r03_5_profile','customer.create',$$SELECT public.get_customer_credit_profile((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'))$$),
+ ('get_customer_credit_check','zz_r03_6_check','customer.create',$$SELECT public.get_customer_credit_check((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'),'100.00')$$),
+ ('decide_credit_exception','zz_r03_7_decide','credit.approve',$$SELECT public.decide_credit_exception((SELECT id FROM public.approvals WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND kind='credit_exception' AND amount=5000),true,NULL)$$),
+ ('cancel_credit_exception','zz_r03_8_cancel','sale.create|credit.approve',$$SELECT public.cancel_credit_exception((SELECT id FROM public.approvals WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND kind='credit_exception' AND amount=6000))$$);
 INSERT INTO t.denial VALUES
  ('search_sales','zz_s07_1_history','sale.create|report.view',$$SELECT public.search_sales()$$),
  ('get_sale_details','zz_s07_2_details','sale.create|report.view',$$SELECT public.get_sale_details((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-sale-1'))$$),
