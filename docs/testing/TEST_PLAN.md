@@ -335,6 +335,10 @@ See [R04 plan](plans/R04.md). Covers the Done when (editing a customer never del
 
 See [R05 plan](plans/R05.md). Covers the Done when (photos are private; a required survey blocks the installment sale until approved, whoever writes the contract) and the D75 rules (assign / save / submit / decide / reassign / cancel, the answers' validation, photos tied to an assigned survey of the caller, who may and the collector who sees only their own, the residence part of the credit score and the profile's latest survey, the requirement read, the 10 routes).
 
+## N01 — installment rules engine (EC-80)
+
+See [N01 plan](plans/N01.md). Covers the Done when (schedule lines always sum to the total payable; changing the policy changes new contracts only; the server rejects terms that break the policy) and the D76 rules (the 35 golden cases run by both engines, a generated sweep, the eight policy rules, the confirm side for N02, the two commit-time triggers, the preview and who may call it).
+
 ## S02 — split payments (EC-69)
 
 See [S02 plan](plans/S02.md). Covers the Done when (a sale paid half cash, half bank transfer posts each amount to the right place and the shift shows both) and the D64 rules (exact total, cash with change, bank reference, store credit, nothing left behind on a refusal, names-only account list, replays).

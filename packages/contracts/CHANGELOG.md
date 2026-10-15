@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.46.0
+
+- N01 installment rules engine: FIRST_DUE_MAX_DAYS, MAX_INSTALLMENTS, INSTALLMENT_VIOLATION_RULES, InstallmentTermsInput, InstallmentViolationRule, InstallmentViolation, ScheduleLinePreview, InstallmentTerms, InstallmentPreviewBody, InstallmentGuarantorCheck, InstallmentPreview, PolicyChangedDetail, InstallmentTermsInvalidDetail, InstallmentEnginePolicy, computeInstallmentTerms, installmentDueDate, installmentDurationMonths. Error codes INSTALLMENT_TERMS_INVALID (400), POLICY_NOT_SET, POLICY_CHANGED, SCHEDULE_NOT_BALANCED (409).
+
 ## 0.45.0
 
 - R05 field surveys: SURVEY_CRITERIA, SURVEY_CHECKLIST, SURVEY_STATUSES, SURVEY_MAX_PHOTOS, SURVEY_VALID_DAYS, SURVEY_LOW_ACCURACY_M, SurveyCriterion, SurveyChecklistItem, SurveyStatus, SurveyVisitType, SurveyScores, SurveyScoresComplete, SurveyChecklist, SurveyChecklistComplete, SurveyGps, Survey, SurveyArray, SurveyListQuery, SurveyList, SurveyIdParams, SurveyCreateBody, SurveyReassignBody, SurveyCancelBody, SurveyAnswersBody, SurveySubmitBody, SurveyDecisionBody, SurveyRequirementQuery, SurveyRequirement, CreditLatestSurvey, SurveyAlreadyOpenDetail, SurveyAssigneeInvalidDetail, SurveyRequiredDetail. `CreditProfile.latest_survey` (nullable). Error codes SURVEY_NOT_FOUND (404), SURVEY_NOT_ASSIGNEE (403), SURVEY_ALREADY_OPEN, SURVEY_ASSIGNEE_INVALID, SURVEY_WRONG_STATUS, SURVEY_PHOTO_REQUIRED, SURVEY_SELF_DECISION, SURVEY_REQUIRED (409).

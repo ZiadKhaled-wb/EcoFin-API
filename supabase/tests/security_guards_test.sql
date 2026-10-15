@@ -95,6 +95,7 @@ INSERT INTO t.no_permission_ok VALUES
   ('get_purchase_invoice', 'U02: read-only purchase invoice of the caller''s branches; any purchasing read key (D53)'),
   ('list_purchase_approvals', 'U06: read-only purchase approvals of the caller''s branches; checks app.has_permission(purchase.invoice_approve) so an expired shop can still read'),
   ('quote_sale', 'S01: read-only price quote of a cart; checks app.has_permission(sale.create); works in an expired shop'),
+  ('preview_installment_terms', 'N01: read-only installment terms preview (nothing written); checks app.has_permission(installment.create) so an expired shop can still preview'),
   ('get_sale', 'S01: read-only sale; own sales with sale.create, the caller''s branches with report.view or cash.view'),
   ('list_sale_payment_accounts', 'S02: read-only names of the active banks the caller''s open shift can take a transfer into; checks app.has_permission(sale.create)'),
   ('get_discount_approval', 'S03: read-only approval; checks app.has_permission(sale.create or discount.above_cap), then only the requester''s own or a branch the caller can access with discount.above_cap'),

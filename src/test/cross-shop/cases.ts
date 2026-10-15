@@ -5124,3 +5124,49 @@ for (const [path, query] of [
     },
   });
 }
+
+// N01: the preview reads only; another shop's customer and guarantors never reach the answer.
+crossShopCase({
+  method: 'POST',
+  path: '/api/installments/preview',
+  name: "a preview refuses a foreign header, an org id and shop B's customer; shop B's guarantors are not counted",
+  async run(h) {
+    const theirs = await shopBGuarantor(h, 'n01-preview');
+    const mine = await shopACustomer(h, 'n01-preview');
+    const body = {
+      cash_price: '1000.00',
+      down_payment: '500.00',
+      installments_count: 2,
+      frequency: 'monthly',
+    };
+    const foreign = await h.call('POST', '/api/installments/preview', {
+      token: mine.token,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/installments/preview', {
+      token: mine.token,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const customer = await h.call('POST', '/api/installments/preview', {
+      token: mine.token,
+      body: { ...body, customer_id: theirs.customer.id },
+    });
+    h.expect(customer.res.status).toBe(404);
+    h.expect(h.code(customer.res)).toBe('CUSTOMER_NOT_FOUND');
+    const guarantors = await h.call('POST', '/api/installments/preview', {
+      token: mine.token,
+      body: { ...body, customer_id: mine.id, guarantor_ids: [theirs.guarantor.id] },
+    });
+    h.expect(guarantors.res.status, JSON.stringify(guarantors.res.body)).toBe(200);
+    const answer = guarantors.res.body as {
+      customer: { guarantors: { selected: number; selected_met: boolean } } | null;
+    };
+    h.expect(answer.customer?.guarantors.selected).toBe(0);
+    h.expect(answer.customer?.guarantors.selected_met).toBe(false);
+    h.expect(await h.auditRowsFrom(SHOP_A, foreign.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});

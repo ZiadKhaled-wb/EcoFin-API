@@ -8888,6 +8888,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      preview_installment_terms: { Args: { p_body: Json }; Returns: Json };
       publish_installment_policy: { Args: { p_policy: Json }; Returns: string };
       quote_sale: {
         Args: { p_customer_id?: string; p_lines: Json; p_payments?: Json; p_sale_discount?: Json };

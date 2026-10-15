@@ -641,6 +641,8 @@ SELECT 'd1000000-0000-0000-0000-000000000001', 'TEST-1-R02-C1', c.id, 'd2000000-
 FROM public.customers c, public.installment_policies p
 WHERE c.organization_id = 'd1000000-0000-0000-0000-000000000001' AND c.full_name = 'TEST-1 denial R03 customer'
   AND p.organization_id = c.organization_id AND p.version = 1;
+-- N01: the installment terms preview of the denial shop (its policy version 1 above), without a customer.
+INSERT INTO t.denial VALUES ('preview_installment_terms','zz_n01_1_preview','installment.create',$$SELECT public.preview_installment_terms('{"cash_price":"1000.00","down_payment":"0.00","installments_count":2,"frequency":"monthly"}')$$);
 INSERT INTO t.denial VALUES ('get_customer_account','zz_r02_1_account','customer.create',$$SELECT public.get_customer_account((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'))$$),
  ('get_customer_contract_schedule','zz_r02_2_schedule','customer.create',$$SELECT public.get_customer_contract_schedule((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'),(SELECT id FROM public.contracts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND number='TEST-1-R02-C1'))$$),
  ('customer_statement','zz_r02_3_statement','customer.create',$$SELECT public.customer_statement((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'))$$);
