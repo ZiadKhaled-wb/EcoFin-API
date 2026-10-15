@@ -8828,6 +8828,15 @@ SELECT t.error('preview: a blocked customer -> CUSTOMER_BLOCKED',format($$SELECT
   jsonb_build_object('cash_price','1000.00','down_payment','100.00','installments_count',2,'frequency','monthly','customer_id',t.id('blocked'))),'CUSTOMER_BLOCKED');
 SELECT t.error('preview: shop B''s customer -> CUSTOMER_NOT_FOUND',format($$SELECT public.preview_installment_terms(%L)$$,
   jsonb_build_object('cash_price','1000.00','down_payment','100.00','installments_count',2,'frequency','monthly','customer_id',t.id('cust-b'))),'CUSTOMER_NOT_FOUND');
+SELECT t.error('preview: nothing financed still checks the customer: blocked -> CUSTOMER_BLOCKED',format($$SELECT public.preview_installment_terms(%L)$$,
+  jsonb_build_object('cash_price','1000.00','down_payment','1000.00','installments_count',2,'frequency','monthly','customer_id',t.id('blocked'))),'CUSTOMER_BLOCKED');
+SELECT t.error('preview: nothing financed, shop B''s customer -> CUSTOMER_NOT_FOUND',format($$SELECT public.preview_installment_terms(%L)$$,
+  jsonb_build_object('cash_price','1000.00','down_payment','1000.00','installments_count',2,'frequency','monthly','customer_id',t.id('cust-b'))),'CUSTOMER_NOT_FOUND');
+SELECT t.expect('preview: nothing financed, a good customer -> customer null and the violation',
+  (SELECT x->'customer'='null'::jsonb AND x->>'can_confirm'='false'
+     AND x->'terms'->'violations'->0->>'rule'='down_payment_too_high'
+   FROM public.preview_installment_terms(jsonb_build_object('cash_price','1000.00','down_payment','1000.00','installments_count',2,
+     'frequency','monthly','customer_id',t.id('ok'))) x));
 SELECT t.error('preview: an unknown key -> VALIDATION_FAILED',
   $$SELECT public.preview_installment_terms('{"cash_price":"1000.00","down_payment":"100.00","installments_count":2,"frequency":"monthly","organization_id":"x"}')$$,'VALIDATION_FAILED');
 SELECT t.error('preview: the same guarantor twice -> VALIDATION_FAILED',format($$SELECT public.preview_installment_terms(%L)$$,

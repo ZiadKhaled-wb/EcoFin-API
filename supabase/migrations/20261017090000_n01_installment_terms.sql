@@ -367,12 +367,17 @@ CREATE CONSTRAINT TRIGGER trg_contracts_terms_check
 -- The version-1 lines of a contract (migrated ones too) add up to its total, financed amount and
 -- markup, and run 1..n without a gap. TODO(N05): later versions (reschedules) need their own
 -- check against what N05 stores; a reschedule never increases what is owed.
+-- A deferred constraint trigger is per row, but the sums are per contract: only the row with the
+-- contract's highest seq checks (one index lookup for the others), so a 520-line contract sums
+-- its lines once instead of 520 times.
 CREATE FUNCTION app.schedule_lines_sum_check()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $$
 DECLARE v_c public.contracts; v_n integer; v_max integer; v_amount numeric; v_principal numeric; v_profit numeric;
 BEGIN
-    IF NEW.version <> 1 THEN
+    IF NEW.version <> 1 OR NEW.seq <> (
+            SELECT max(l.seq) FROM public.schedule_lines l
+            WHERE l.contract_id = NEW.contract_id AND l.version = 1) THEN
         RETURN NULL;
     END IF;
     SELECT * INTO v_c FROM public.contracts WHERE id = NEW.contract_id AND organization_id = NEW.organization_id;
@@ -463,7 +468,20 @@ BEGIN
     v_terms := app.installment_terms(v_policy, v_input, app.org_today(v_org));
     v_can := jsonb_array_length(v_terms -> 'violations') = 0;
 
-    IF v_customer IS NULL OR (v_terms ->> 'financed_amount')::numeric <= 0 THEN
+    IF v_customer IS NULL THEN
+        RETURN jsonb_build_object('terms', v_terms, 'customer', NULL, 'can_confirm', false);
+    END IF;
+    IF (v_terms ->> 'financed_amount')::numeric <= 0 THEN
+        -- Nothing financed (a violation says why): no credit, guarantor or survey check, but the
+        -- customer is still checked like R03 does, so a wrong or blocked one shows now.
+        PERFORM app.customer_read_guard();
+        IF NOT EXISTS (SELECT 1 FROM public.customers c WHERE c.id = v_customer AND c.organization_id = v_org) THEN
+            RAISE EXCEPTION 'CUSTOMER_NOT_FOUND' USING ERRCODE = 'P0001';
+        END IF;
+        IF EXISTS (SELECT 1 FROM public.customers c WHERE c.id = v_customer AND c.organization_id = v_org
+                   AND (c.status = 'blocked' OR c.archived_at IS NOT NULL)) THEN
+            RAISE EXCEPTION 'CUSTOMER_BLOCKED' USING ERRCODE = 'P0001';
+        END IF;
         RETURN jsonb_build_object('terms', v_terms, 'customer', NULL, 'can_confirm', false);
     END IF;
 
