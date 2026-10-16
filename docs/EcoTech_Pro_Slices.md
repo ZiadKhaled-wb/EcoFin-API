@@ -698,11 +698,11 @@ The shop lends its own money. Rules are built new on the server; nothing is reus
 **What it does:** records customers paying their installments.
 **Includes:**
 - Find a customer or contract (any branch); see what's due and overdue
-- Take a payment (full, partial or several installments), split across cash and bank transfers; allocated in a fixed order: oldest installment (profit, then principal) → next
+- Take a payment (full, partial or several installments, on one or several contracts of the customer), split across cash and bank transfers; allocated in a fixed order: oldest installment (profit, then principal) → next
 - **Owner, 16 Oct (`docs/tasks/N03.md`):** no late fees (`docs/ISLAMIC_FINANCE_RULES.md` rule 4); a customer can't pay more than what is owed (no overpayment, no store credit); a payment can be taken at any branch and its cash goes into that branch's drawer
 - Payment receipt (numbered, printed); cash goes to the current shift's drawer (or collector wallet, N06)
 - Contract balance and status update; fully paid → completed
-- A wrong collection can be reversed on the same day (money back, installments unpaid again)
+- A wrong collection can be reversed on the same day (money back, installments unpaid again); `collection.reverse` for owner and branch manager by default, grantable to any employee
 - A collection is **not** a new sale (no new revenue or VAT on the goods)
 - Idempotent
 
