@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -23,6 +23,15 @@ function loadBaseline(): string {
 }
 
 const sql = loadBaseline();
+
+/** Every migration after the baseline, in file (= time) order. */
+function laterMigrations(): string[] {
+  const dir = dirname(baselinePath);
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.sql') && f > '20261002000000_v1_baseline.sql')
+    .sort()
+    .map((f) => readFileSync(resolve(dir, f), 'utf8'));
+}
 
 function between(text: string, startMarker: string, endMarker: string, from = 0): string {
   const s = text.indexOf(startMarker, from);
@@ -54,15 +63,45 @@ describe('baseline parity: permissions', () => {
     }),
   );
 
-  it('has 61 keys in the seed and in the package', () => {
+  // Keys and role grants added by later migrations (N03 on), in migration order.
+  const later = laterMigrations();
+  const addedRows = later.flatMap((text) =>
+    [
+      ...text.matchAll(
+        /INSERT INTO public\.permissions \(key, module, description\) VALUES([^;]*);/g,
+      ),
+    ].flatMap((b) =>
+      [...(b[1] ?? '').matchAll(/\(\s*'([^']+)',\s*'([^']+)',\s*'((?:[^']|'')*)'\)/g)].map((m) => ({
+        key: m[1] as string,
+        module: m[2] as string,
+        description: (m[3] ?? '').replace(/''/g, "'"),
+      })),
+    ),
+  );
+  const addedGrants = later.flatMap((text) =>
+    [
+      ...text.matchAll(
+        /INSERT INTO public\.role_permissions \(role, permission_key\) VALUES([^;]*);/g,
+      ),
+    ].flatMap((b) =>
+      [...(b[1] ?? '').matchAll(/\('([A-Z_]+)',\s*'([^']+)'\)/g)].map((m) => ({
+        role: m[1] as string,
+        key: m[2] as string,
+      })),
+    ),
+  );
+  const allRows = [...rows, ...addedRows];
+
+  it('has 61 keys in the seed, 62 with the later migrations, as many in the package', () => {
     expect(rows).toHaveLength(61);
-    expect(PERMISSION_KEYS).toHaveLength(61);
-    expect(new Set(PERMISSION_KEYS).size).toBe(61);
+    expect(allRows).toHaveLength(62);
+    expect(PERMISSION_KEYS).toHaveLength(62);
+    expect(new Set(PERMISSION_KEYS).size).toBe(62);
   });
 
-  it('keys, modules and descriptions match the seed exactly (same order)', () => {
-    expect(PERMISSIONS.map((p) => ({ ...p }))).toEqual(rows);
-    expect([...PERMISSION_KEYS]).toEqual(rows.map((r) => r.key));
+  it('keys, modules and descriptions match the seed and the later migrations (same order)', () => {
+    expect(PERMISSIONS.map((p) => ({ ...p }))).toEqual(allRows);
+    expect([...PERMISSION_KEYS]).toEqual(allRows.map((r) => r.key));
   });
 
   it('role defaults match the seeded role_permissions', () => {
@@ -82,6 +121,9 @@ describe('baseline parity: permissions', () => {
     for (const m of values.matchAll(/\('([A-Z_]+)',\s*'([^']+)'\)/g)) {
       (expected[m[1] as string] ??= []).push(m[2] as string);
     }
+    // OWNER has every key; later grants add to the other roles.
+    expected['OWNER'] = allRows.map((r) => r.key);
+    for (const g of addedGrants) (expected[g.role] ??= []).push(g.key);
 
     expect(Object.keys(ROLE_DEFAULT_PERMISSIONS).sort()).toEqual([...EMPLOYEE_ROLES].sort());
     for (const role of EMPLOYEE_ROLES) {

@@ -98,6 +98,12 @@ export const PERMISSIONS = [
   { key: 'import.data', module: 'data', description: 'Import data and opening balances' },
   { key: 'legal.view', module: 'legal', description: 'See legal cases' },
   { key: 'legal.manage', module: 'legal', description: 'Open and update legal cases' },
+  // Added after the baseline, in migration order (the parity test reads them from there).
+  {
+    key: 'collection.reverse',
+    module: 'installments',
+    description: 'Reverse a same-day collection',
+  },
 ] as const;
 
 export type PermissionDef = (typeof PERMISSIONS)[number];
@@ -164,6 +170,7 @@ export const PERMISSION_KEYS = [
   'import.data',
   'legal.view',
   'legal.manage',
+  'collection.reverse',
 ] as const;
 
 export const PermissionKey = z.enum(PERMISSION_KEYS);
@@ -235,6 +242,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Readonly<Record<EmployeeRole, readonly Pe
     'warranty.manage',
     'installment.create',
     'collection.create',
+    'collection.reverse',
     'collector.settle',
     'charge.waive',
     'schedule.change',

@@ -92,6 +92,11 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   },
   'POST /api/sales': { action: 'sale.created' },
   'POST /api/installments/sales': { action: 'contract.created', also: ['sale.created'] },
+  // N03: a payment that pays a contract off also writes contract.completed (the drivers pay a
+  // part); a reversal of a completing collection also writes contract.reopened.
+  'POST /api/collections': { action: 'collection.created' },
+  'POST /api/collections/:id/prints': { action: 'collection.receipt_printed' },
+  'POST /api/collections/:id/reverse': { action: 'collection.reversed' },
   'POST /api/sales/discount-approvals': { action: 'approval.requested' },
   'POST /api/sales/discount-approvals/:id/cancel': { action: 'approval.cancelled' },
   'POST /api/approvals/:id/decide': { action: 'approval.decided' },

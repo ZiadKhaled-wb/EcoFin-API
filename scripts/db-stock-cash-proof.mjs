@@ -23,6 +23,11 @@
 //   K. N02 (public.post_installment_sale): K1. 20 installment sales of the last TV: one contract.
 //      K2. 20 requests with ONE key: one sale, one contract, one schedule. K3. a customer whose
 //      limit covers one financed amount, 20 tills at once: one contract, 19 CREDIT_LIMIT_EXCEEDED.
+//   L. N03 (public.post_collection): L1. 20 requests with ONE key: one collection, one receipt, one
+//      cash movement. L2. 20 tills each paying the whole remaining of one contract with
+//      expected_remaining: one collection, 19 COLLECTION_DUE_CHANGED, completed once. L3. 20 tills
+//      paying 1.00 each on one contract: every one is allocated, no line paid beyond its amount.
+//      L4. 20 tills paying two contracts, half A then B and half B then A: nothing deadlocks.
 // (The sale race on the bare ledger is db:ledger, F10.)
 import { pgbench, processed, psql, removeProofShop, report, writeFile } from './db-proof-lib.mjs';
 
@@ -604,6 +609,142 @@ try {
     ],
   ]);
 
+  // ---------------------------------------------------------------- L. collections (N03)
+  // The installment buyer's contracts: K1's TV (A_TV), K2's lamp (A_KEY) and one more lamp (A_B),
+  // all 0 % profit, 2 monthly lines. Each request pays in cash in the cashier's open shift.
+  psql(`BEGIN; SELECT ${SCHEMA}.sign_in_as(1);
+        SELECT public.post_installment_sale(jsonb_build_object(
+          'lines', jsonb_build_array(jsonb_build_object('product_id', ${SCHEMA}.id('lamp'), 'quantity', 1)),
+          'expected_total', public.quote_sale(jsonb_build_array(jsonb_build_object('product_id', ${SCHEMA}.id('lamp'), 'quantity', 1)))->>'total',
+          'customer_id', ${SCHEMA}.id('inst'),
+          'terms', jsonb_build_object('down_payment', '10.00', 'installments_count', 2, 'frequency', 'monthly',
+                                      'policy_version', (SELECT max(version) FROM public.installment_policies
+                                                         WHERE organization_id = ${SCHEMA}.id('org')))), 'test3-proof-inst-b');
+        COMMIT;
+        INSERT INTO ${SCHEMA}.ids SELECT 'c_tv', c.id FROM public.contracts c JOIN public.sale_lines l ON l.sale_id = c.sale_id
+          WHERE c.organization_id = ${SCHEMA}.id('org') AND l.product_id = ${SCHEMA}.id('tv');
+        INSERT INTO ${SCHEMA}.ids SELECT 'c_key', id FROM public.contracts
+          WHERE organization_id = ${SCHEMA}.id('org') AND idempotency_key = 'test3-proof-inst-key';
+        INSERT INTO ${SCHEMA}.ids SELECT 'c_b', id FROM public.contracts
+          WHERE organization_id = ${SCHEMA}.id('org') AND idempotency_key = 'test3-proof-inst-b';
+        -- L2's amount, fixed before the race: the whole remaining of the TV contract.
+        CREATE TABLE ${SCHEMA}.whole AS
+          SELECT app.contract_remaining(${SCHEMA}.id('org'), ${SCHEMA}.id('c_tv'))::text AS v;
+        TRUNCATE ${SCHEMA}.outcomes;
+
+        CREATE FUNCTION ${SCHEMA}.collect(p_kind text, p_cashier integer, p_client integer) RETURNS void LANGUAGE plpgsql AS $$
+        DECLARE
+          v_key text := CASE WHEN p_kind = 'col_same_key' THEN 'test3-proof-col-key' ELSE 'test3-proof-' || gen_random_uuid() END;
+          v_contracts jsonb; v_amount text; v_answer jsonb;
+        BEGIN
+          PERFORM ${SCHEMA}.sign_in_as(p_cashier);
+          IF p_kind = 'col_whole' THEN
+            v_amount := (SELECT v FROM ${SCHEMA}.whole);
+            v_contracts := jsonb_build_array(jsonb_build_object('contract_id', ${SCHEMA}.id('c_tv'),
+                             'amount', v_amount, 'expected_remaining', v_amount));
+          ELSIF p_kind = 'col_pairs' THEN
+            v_amount := '1.00';
+            v_contracts := CASE WHEN p_client % 2 = 0
+              THEN jsonb_build_array(jsonb_build_object('contract_id', ${SCHEMA}.id('c_key'), 'amount', '0.50'),
+                                     jsonb_build_object('contract_id', ${SCHEMA}.id('c_b'), 'amount', '0.50'))
+              ELSE jsonb_build_array(jsonb_build_object('contract_id', ${SCHEMA}.id('c_b'), 'amount', '0.50'),
+                                     jsonb_build_object('contract_id', ${SCHEMA}.id('c_key'), 'amount', '0.50')) END;
+          ELSE
+            v_amount := '1.00';
+            v_contracts := jsonb_build_array(jsonb_build_object('contract_id', ${SCHEMA}.id('c_key'), 'amount', '1.00'));
+          END IF;
+          BEGIN
+            v_answer := public.post_collection(jsonb_build_object('customer_id', ${SCHEMA}.id('inst'),
+              'contracts', v_contracts, 'payments', jsonb_build_array(jsonb_build_object('method', 'cash', 'amount', v_amount))), v_key);
+            INSERT INTO ${SCHEMA}.outcomes (kind, result, ref) VALUES (p_kind, 'done', (v_answer->>'id')::uuid);
+          EXCEPTION WHEN others THEN
+            INSERT INTO ${SCHEMA}.outcomes (kind, result, error) VALUES (p_kind, 'refused', SQLERRM);
+          END;
+        END $$;`);
+  const colScript = (kind) =>
+    `\\set c random(1, ${CASHIERS})\nSELECT ${SCHEMA}.collect('${kind}', :c, :client_id);\n`;
+
+  await round('L1.', '/tmp/test3_col_key.sql', colScript('col_same_key'));
+  [done, refused, other, firstOther] = outcomes('col_same_key', '-');
+  const [colAnswers, colRows, colMoves, colAllocs] = psql(`
+    SELECT concat_ws('|',
+      (SELECT count(DISTINCT ref) FROM ${SCHEMA}.outcomes WHERE kind = 'col_same_key'),
+      (SELECT count(*) FROM public.payments WHERE organization_id = ${SCHEMA}.id('org') AND idempotency_key = 'test3-proof-col-key'),
+      (SELECT count(*) FROM public.cash_movements m JOIN public.payments p ON p.id = m.source_id
+        WHERE p.idempotency_key = 'test3-proof-col-key' AND m.organization_id = ${SCHEMA}.id('org')),
+      (SELECT COALESCE(sum(a.amount), 0) FROM public.payment_allocations a JOIN public.payments p ON p.id = a.payment_id
+        WHERE p.idempotency_key = 'test3-proof-col-key' AND a.organization_id = ${SCHEMA}.id('org')));`).split(
+    '|',
+  );
+  const partL1 = report([
+    [
+      `L1. all ${CLIENTS} requests with one key got an answer, none refused`,
+      Number(done) === CLIENTS && refused === '0' && other === '0',
+      `${done} done, ${other} ${firstOther}`,
+    ],
+    ['L1. all of them got the same receipt', colAnswers === '1', `${colAnswers} distinct`],
+    [
+      'L1. one payment, one cash movement, 1.00 allocated once',
+      colRows === '1' && colMoves === '1' && Number(colAllocs) === 1,
+      `${colRows} / ${colMoves} / ${colAllocs}`,
+    ],
+  ]);
+
+  await round('L2.', '/tmp/test3_col_whole.sql', colScript('col_whole'));
+  [done, refused, other, firstOther] = outcomes(
+    'col_whole',
+    'COLLECTION_DUE_CHANGED,CONTRACT_NOT_OPEN',
+  );
+  const [tvStatus, tvCompleted] = psql(`
+    SELECT concat_ws('|', (SELECT status FROM public.contracts WHERE id = ${SCHEMA}.id('c_tv')),
+      (SELECT count(*) FROM public.audit_log WHERE action = 'contract.completed' AND entity_id = ${SCHEMA}.id('c_tv')));`).split(
+    '|',
+  );
+  const partL2 = report([
+    ['L2. exactly one collection paid the whole contract', done === '1', done],
+    [
+      `L2. the other ${CLIENTS - 1} got COLLECTION_DUE_CHANGED (or CONTRACT_NOT_OPEN)`,
+      Number(refused) === CLIENTS - 1,
+      refused,
+    ],
+    ['L2. no other errors (no deadlocks)', other === '0', `${other} ${firstOther}`],
+    [
+      'L2. the contract was completed once',
+      tvStatus === 'completed' && tvCompleted === '1',
+      `${tvStatus} / ${tvCompleted}`,
+    ],
+  ]);
+
+  await round('L3.', '/tmp/test3_col_many.sql', colScript('col_many'));
+  [done, refused, other, firstOther] = outcomes('col_many', 'COLLECTION_EXCEEDS_REMAINING');
+  const [overpaid, allocatedKey, receiptsKey] = psql(`
+    SELECT concat_ws('|',
+      (SELECT count(*) FROM public.v_schedule_line_status WHERE contract_id = ${SCHEMA}.id('c_key') AND paid > amount),
+      (SELECT sum(paid) FROM public.v_schedule_line_status WHERE contract_id = ${SCHEMA}.id('c_key')),
+      (SELECT count(DISTINCT p.collection_id) FROM public.payment_allocations a JOIN public.payments p ON p.id = a.payment_id
+        WHERE a.contract_id = ${SCHEMA}.id('c_key')));`).split('|');
+  const partL3 = report([
+    [`L3. all ${CLIENTS} payments of 1.00 were taken`, Number(done) === CLIENTS, done],
+    ['L3. no other errors (no deadlocks)', other === '0', `${other} ${firstOther}`],
+    ['L3. no line paid beyond its amount', overpaid === '0', overpaid],
+    [
+      `L3. the contract holds 1.00 from L1 + ${CLIENTS} x 1.00, in ${CLIENTS + 1} receipts`,
+      Number(allocatedKey) === CLIENTS + 1 && Number(receiptsKey) === CLIENTS + 1,
+      `${allocatedKey} in ${receiptsKey}`,
+    ],
+  ]);
+
+  await round('L4.', '/tmp/test3_col_pairs.sql', colScript('col_pairs'));
+  [done, refused, other, firstOther] = outcomes('col_pairs', '-');
+  const partL4 = report([
+    [`L4. all ${CLIENTS} two-contract payments were taken`, Number(done) === CLIENTS, done],
+    [
+      'L4. nothing deadlocked or failed',
+      refused === '0' && other === '0',
+      `${other} ${firstOther}`,
+    ],
+  ]);
+
   // ---------------------------------------------------------------- E. reconciliation
   const [shopMismatches, allMismatches] = psql(`
     SELECT concat_ws('|', (SELECT count(*) FROM app.ledger_mismatches(${SCHEMA}.id('org'))),
@@ -631,6 +772,10 @@ try {
     partK1 &&
     partK2 &&
     partK3 &&
+    partL1 &&
+    partL2 &&
+    partL3 &&
+    partL4 &&
     partE
   );
 } catch (error) {

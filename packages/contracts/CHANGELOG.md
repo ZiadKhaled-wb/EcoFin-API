@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.48.0
+
+- N03 collections: COLLECTION_MAX_CONTRACTS, COLLECTION_MAX_PAYMENTS, CollectionPaymentInput, CollectionContractInput, CollectionBody, CollectionReverseBody, CollectionAllocationLine, CollectionAllocation, ContractDue, ContractDueLine, CollectionPreviewQuery, CollectionPreview, ContractListStatus, ContractListQuery, ContractListQueryInput, ContractListItem, ContractListPage, CollectionPaymentLine, CollectionContract, CollectionReversal, CollectionPrint, Collection, CollectionIdParams, ContractNotOpenDetail, CollectionRemainingDetail, COLLECTION_NOT_REVERSIBLE_REASONS, CollectionNotReversibleDetail. Permission `collection.reverse` (installments; OWNER and BRANCH_MANAGER by default). Error codes CONTRACT_NOT_OPEN, COLLECTION_DUE_CHANGED, COLLECTION_EXCEEDS_REMAINING, COLLECTION_NOT_REVERSIBLE (409), COLLECTION_NOT_FOUND (404).
+
 ## 0.47.0
 
 - N02 installment sale and contract: InstallmentSaleTerms, InstallmentSaleBody, InstallmentSaleInput, ContractScheduleLine, ContractGuarantor, Contract, InstallmentSale, ContractIdParams; `SaleLines` and `SalePayments` are exported. Error codes CUSTOMER_NATIONAL_ID_REQUIRED, MARKUP_VAT_NOT_SUPPORTED (409).

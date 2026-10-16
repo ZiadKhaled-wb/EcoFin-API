@@ -5233,3 +5233,144 @@ crossShopCase({
     h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
   },
 });
+// N03 (D78). Collections: a foreign shop header is refused, an organization id in the request
+// is refused, another shop's (here unknown) contract or receipt is not found, nothing is written.
+const N03_UNKNOWN = '00000000-0000-4000-8000-0000000c0113';
+crossShopCase({
+  method: 'GET',
+  path: '/api/contracts',
+  name: 'the contract search refuses a foreign header and an org id; shop A sees no other shop',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/contracts', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/contracts', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const mine = await h.call('GET', '/api/contracts', {
+      token: a.accessToken,
+      query: 'status=all',
+    });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/contracts/:id/collection',
+  name: 'a collection preview refuses a foreign header, an org id and an unknown or other-shop contract',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const path = `/api/contracts/${N03_UNKNOWN}/collection`;
+    const foreign = await h.call('GET', path, { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', path, {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('GET', path, { token: a.accessToken, query: 'amount=10.00' });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('CONTRACT_NOT_FOUND');
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/collections',
+  name: 'a collection refuses a foreign header, an org id and a contract that is not the shop customer’s',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = {
+      customer_id: N03_UNKNOWN,
+      contracts: [{ contract_id: N03_UNKNOWN, amount: '1.00' }],
+      payments: [{ method: 'cash', amount: '1.00' }],
+    };
+    const foreign = await h.call('POST', '/api/collections', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+      idempotencyKey: 'n03-xshop-foreign',
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/collections', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+      idempotencyKey: 'n03-xshop-injected',
+    });
+    h.expect(injected.res.status).toBe(400);
+    // No shift or not its device, or no such customer and contract in shop A: refused either
+    // way, nothing written.
+    const theirs = await h.call('POST', '/api/collections', {
+      token: a.accessToken,
+      body,
+      idempotencyKey: 'n03-xshop-theirs',
+    });
+    h.expect([403, 404, 409]).toContain(theirs.res.status);
+    h.expect([
+      'SHIFT_REQUIRED',
+      'DEVICE_REVOKED',
+      'DEVICE_MISMATCH',
+      'CUSTOMER_NOT_FOUND',
+      'CONTRACT_NOT_FOUND',
+    ]).toContain(h.code(theirs.res));
+    h.expect(await h.auditRowsFrom(SHOP_A, theirs.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, theirs.ip)).toBe(0);
+  },
+});
+for (const [method, suffix] of [
+  ['GET', ''],
+  ['POST', '/prints'],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/collections/:id${suffix}`,
+    name: `a collection receipt${suffix ? ' print' : ''} refuses a foreign header, an org id and an unknown or other-shop id`,
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const path = `/api/collections/${N03_UNKNOWN}${suffix}`;
+      const foreign = await h.call(method, path, { token: a.accessToken, orgId: SHOP_B });
+      h.expect(foreign.res.status).toBe(403);
+      const injected = await h.call(method, path, {
+        token: a.accessToken,
+        query: 'organization_id=' + SHOP_B,
+      });
+      h.expect(injected.res.status).toBe(400);
+      const missing = await h.call(method, path, { token: a.accessToken });
+      h.expect(missing.res.status).toBe(404);
+      h.expect(h.code(missing.res)).toBe('COLLECTION_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+    },
+  });
+}
+crossShopCase({
+  method: 'POST',
+  path: '/api/collections/:id/reverse',
+  name: 'a reversal refuses a foreign header, an org id and an unknown or other-shop receipt',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const path = `/api/collections/${N03_UNKNOWN}/reverse`;
+    const body = { reason: 'Cross-shop check' };
+    const foreign = await h.call('POST', path, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+      idempotencyKey: 'n03-xshop-rev-foreign',
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', path, {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+      idempotencyKey: 'n03-xshop-rev-injected',
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('POST', path, {
+      token: a.accessToken,
+      body,
+      idempotencyKey: 'n03-xshop-rev-missing',
+    });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('COLLECTION_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+  },
+});

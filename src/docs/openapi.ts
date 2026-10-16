@@ -2131,6 +2131,66 @@ export const openApiSpec = {
                 responses: { 200: { description: 'Contract' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/contracts': {
+            get: {
+                tags: ['Installments'],
+                summary: 'Search installment contracts',
+                description: 'N03 (D78). Contracts of the shop, newest first, with what was paid, what is left, the overdue amount, the days late and the next due date. q matches the contract number (prefix), the customer\'s name or phone (contains) or national ID (exact; never shown). status: open (active and rescheduled, the default), all, or one status; customer_id, branch_id, overdue=true, limit (1-100, 25) and cursor (next_cursor of the previous page). Any customer read key; a caller holding collection.create or collection.reverse sees every branch of the shop (a customer may pay anywhere), anyone else only their own branches. Works in an expired shop. Schema: ContractListQuery → ContractListPage.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'ContractListPage' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/contracts/{id}/collection': {
+            get: {
+                tags: ['Installments'],
+                summary: 'What is due on a contract and what an amount would pay (collection.create)',
+                description: 'N03 (D78). The due summary of the current schedule (overdue amount and lines, due today, next due date and amount, remaining = what closes the contract) and its lines. With amount, the allocation: the oldest open line first, its profit then its principal, then the next line; completes_contract; exceeds_remaining (no lines) when the amount is above what is left. No late fees or penalties of any kind (docs/ISLAMIC_FINANCE_RULES.md rule 4). Nothing is written; works in an expired shop. CONTRACT_NOT_FOUND for another shop\'s id. Schema: CollectionPreviewQuery → CollectionPreview.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'CollectionPreview' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/collections': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Take an installment payment on one or several contracts (collection.create)',
+                description: 'N03 (D78). One database transaction in the open shift of the caller (the installments module, the shift\'s paired device), at any branch: the payment belongs to the shift\'s branch and its cash goes into that drawer; the contracts may be from any branch. The contracts must be the customer\'s (CUSTOMER_NOT_FOUND, CONTRACT_NOT_FOUND), active or rescheduled with something left (CONTRACT_NOT_OPEN). Each contract\'s amount is allocated to its current schedule, oldest line first, its profit then its principal; it can never be more than what is left (COLLECTION_EXCEEDS_REMAINING; no overpayment and no store credit); expected_remaining that no longer matches answers COLLECTION_DUE_CHANGED. Payment lines: one cash (tendered, change) and up to three bank transfers (an active bank of the branch or the shop, a reference); they add up to the contracts\' amounts (PAYMENT_TOTAL_MISMATCH). The first payment row is the receipt. A contract with nothing left is completed. A collection is not a sale: no revenue, no VAT, no ETA receipt, and no late fee (rule 4). Audit collection.created (+ contract.completed). The same Idempotency-Key returns the same receipt; a key another payment or a sale used answers IDEMPOTENCY_CONFLICT. Schema: CollectionBody → Collection.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }],
+                responses: { 201: { description: 'Collection' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/collections/{id}': {
+            get: {
+                tags: ['Installments'],
+                summary: 'A collection receipt',
+                description: 'N03 (D78). The receipt: its number, the payment lines (method, amount, tendered, change, reference), each contract with the installments it paid and what was left after it, the reversal when there is one, and how many times it was printed. collection.create or collection.reverse (any branch); COLLECTION_NOT_FOUND for another shop\'s id or a sale\'s payment. Schema: CollectionIdParams → Collection.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Collection' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/collections/{id}/prints': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Log a printed collection receipt',
+                description: 'N03 (D78). S04\'s print log: the first print is the original, every later one a copy (print.print_no, print.copy). collection.create or collection.reverse; refused in an expired shop. Audit collection.receipt_printed. Schema: CollectionIdParams → Collection.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Collection' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/collections/{id}/reverse': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Reverse a same-day collection (collection.reverse)',
+                description: 'N03 (D78). Undoes a whole collection: one reversing payment row per payment row, the cash paid back out of the drawer that took it and bank money recorded as returned; the installments are unpaid again and a contract it completed is open again (audit collection.reversed, + contract.reopened). Only on the collection\'s business day, only when it is the latest collection of every contract it paid, and while its shift is still open (COLLECTION_NOT_REVERSIBLE, details reason already_reversed, not_same_day, not_latest or shift_closed). collection.reverse: owner and branch manager by default, grantable to any employee. A reason is required. The same Idempotency-Key returns the same answer. Schema: CollectionReverseBody → Collection.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }],
+                responses: { 200: { description: 'Collection' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/sales/quote': {
             post: {
                 tags: ['Sales'],

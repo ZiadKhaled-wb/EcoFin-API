@@ -47,9 +47,9 @@ const row = (keys: string[]) => ({
   error: null,
 });
 
-describe('requirePermission: every one of the 61 contract keys', () => {
-  it('the contract has 61 keys', () => {
-    expect(PERMISSION_KEYS).toHaveLength(61);
+describe('requirePermission: every one of the 62 contract keys (N03 added collection.reverse)', () => {
+  it('the contract has 62 keys', () => {
+    expect(PERMISSION_KEYS).toHaveLength(62);
   });
 
   it.each(PERMISSION_KEYS.map((k) => [k]))(
