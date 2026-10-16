@@ -3,11 +3,20 @@ name: CI
 on:
   push:
     branches: [main]
+    # Docs and specs only (root docs/, any .md): nothing to build or test. src/docs is code and still runs.
+    paths-ignore: ['docs/**', '**/*.md']
   pull_request:
+    paths-ignore: ['docs/**', '**/*.md']
+
+# A new push to a PR cancels that PR's older run. Runs on main are never cancelled (deploys follow them).
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -68,8 +77,14 @@ jobs:
   # F02: the baseline builds an empty database, a second run changes nothing, the seeded super
   # admin works, and every SQL test in supabase/tests passes (TEST-1: found by a glob).
   # Local Supabase only: this job never links to or pushes to a real project.
+  # The same job then runs the integration suites (TEST-1, below) on a fresh reset of that stack,
+  # so the stack is installed and started once.
+  # Pull requests only: a PR is merged after this job passed on it, so a push to main runs `check`
+  # (incl. the migration order check) and does not repeat the database and integration suites.
   db:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       DB_CONTAINER: supabase_db_ecofin-api
 
@@ -158,43 +173,19 @@ jobs:
       - name: Ledger reconciliation after the SQL tests
         run: node scripts/db-reconcile.mjs
 
-      - name: Stop database
-        if: always()
-        run: supabase stop --no-backup
-
-      - name: TEST4 known failures
-        if: always()
-        run: node scripts/test4-known-failures.mjs
-
-  # TEST-1 (EC-128): the RUN_INTEGRATION=1 suites (auth, sessions, cross-shop, audit, files, ...)
-  # on a fresh local stack. The tests start the app themselves, in-process (supertest), so no
-  # separate API server is needed. Local demo keys printed by the CLI for this stack, not secrets.
-  integration:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - uses: supabase/setup-cli@v1
-        with:
-          version: 2.119.0
-
-      # The integration tests need Auth, PostgREST, Kong, Storage and Mailpit, not just Postgres.
-      - name: Start local Supabase (applies migrations and seeds)
-        run: supabase start -x studio,postgres-meta,imgproxy,edge-runtime,logflare,vector,supavisor,realtime
-
-      - name: Fresh database (migrations + dev seed)
+      # TEST-1 (EC-128): the RUN_INTEGRATION=1 suites (auth, sessions, cross-shop, audit, files, ...)
+      # on a fresh database. The tests start the app themselves, in-process (supertest), so no
+      # separate API server is needed. Local demo keys printed by the CLI for this stack, not secrets.
+      # They need Auth, PostgREST, Kong, Storage and Mailpit (started above), not just Postgres.
+      # if: !cancelled() so the integration suites still run (and report) when a SQL test failed.
+      - name: Fresh database for the integration tests (migrations + dev seed)
+        id: reset
+        if: ${{ !cancelled() }}
         run: supabase db reset
 
       - name: Integration tests (RUN_INTEGRATION=1 npm test)
+        id: integration
+        if: ${{ !cancelled() && steps.reset.outcome == 'success' }}
         run: |
           status=$(supabase status -o json)
           field() { node -e 'console.log(JSON.parse(process.argv[1])[process.argv[2]])' "$status" "$1"; }
@@ -209,6 +200,7 @@ jobs:
 
       # F10: after the integration suites wrote to the database, every cache must still equal its ledger.
       - name: Ledger reconciliation after the integration tests
+        if: ${{ !cancelled() && steps.integration.outcome == 'success' }}
         run: node scripts/db-reconcile.mjs
 
       - name: Stop database
