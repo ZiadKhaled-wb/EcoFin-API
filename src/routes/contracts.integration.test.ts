@@ -34,6 +34,7 @@ describe.skipIf(!RUN)('N02 installment sale and contract against local stack', (
   let customerId: string;
   let noIdCustomer: string;
   let shift: Shift;
+  let version: number;
   let ip = 0;
   let pos = '';
   const call = (
@@ -103,7 +104,7 @@ describe.skipIf(!RUN)('N02 installment sale and contract against local stack', (
     expect(limit.status, JSON.stringify(limit.body)).toBe(200);
     return id;
   }
-  const sale = (customer: string, version = 1) => ({
+  const sale = (customer: string, policyVersion?: number) => ({
     lines: [{ product_id: tv, quantity: 1 }],
     expected_total: '12000.00',
     customer_id: customer,
@@ -111,7 +112,7 @@ describe.skipIf(!RUN)('N02 installment sale and contract against local stack', (
       down_payment: '2000.00',
       installments_count: 12,
       frequency: 'monthly',
-      policy_version: version,
+      policy_version: policyVersion ?? version,
     },
   });
 
@@ -164,6 +165,10 @@ describe.skipIf(!RUN)('N02 installment sale and contract against local stack', (
       rounding_step: '1.00',
     });
     expect(published.status, JSON.stringify(published.body)).toBe(201);
+    // A new shop already has policy version 1; the one just published is the current one.
+    const current = await call('get', '/api/settings', owner);
+    version = (current.body as { installment_policy: { version: number } }).installment_policy
+      .version;
     const product = await call('post', '/api/products', owner, {
       name_ar: 'تلفزيون',
       sku: `N02-TV-${STAMP}`,
@@ -232,7 +237,7 @@ describe.skipIf(!RUN)('N02 installment sale and contract against local stack', (
       .select('amount')
       .eq('shift_id', shift.id)
       .eq('source_id', answer.sale.id);
-    expect(drawer.data?.map((m) => String(m.amount))).toEqual(['2000.00']);
+    expect(drawer.data?.map((m) => Number(m.amount))).toEqual([2000]);
 
     const read = await call('get', `/api/contracts/${answer.contract.id}`, owner);
     expect(read.status, JSON.stringify(read.body)).toBe(200);
@@ -240,7 +245,13 @@ describe.skipIf(!RUN)('N02 installment sale and contract against local stack', (
   });
 
   it('refuses a customer without a national ID, an old policy version and a warehouse user', async () => {
-    const noId = await call('post', '/api/installments/sales', cashier, sale(noIdCustomer));
+    const noId = await call(
+      'post',
+      '/api/installments/sales',
+      cashier,
+      sale(noIdCustomer),
+      key('no-id'),
+    );
     expect(noId.status).toBe(409);
     expect(code(noId)).toBe('CUSTOMER_NATIONAL_ID_REQUIRED');
 
@@ -248,7 +259,7 @@ describe.skipIf(!RUN)('N02 installment sale and contract against local stack', (
       'post',
       '/api/installments/sales',
       cashier,
-      sale(customerId, 9),
+      sale(customerId, version + 9),
       key('old'),
     );
     expect(old.status).toBe(409);

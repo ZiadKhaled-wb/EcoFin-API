@@ -497,7 +497,8 @@ try {
         COMMIT;
         UPDATE public.org_settings SET credit_min_score = 0 WHERE organization_id = ${SCHEMA}.id('org');
         INSERT INTO public.installment_policies (organization_id, version, max_months, markup_tiers)
-          VALUES (${SCHEMA}.id('org'), 1, 12, '[{"pct": 0, "up_to_months": 12}]');
+          SELECT ${SCHEMA}.id('org'), max(version) + 1, 12, '[{"pct": 0, "up_to_months": 12}]'
+          FROM public.installment_policies WHERE organization_id = ${SCHEMA}.id('org');
         INSERT INTO public.customers (organization_id, full_name, national_id, credit_limit) VALUES
           (${SCHEMA}.id('org'), 'Proof installment buyer', '29001010100301', 1000000),
           (${SCHEMA}.id('org'), 'Proof tight buyer', '29001010100302', 0);
@@ -520,7 +521,8 @@ try {
               'lines', v_lines, 'expected_total', public.quote_sale(v_lines)->>'total',
               'customer_id', ${SCHEMA}.id(CASE WHEN p_kind = 'inst_credit' THEN 'tight' ELSE 'inst' END),
               'terms', jsonb_build_object('down_payment', '10.00', 'installments_count', 2, 'frequency', 'monthly',
-                                          'policy_version', 1)), v_key);
+                                          'policy_version', (SELECT max(version) FROM public.installment_policies
+                                                             WHERE organization_id = ${SCHEMA}.id('org')))), v_key);
             -- The commit-time checks (R03 credit, N01 terms, R04, R05) run before the request ends.
             SET CONSTRAINTS ALL IMMEDIATE;
             INSERT INTO ${SCHEMA}.outcomes (kind, result, ref) VALUES (p_kind, 'done', (v_answer->'contract'->>'id')::uuid);
@@ -580,9 +582,11 @@ try {
   ]);
 
   // The tight buyer's limit covers exactly one financed lamp (its cash price - 10.00 down).
-  psql(`UPDATE public.customers SET credit_limit =
+  psql(`BEGIN; SELECT ${SCHEMA}.sign_in_as(1);
+        UPDATE public.customers SET credit_limit =
           (public.quote_sale(jsonb_build_array(jsonb_build_object('product_id', ${SCHEMA}.id('lamp'), 'quantity', 1)))->>'total')::numeric - 10
-        WHERE id = ${SCHEMA}.id('tight');`);
+        WHERE id = ${SCHEMA}.id('tight');
+        COMMIT;`);
   await round('K3.', '/tmp/test3_inst_credit.sql', instScript('inst_credit'));
   [done, refused, other, firstOther] = outcomes('inst_credit', 'CREDIT_LIMIT_EXCEEDED');
   const partK3 = report([

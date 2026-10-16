@@ -5,7 +5,11 @@
 // route is missing here; audit.integration.test.ts calls each route that has an action and
 // asserts exactly one new audit_log row with that action, the request id and the client IP.
 
-export type AuditExpectation = { action: string } | { none: string };
+/**
+ * `also`: other actions the same request writes (N02: the installment sale writes the sale's
+ * `sale.created` through the sale core, then `contract.created`).
+ */
+export type AuditExpectation = { action: string; also?: readonly string[] } | { none: string };
 
 /** Keyed `METHOD /path` as mounted (same keys as the cross-shop and permission checks). */
 export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
@@ -87,7 +91,7 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
     none: 'Read-only installment terms preview; nothing is written.',
   },
   'POST /api/sales': { action: 'sale.created' },
-  'POST /api/installments/sales': { action: 'contract.created' },
+  'POST /api/installments/sales': { action: 'contract.created', also: ['sale.created'] },
   'POST /api/sales/discount-approvals': { action: 'approval.requested' },
   'POST /api/sales/discount-approvals/:id/cancel': { action: 'approval.cancelled' },
   'POST /api/approvals/:id/decide': { action: 'approval.decided' },
