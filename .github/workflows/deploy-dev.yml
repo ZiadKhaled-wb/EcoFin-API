@@ -4,7 +4,6 @@ name: Deploy (development)
 # Run it by hand ("Run workflow") to rebuild main, or to roll back by giving an
 # image tag that was deployed before (e.g. sha-1a2b3c4).
 # Setup and secrets: docs/05-operations/deployment.md
-# Runs on the self-hosted runner on the owner's PC (see ci.yml); CI_RUNNER=ubuntu-latest switches back.
 
 on:
   workflow_run:
@@ -31,7 +30,7 @@ jobs:
     if: >-
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
       (github.event_name == 'workflow_dispatch' && inputs.image_tag == '')
-    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}
+    runs-on: ubuntu-latest
     environment: development
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +51,7 @@ jobs:
   build:
     name: Build image
     needs: migrate
-    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -96,7 +95,7 @@ jobs:
       !cancelled() && !contains(needs.*.result, 'failure') &&
       ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
        github.event_name == 'workflow_dispatch')
-    runs-on: ${{ vars.CI_RUNNER || 'self-hosted' }}
+    runs-on: ubuntu-latest
     environment:
       name: development
       url: https://${{ vars.API_DOMAIN }}/health
@@ -120,10 +119,9 @@ jobs:
           VM_SSH_KNOWN_HOSTS: ${{ secrets.VM_SSH_KNOWN_HOSTS }}
         run: |
           test -n "$VM_SSH_KEY" && test -n "$VM_SSH_KNOWN_HOSTS" || { echo "::error::Secrets VM_SSH_KEY / VM_SSH_KNOWN_HOSTS are not set"; exit 1; }
-          # In the job's temp folder, not ~/.ssh: on the self-hosted runner that is the owner's own.
-          install -d -m 700 "$RUNNER_TEMP/ssh"
-          printf '%s\n' "$VM_SSH_KEY" > "$RUNNER_TEMP/ssh/deploy_key" && chmod 600 "$RUNNER_TEMP/ssh/deploy_key"
-          printf '%s\n' "$VM_SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/ssh/known_hosts" && chmod 644 "$RUNNER_TEMP/ssh/known_hosts"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$VM_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts && chmod 644 ~/.ssh/known_hosts
 
       - name: Release on the VM
         env:
@@ -133,8 +131,7 @@ jobs:
         run: |
           test -n "$VM_HOST" || { echo "::error::Variable VM_HOST is not set"; exit 1; }
           # The deploy key is restricted to /usr/local/bin/ecofin-deploy on the VM.
-          printf '%s\n' "$REGISTRY_TOKEN" | ssh -i "$RUNNER_TEMP/ssh/deploy_key" -o IdentitiesOnly=yes \
-            -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts" -o StrictHostKeyChecking=yes \
+          printf '%s\n' "$REGISTRY_TOKEN" | ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             "deploy@$VM_HOST" "deploy $IMAGE_REF $GITHUB_ACTOR"
 
       - name: Smoke test over HTTPS
@@ -147,7 +144,3 @@ jobs:
           done
           echo "::error::https://$API_DOMAIN/health did not answer"
           exit 1
-
-      - name: Remove the deploy key
-        if: always()
-        run: rm -rf "$RUNNER_TEMP/ssh"
