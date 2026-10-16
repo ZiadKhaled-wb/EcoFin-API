@@ -83,7 +83,7 @@ function checkCart(lines: readonly SaleLineInput[], ctx: z.RefinementCtx) {
     }
   });
 }
-const SaleLines = z.array(SaleLineInput).min(1).max(100).superRefine(checkCart);
+export const SaleLines = z.array(SaleLineInput).min(1).max(100).superRefine(checkCart);
 
 export const SalePaymentMethod = z.enum(['cash', 'bank_transfer', 'store_credit']);
 export type SalePaymentMethod = z.infer<typeof SalePaymentMethod>;
@@ -134,7 +134,7 @@ function checkPayments(payments: readonly SalePaymentInput[], ctx: z.RefinementC
     });
   }
 }
-const SalePayments = z.array(SalePaymentInput).min(1).max(5).superRefine(checkPayments);
+export const SalePayments = z.array(SalePaymentInput).min(1).max(5).superRefine(checkPayments);
 
 /** Store credit is the customer's: a sale without a customer can't use it. */
 function checkCustomerForCredit(

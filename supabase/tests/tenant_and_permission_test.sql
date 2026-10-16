@@ -643,6 +643,25 @@ WHERE c.organization_id = 'd1000000-0000-0000-0000-000000000001' AND c.full_name
   AND p.organization_id = c.organization_id AND p.version = 1;
 -- N01: the installment terms preview of the denial shop (its policy version 1 above), without a customer.
 INSERT INTO t.denial VALUES ('preview_installment_terms','zz_n01_1_preview','installment.create',$$SELECT public.preview_installment_terms('{"cash_price":"1000.00","down_payment":"0.00","installments_count":2,"frequency":"monthly"}')$$);
+-- N02: an installment sale of the denial shop (its policy version 1 above, no profit) by the owner in
+-- the shift unit_5 opened: a stocked product and a customer with a national ID and a limit; then the
+-- contract read.
+SELECT t.as_user('d0000000-0000-0000-0000-000000000011', 'd1000000-0000-0000-0000-000000000001');
+SET LOCAL ROLE authenticated;
+SELECT public.create_product('{"name_ar":"Denial installment chair","sku":"DENIAL-N02","cash_price":"100"}');
+SELECT public.post_stock_adjustment('d2000000-0000-0000-0000-000000000011','found',NULL,
+  jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-N02'),'quantity',2)),'denial-n02-stock');
+RESET ROLE;
+SELECT t.as_user(NULL);
+UPDATE public.org_settings SET credit_min_score = 0 WHERE organization_id = 'd1000000-0000-0000-0000-000000000001';
+-- The shop's current policy version when the case runs (an earlier case publishes a newer one).
+CREATE FUNCTION t.n02_policy_version() RETURNS integer LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT max(version) FROM public.installment_policies WHERE organization_id = 'd1000000-0000-0000-0000-000000000001' $$;
+INSERT INTO public.customers (id, organization_id, full_name, phones, national_id, credit_limit)
+VALUES ('d9020000-0000-0000-0000-000000000001', 'd1000000-0000-0000-0000-000000000001', 'TEST-1 denial N02 customer', ARRAY['01000000002'], '29001010100999', 100000);
+INSERT INTO t.denial VALUES
+ ('post_installment_sale','zz_n02_1_sale','installment.create',$$SELECT public.post_installment_sale(jsonb_build_object('lines',jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-N02'),'quantity',1)),'expected_total','100.00','customer_id','d9020000-0000-0000-0000-000000000001','terms',jsonb_build_object('down_payment','50.00','installments_count',1,'frequency','monthly','policy_version',t.n02_policy_version())),'denial-n02-sale')$$),
+ ('get_contract','zz_n02_2_contract','customer.create',$$SELECT public.get_contract((SELECT id FROM public.contracts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-n02-sale'))$$);
 INSERT INTO t.denial VALUES ('get_customer_account','zz_r02_1_account','customer.create',$$SELECT public.get_customer_account((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'))$$),
  ('get_customer_contract_schedule','zz_r02_2_schedule','customer.create',$$SELECT public.get_customer_contract_schedule((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'),(SELECT id FROM public.contracts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND number='TEST-1-R02-C1'))$$),
  ('customer_statement','zz_r02_3_statement','customer.create',$$SELECT public.customer_statement((SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND full_name='TEST-1 denial R03 customer'))$$);

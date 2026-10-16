@@ -882,6 +882,97 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         status: 201,
       };
     },
+    'POST /api/installments/sales': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      await openShift(owner.accessToken);
+      // N02 needs a policy, a customer with a national ID and a limit, and a stocked product.
+      let settings = await send('get', '/api/settings', { token: owner.accessToken });
+      type Policy = { installment_policy: { version: number } | null };
+      if (!(settings.res.body as Policy).installment_policy) {
+        const published = await send('post', '/api/settings/installment-policies', {
+          token: owner.accessToken,
+          body: { grace_days: 0 },
+        });
+        expect(published.res.status, JSON.stringify(published.res.body)).toBe(201);
+        settings = await send('get', '/api/settings', { token: owner.accessToken });
+      }
+      const version = (settings.res.body as Policy).installment_policy?.version ?? 1;
+      const created = await send('post', '/api/customers', {
+        token: owner.accessToken,
+        body: {
+          full_name: `N02 customer ${STAMP}-${ipCounter}`,
+          phones: ['01000000077'],
+          national_id: freshNationalId(),
+        },
+      });
+      expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+      const customerId = (created.res.body as { id: string }).id;
+      const limit = await send('put', `/api/customers/${customerId}/credit-limit`, {
+        token: owner.accessToken,
+        body: { credit_limit: '100000.00', reason: `N02 ${STAMP}-${ipCounter}` },
+      });
+      expect(limit.res.status, JSON.stringify(limit.res.body)).toBe(200);
+      const product = await newProduct(owner.accessToken);
+      const stocked = await send('post', '/api/stock/adjustments', {
+        token: owner.accessToken,
+        key: `n02-sale-stock-${STAMP}-${ipCounter}`,
+        body: { branch_id: BR1, reason: 'found', lines: [{ product_id: product, quantity: 1 }] },
+      });
+      expect(stocked.res.status, JSON.stringify(stocked.res.body)).toBe(201);
+      const lines = [{ product_id: product, quantity: 1 }];
+      const quote = await send('post', '/api/sales/quote', {
+        token: owner.accessToken,
+        body: { lines },
+      });
+      expect(quote.res.status, JSON.stringify(quote.res.body)).toBe(200);
+      const total = (quote.res.body as { total: string }).total;
+      const preview = await send('post', '/api/installments/preview', {
+        token: owner.accessToken,
+        body: {
+          cash_price: total,
+          down_payment: '0.00',
+          installments_count: 1,
+          frequency: 'monthly',
+        },
+      });
+      expect(preview.res.status, JSON.stringify(preview.res.body)).toBe(200);
+      // Shop one asks for a credit score the new customer doesn't have: an approved exception.
+      const asked = await send('post', `/api/customers/${customerId}/credit-exceptions`, {
+        token: owner.accessToken,
+        body: { financed_amount: total, reason: `N02 ${STAMP}-${ipCounter}` },
+      });
+      expect(asked.res.status, JSON.stringify(asked.res.body)).toBe(201);
+      const exceptionId = (asked.res.body as { id: string }).id;
+      const decided = await send('post', `/api/credit-exceptions/${exceptionId}/decide`, {
+        token: owner.accessToken,
+        body: { approve: true },
+      });
+      expect(decided.res.status, JSON.stringify(decided.res.body)).toBe(200);
+      const down =
+        (preview.res.body as { terms: { min_down_payment: string | null } }).terms
+          .min_down_payment ?? '0.00';
+      return {
+        sent: await send('post', '/api/installments/sales', {
+          token: owner.accessToken,
+          pos,
+          key: `n02-sale-${STAMP}-${ipCounter}`,
+          body: {
+            lines,
+            expected_total: total,
+            customer_id: customerId,
+            credit_approval_id: exceptionId,
+            terms: {
+              down_payment: down,
+              installments_count: 1,
+              frequency: 'monthly',
+              policy_version: version,
+            },
+          },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
     'POST /api/sales/discount-approvals': async () => {
       const { sent } = await newDiscountRequest();
       return { sent, org: SHOP_ONE, status: 201 };
@@ -2060,7 +2151,7 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
   }
 
   const withAction = Object.entries(AUDIT_REGISTRY).flatMap(([route, e]) =>
-    'action' in e ? [{ route, action: e.action }] : [],
+    'action' in e ? [{ route, action: e.action, also: e.also ?? [] }] : [],
   );
 
   it('every registry entry with an action has a driver here', () => {
@@ -2069,13 +2160,15 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
 
   it.each(withAction)(
     '$route writes exactly one $action row with the request id and IP',
-    async ({ route, action }) => {
+    async ({ route, action, also }) => {
       const driver = drivers[route];
       if (!driver) throw new Error(`no driver for ${route}`);
       const { sent, org, status = 200 } = await driver();
       expect(sent.res.status, JSON.stringify(sent.res.body)).toBe(status);
       expect(sent.res.headers['x-request-id']).toBe(sent.requestId);
-      const rows = await rowsFor(sent.requestId);
+      const all = await rowsFor(sent.requestId);
+      expect(all.map((r) => r.action).sort()).toEqual([action, ...also].sort());
+      const rows = all.filter((r) => r.action === action);
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({
         action,

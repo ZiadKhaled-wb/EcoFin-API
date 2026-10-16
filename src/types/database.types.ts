@@ -8441,6 +8441,7 @@ export type Database = {
       };
       get_cash_account: { Args: { p_id: string }; Returns: Json };
       get_cash_transfer: { Args: { p_id: string }; Returns: Json };
+      get_contract: { Args: { p_id: string }; Returns: Json };
       get_credit_exception: { Args: { p_id: string }; Returns: Json };
       get_current_shift: { Args: Record<PropertyKey, never>; Returns: Json };
       get_customer: { Args: { p_id: string }; Returns: Json };
@@ -8838,6 +8839,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      post_installment_sale: { Args: { p_body: Json; p_idempotency_key: string }; Returns: Json };
       post_purchase_return: {
         Args: {
           p_cash_account_id?: string;

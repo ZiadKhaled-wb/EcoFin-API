@@ -1,8 +1,10 @@
 import Big from 'big.js';
 import { z } from 'zod';
-import { BusinessDate, Money, Uuid } from './common.js';
+import { BusinessDate, IsoTimestamp, Money, Uuid } from './common.js';
 import { CreditCheck } from './credit.js';
+import { ContractStatus, ScheduleLineStatus } from './customerAccount.js';
 import { GuarantorRequirement, MAX_GUARANTORS_PER_CONTRACT } from './guarantors.js';
+import { Discount, DiscountReason, Sale, SaleLines, SalePayments } from './sales.js';
 import { InstallmentFrequency, type InstallmentPolicy } from './settings.js';
 import { SurveyRequirement } from './surveys.js';
 
@@ -166,6 +168,113 @@ export const InstallmentTermsInvalidDetail = z.object({
   mismatch: z.string().optional(),
 });
 export type InstallmentTermsInvalidDetail = z.infer<typeof InstallmentTermsInvalidDetail>;
+
+// ---------------------------------------------------------------------------------------------
+// N02 installment sale and contract (D77)
+
+/**
+ * The terms of `POST /api/installments/sales`: N01's input without the cash price (the server
+ * takes the sale total) plus the policy version the preview showed (`POLICY_CHANGED` otherwise).
+ */
+export const InstallmentSaleTerms = z
+  .object({
+    down_payment: NonNegativeMoney,
+    installments_count: z.number().int().min(1).max(MAX_INSTALLMENTS),
+    frequency: InstallmentFrequency,
+    first_due_date: BusinessDate.optional(),
+    policy_version: z.number().int().min(1),
+  })
+  .strict();
+export type InstallmentSaleTerms = z.infer<typeof InstallmentSaleTerms>;
+
+/**
+ * `POST /api/installments/sales` (installment.create and sale.create, `Idempotency-Key` header).
+ * The cart, discounts and `expected_total` are the sale's (S01/S03): `expected_total` is the cash
+ * price the cashier showed. `payments` pay the down payment (none for a down payment of 0.00);
+ * without them a down payment above 0 is taken in cash.
+ */
+export const InstallmentSaleBody = z
+  .object({
+    lines: SaleLines,
+    expected_total: PositiveMoney,
+    customer_id: Uuid,
+    terms: InstallmentSaleTerms,
+    payments: SalePayments.optional(),
+    sale_discount: Discount.optional(),
+    discount_reason: DiscountReason.optional(),
+    discount_approval_id: Uuid.optional(),
+    guarantor_ids: z
+      .array(Uuid)
+      .max(MAX_GUARANTORS_PER_CONTRACT)
+      .refine((ids) => new Set(ids).size === ids.length, { message: 'Duplicate guarantor' })
+      .default([]),
+    /** An approved R03 credit exception, when the customer is over the limit. */
+    credit_approval_id: Uuid.optional(),
+  })
+  .strict();
+export type InstallmentSaleBody = z.infer<typeof InstallmentSaleBody>;
+export type InstallmentSaleInput = z.input<typeof InstallmentSaleBody>;
+
+/** A line of the contract's current schedule, with what was paid on it. */
+export const ContractScheduleLine = z.object({
+  seq: z.number().int().positive(),
+  due_date: BusinessDate,
+  principal: Money,
+  profit: Money,
+  amount: Money,
+  paid: Money,
+  remaining: Money,
+  status: ScheduleLineStatus,
+});
+export type ContractScheduleLine = z.infer<typeof ContractScheduleLine>;
+
+export const ContractGuarantor = z.object({
+  id: Uuid,
+  name: z.string(),
+  relation: z.string().nullable(),
+});
+export type ContractGuarantor = z.infer<typeof ContractGuarantor>;
+
+/**
+ * `GET /api/contracts/:id`. The installment price is `total_payable`; `markup_amount` is the
+ * profit for the whole term (never interest). A contract is never edited (N05 makes changes).
+ */
+export const Contract = z.object({
+  id: Uuid,
+  number: z.string(),
+  status: ContractStatus,
+  branch_id: Uuid,
+  sale_id: Uuid.nullable(),
+  sale_number: z.string().nullable(),
+  customer: z.object({ id: Uuid, name: z.string(), phone: z.string().nullable() }),
+  guarantors: z.array(ContractGuarantor),
+  policy_version: z.number().int().min(1),
+  creditor: z.string(),
+  cash_price: Money,
+  down_payment: Money,
+  financed_amount: Money,
+  markup_pct: z.string().regex(/^\d{1,3}(\.\d{1,4})?$/),
+  markup_amount: Money,
+  total_payable: Money,
+  installments_count: z.number().int().positive(),
+  frequency: InstallmentFrequency,
+  first_due_date: BusinessDate,
+  last_due_date: BusinessDate.nullable(),
+  current_version: z.number().int().positive(),
+  credit_approval_id: Uuid.nullable(),
+  created_at: IsoTimestamp,
+  created_by_name: z.string().nullable(),
+  lines: z.array(ContractScheduleLine),
+  balance: z.object({ paid: Money, remaining: Money, overdue: Money }),
+});
+export type Contract = z.infer<typeof Contract>;
+
+/** The answer of `POST /api/installments/sales`: the sale and its contract. */
+export const InstallmentSale = z.object({ sale: Sale, contract: Contract });
+export type InstallmentSale = z.infer<typeof InstallmentSale>;
+
+export const ContractIdParams = z.object({ id: Uuid }).strict();
+export type ContractIdParams = z.infer<typeof ContractIdParams>;
 
 // ---------------------------------------------------------------------------------------------
 // The engine (same calculation as app.installment_terms). Money is big.js, never a JS number.

@@ -20,6 +20,9 @@
 //      sales' totals equal their payments and the drawers' sale movements.
 //   J. S02: 20 sales each paying a lamp with the same customer's store credit (exactly one lamp's
 //      worth): one is paid, the balance ends at 0.00, never below.
+//   K. N02 (public.post_installment_sale): K1. 20 installment sales of the last TV: one contract.
+//      K2. 20 requests with ONE key: one sale, one contract, one schedule. K3. a customer whose
+//      limit covers one financed amount, 20 tills at once: one contract, 19 CREDIT_LIMIT_EXCEEDED.
 // (The sale race on the bare ledger is db:ledger, F10.)
 import { pgbench, processed, psql, removeProofShop, report, writeFile } from './db-proof-lib.mjs';
 
@@ -483,6 +486,124 @@ try {
     ['J. the balance is exactly 0.00, never below', Number(creditBalance) === 0, creditBalance],
   ]);
 
+  // ---------------------------------------------------------------- K. installment sales (N02)
+  // A policy without profit, one TV in stock and two customers with a national ID: one with room
+  // for every sale, one whose limit covers exactly one financed amount. Each request quotes the
+  // cart and sells it on installments (100.00 down, 2 monthly), as the POS does.
+  psql(`BEGIN; SELECT ${SCHEMA}.sign_in();
+        INSERT INTO ${SCHEMA}.ids VALUES ('tv', public.create_product('{"name_ar":"Proof TV","sku":"T3P-TV","cash_price":"1000"}'));
+        SELECT public.post_stock_adjustment(${SCHEMA}.id('main'), 'found', NULL,
+          jsonb_build_array(jsonb_build_object('product_id', ${SCHEMA}.id('tv'), 'quantity', 1)), 'test3-proof-tv-1');
+        COMMIT;
+        UPDATE public.org_settings SET credit_min_score = 0 WHERE organization_id = ${SCHEMA}.id('org');
+        INSERT INTO public.installment_policies (organization_id, version, max_months, markup_tiers)
+          SELECT ${SCHEMA}.id('org'), max(version) + 1, 12, '[{"pct": 0, "up_to_months": 12}]'
+          FROM public.installment_policies WHERE organization_id = ${SCHEMA}.id('org');
+        INSERT INTO public.customers (organization_id, full_name, national_id, credit_limit) VALUES
+          (${SCHEMA}.id('org'), 'Proof installment buyer', '29001010100301', 1000000),
+          (${SCHEMA}.id('org'), 'Proof tight buyer', '29001010100302', 0);
+        INSERT INTO ${SCHEMA}.ids SELECT 'inst', id FROM public.customers
+          WHERE organization_id = ${SCHEMA}.id('org') AND full_name = 'Proof installment buyer';
+        INSERT INTO ${SCHEMA}.ids SELECT 'tight', id FROM public.customers
+          WHERE organization_id = ${SCHEMA}.id('org') AND full_name = 'Proof tight buyer';
+        TRUNCATE ${SCHEMA}.outcomes;
+
+        CREATE FUNCTION ${SCHEMA}.installment(p_kind text, p_cashier integer) RETURNS void LANGUAGE plpgsql AS $$
+        DECLARE
+          v_key text := CASE WHEN p_kind = 'inst_same_key' THEN 'test3-proof-inst-key' ELSE 'test3-proof-' || gen_random_uuid() END;
+          v_product uuid := CASE WHEN p_kind = 'inst_last' THEN ${SCHEMA}.id('tv') ELSE ${SCHEMA}.id('lamp') END;
+          v_lines jsonb := jsonb_build_array(jsonb_build_object('product_id', v_product, 'quantity', 1));
+          v_answer jsonb;
+        BEGIN
+          PERFORM ${SCHEMA}.sign_in_as(p_cashier);
+          BEGIN
+            v_answer := public.post_installment_sale(jsonb_build_object(
+              'lines', v_lines, 'expected_total', public.quote_sale(v_lines)->>'total',
+              'customer_id', ${SCHEMA}.id(CASE WHEN p_kind = 'inst_credit' THEN 'tight' ELSE 'inst' END),
+              'terms', jsonb_build_object('down_payment', '10.00', 'installments_count', 2, 'frequency', 'monthly',
+                                          'policy_version', (SELECT max(version) FROM public.installment_policies
+                                                             WHERE organization_id = ${SCHEMA}.id('org')))), v_key);
+            -- The commit-time checks (R03 credit, N01 terms, R04, R05) run before the request ends.
+            SET CONSTRAINTS ALL IMMEDIATE;
+            INSERT INTO ${SCHEMA}.outcomes (kind, result, ref) VALUES (p_kind, 'done', (v_answer->'contract'->>'id')::uuid);
+          EXCEPTION WHEN others THEN
+            INSERT INTO ${SCHEMA}.outcomes (kind, result, error) VALUES (p_kind, 'refused', SQLERRM);
+          END;
+        END $$;`);
+  const instScript = (kind) =>
+    `\\set c random(1, ${CASHIERS})\nSELECT ${SCHEMA}.installment('${kind}', :c);\n`;
+  const contractsOf = (where) =>
+    psql(
+      `SELECT count(*) FROM public.contracts WHERE organization_id = ${SCHEMA}.id('org') AND ${where};`,
+    );
+
+  await round('K1.', '/tmp/test3_inst_last.sql', instScript('inst_last'));
+  [done, refused, other, firstOther] = outcomes('inst_last', 'OUT_OF_STOCK');
+  const partK1 = report([
+    ['K1. exactly one installment sale of the last TV', done === '1', done],
+    [`K1. the other ${CLIENTS - 1} got OUT_OF_STOCK`, Number(refused) === CLIENTS - 1, refused],
+    ['K1. no other errors (no deadlocks)', other === '0', `${other} ${firstOther}`],
+    [
+      'K1. one contract, the TV at exactly 0',
+      contractsOf(
+        `sale_id IN (SELECT sale_id FROM public.sale_lines WHERE product_id = ${SCHEMA}.id('tv'))`,
+      ) === '1' && level('tv') === '0',
+      `${level('tv')} left`,
+    ],
+  ]);
+
+  psql(`BEGIN; SELECT ${SCHEMA}.sign_in();
+        SELECT public.post_stock_adjustment(${SCHEMA}.id('main'), 'found', NULL,
+          jsonb_build_array(jsonb_build_object('product_id', ${SCHEMA}.id('lamp'), 'quantity', 40)), 'test3-proof-lamps-3');
+        COMMIT;`);
+  await round('K2.', '/tmp/test3_inst_key.sql', instScript('inst_same_key'));
+  [done, refused, other, firstOther] = outcomes('inst_same_key', '-');
+  const [instAnswers, instSales, instContracts, instLines, instNumbers] = psql(`
+    SELECT concat_ws('|',
+      (SELECT count(DISTINCT ref) FROM ${SCHEMA}.outcomes WHERE kind = 'inst_same_key'),
+      (SELECT count(*) FROM public.sales WHERE organization_id = ${SCHEMA}.id('org') AND idempotency_key = 'test3-proof-inst-key'),
+      (SELECT count(*) FROM public.contracts WHERE organization_id = ${SCHEMA}.id('org') AND idempotency_key = 'test3-proof-inst-key'),
+      (SELECT count(*) FROM public.schedule_lines l JOIN public.contracts c ON c.id = l.contract_id WHERE c.idempotency_key = 'test3-proof-inst-key'),
+      (SELECT count(*) FROM public.contracts WHERE organization_id = ${SCHEMA}.id('org')));`).split(
+    '|',
+  );
+  const partK2 = report([
+    [
+      `K2. all ${CLIENTS} requests with one key got an answer, none refused`,
+      Number(done) === CLIENTS && refused === '0' && other === '0',
+      `${done} done, ${other} ${firstOther}`,
+    ],
+    ['K2. all of them got the same contract', instAnswers === '1', `${instAnswers} distinct`],
+    [
+      'K2. one sale, one contract, one schedule of 2 lines; two contracts in the shop so far',
+      instSales === '1' && instContracts === '1' && instLines === '2' && instNumbers === '2',
+      `${instSales} / ${instContracts} / ${instLines} / ${instNumbers}`,
+    ],
+  ]);
+
+  // The tight buyer's limit covers exactly one financed lamp (its cash price - 10.00 down).
+  psql(`BEGIN; SELECT ${SCHEMA}.sign_in_as(1);
+        UPDATE public.customers SET credit_limit =
+          (public.quote_sale(jsonb_build_array(jsonb_build_object('product_id', ${SCHEMA}.id('lamp'), 'quantity', 1)))->>'total')::numeric - 10
+        WHERE id = ${SCHEMA}.id('tight');
+        COMMIT;`);
+  await round('K3.', '/tmp/test3_inst_credit.sql', instScript('inst_credit'));
+  [done, refused, other, firstOther] = outcomes('inst_credit', 'CREDIT_LIMIT_EXCEEDED');
+  const partK3 = report([
+    ['K3. exactly one installment sale within the limit', done === '1', done],
+    [
+      `K3. the other ${CLIENTS - 1} got CREDIT_LIMIT_EXCEEDED`,
+      Number(refused) === CLIENTS - 1,
+      refused,
+    ],
+    ['K3. no other errors (no deadlocks)', other === '0', `${other} ${firstOther}`],
+    [
+      'K3. one contract for the tight buyer',
+      contractsOf(`customer_id = ${SCHEMA}.id('tight')`) === '1',
+      contractsOf(`customer_id = ${SCHEMA}.id('tight')`),
+    ],
+  ]);
+
   // ---------------------------------------------------------------- E. reconciliation
   const [shopMismatches, allMismatches] = psql(`
     SELECT concat_ws('|', (SELECT count(*) FROM app.ledger_mismatches(${SCHEMA}.id('org'))),
@@ -507,6 +628,9 @@ try {
     partI &&
     partMoney &&
     partJ &&
+    partK1 &&
+    partK2 &&
+    partK3 &&
     partE
   );
 } catch (error) {

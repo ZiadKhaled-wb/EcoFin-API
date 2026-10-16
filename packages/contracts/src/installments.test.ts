@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   computeInstallmentTerms,
+  Contract,
+  InstallmentSaleBody,
   InstallmentPreview,
   InstallmentPreviewBody,
   InstallmentTerms,
@@ -280,5 +282,95 @@ describe('schemas', () => {
     expect(InstallmentPreview.parse({ terms, customer: null, can_confirm: false }).terms).toEqual(
       terms,
     );
+  });
+});
+
+describe('N02 installment sale schemas', () => {
+  const id = '00000000-0000-4000-8000-000000000001';
+  const body = {
+    lines: [{ product_id: id, quantity: 1 }],
+    expected_total: '12000.00',
+    customer_id: id,
+    terms: {
+      down_payment: '2000.00',
+      installments_count: 12,
+      frequency: 'monthly',
+      policy_version: 3,
+    },
+  };
+
+  it('accepts a sale and defaults guarantor_ids to []', () => {
+    const r = InstallmentSaleBody.parse(body);
+    expect(r.guarantor_ids).toEqual([]);
+  });
+
+  it('needs a customer and the policy version', () => {
+    expect(InstallmentSaleBody.safeParse({ ...body, customer_id: undefined }).success).toBe(false);
+    const { policy_version: _pv, ...terms } = body.terms;
+    expect(InstallmentSaleBody.safeParse({ ...body, terms }).success).toBe(false);
+  });
+
+  it('refuses unknown keys, a zero cash price, duplicate or too many guarantors', () => {
+    expect(InstallmentSaleBody.safeParse({ ...body, organization_id: id }).success).toBe(false);
+    expect(InstallmentSaleBody.safeParse({ ...body, expected_total: '0.00' }).success).toBe(false);
+    expect(InstallmentSaleBody.safeParse({ ...body, guarantor_ids: [id, id] }).success).toBe(false);
+    const ids = ['1', '2', '3', '4'].map((n) => `00000000-0000-4000-8000-00000000000${n}`);
+    expect(InstallmentSaleBody.safeParse({ ...body, guarantor_ids: ids }).success).toBe(false);
+    expect(
+      InstallmentSaleBody.safeParse({ ...body, terms: { ...body.terms, cash_price: '1.00' } })
+        .success,
+    ).toBe(false);
+  });
+
+  it('takes the down payment lines', () => {
+    const r = InstallmentSaleBody.safeParse({
+      ...body,
+      payments: [{ method: 'cash', amount: '2000.00' }],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('parses a contract answer', () => {
+    const contract = {
+      id,
+      number: 'MAIN-CT-26-000001',
+      status: 'active',
+      branch_id: id,
+      sale_id: id,
+      sale_number: 'MAIN-SL-26-000001',
+      customer: { id, name: 'Good Customer', phone: '01000000001' },
+      guarantors: [{ id, name: 'First Guarantor', relation: 'brother' }],
+      policy_version: 1,
+      creditor: 'in_house',
+      cash_price: '12000.00',
+      down_payment: '2000.00',
+      financed_amount: '10000.00',
+      markup_pct: '20',
+      markup_amount: '2000.00',
+      total_payable: '12000.00',
+      installments_count: 1,
+      frequency: 'monthly',
+      first_due_date: '2026-11-16',
+      last_due_date: '2026-11-16',
+      current_version: 1,
+      credit_approval_id: null,
+      created_at: '2026-10-16T06:12:02.830466+00:00',
+      created_by_name: 'N02 Cashier',
+      lines: [
+        {
+          seq: 1,
+          due_date: '2026-11-16',
+          principal: '10000.00',
+          profit: '2000.00',
+          amount: '12000.00',
+          paid: '0.00',
+          remaining: '12000.00',
+          status: 'upcoming',
+        },
+      ],
+      balance: { paid: '0.00', remaining: '12000.00', overdue: '0.00' },
+    };
+    expect(Contract.safeParse(contract).success).toBe(true);
+    expect(Contract.safeParse({ ...contract, markup_pct: '12.34567' }).success).toBe(false);
   });
 });

@@ -339,6 +339,10 @@ See [R05 plan](plans/R05.md). Covers the Done when (photos are private; a requir
 
 See [N01 plan](plans/N01.md). Covers the Done when (schedule lines always sum to the total payable; changing the policy changes new contracts only; the server rejects terms that break the policy) and the D76 rules (the 35 golden cases run by both engines, a generated sweep, the eight policy rules, the confirm side for N02, the two commit-time triggers, the preview and who may call it).
 
+## N02 — installment sale and contract (EC-81)
+
+See [N02 plan](plans/N02.md). Covers the Done when (the contract total = cash price − down payment + markup; the down payment is in the drawer; the contract shows on the customer account) and the D77 rules (one transaction, every refusal leaves nothing, the customer checks, credit exceptions, guarantors and surveys, payment methods, zero down payment, idempotency, never edited, the contract read).
+
 ## S02 — split payments (EC-69)
 
 See [S02 plan](plans/S02.md). Covers the Done when (a sale paid half cash, half bank transfer posts each amount to the right place and the shift shows both) and the D64 rules (exact total, cash with change, bank reference, store credit, nothing left behind on a refusal, names-only account list, replays).

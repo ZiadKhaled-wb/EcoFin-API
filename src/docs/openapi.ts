@@ -2105,6 +2105,32 @@ export const openApiSpec = {
                 responses: { 200: { description: 'InstallmentPreview' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/installments/sales': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Sell on installments: the sale, its down payment and the contract (installment.create)',
+                description: 'N02 (D77). One database transaction in the open shift of the caller (also sale.create, the installments and pos modules, the shop\'s installments switch INSTALLMENTS_DISABLED, the shift\'s paired device). An installment sale is a sale at a fixed deferred price, not a loan (docs/ISLAMIC_FINANCE_RULES.md): the cash price is the sale total (expected_total; PRICE_CHANGED otherwise), the profit for the whole term and the installment price (total_payable) come from the N01 engine for the policy version the preview showed (POLICY_CHANGED, details current_version; INSTALLMENT_TERMS_INVALID, details violations; POLICY_NOT_SET). The customer must be the shop\'s (CUSTOMER_NOT_FOUND), not blocked (CUSTOMER_BLOCKED) and have a national ID (CUSTOMER_NATIONAL_ID_REQUIRED); then the R03 credit check (CREDIT_LIMIT_EXCEEDED, CREDIT_SCORE_TOO_LOW, CREDIT_CUSTOMER_WATCH, or credit_approval_id of an approved exception, CREDIT_APPROVAL_INVALID), the R04 guarantors (guarantor_ids; GUARANTOR_REQUIRED, GUARANTOR_NOT_LINKED) and the R05 survey (SURVEY_REQUIRED). The sale is written as POST /api/sales writes it (stock, tax, discounts, number) but its payments cover only the down payment (PAYMENT_TOTAL_MISMATCH; none for a down payment of 0.00; without payments a down payment above 0 is taken in cash into the drawer). Then the contract (CT number, the creditor from the shop, the policy version) and its version-1 schedule lines (principal + profit), the guarantors and the credit exception, and the audit rows sale.created and contract.created (a warning with a credit exception). A shop whose VAT setting taxes the profit is refused (MARKUP_VAT_NOT_SUPPORTED) until the accountant answers. The same Idempotency-Key returns the same answer; a key a cash sale used answers IDEMPOTENCY_CONFLICT. Schema: InstallmentSaleBody → InstallmentSale.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
+                ],
+                responses: { 201: { description: 'InstallmentSale' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/contracts/{id}': {
+            get: {
+                tags: ['Installments'],
+                summary: 'An installment contract with its schedule and balance',
+                description: 'N02 (D77). The contract (cash price, down payment, financed amount, profit for the whole term, installment price, policy version, creditor), its customer and guarantors, the current schedule lines with what was paid and their status, and the balance. Any customer read key and the contract\'s branch among the caller\'s branches; otherwise, and for another shop\'s id, CONTRACT_NOT_FOUND. Works in an expired shop. A contract is never edited. Schema: ContractIdParams → Contract.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                ],
+                responses: { 200: { description: 'Contract' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/sales/quote': {
             post: {
                 tags: ['Sales'],
