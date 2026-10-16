@@ -408,7 +408,7 @@ SELECT t.expect('grants: the three functions for authenticated, not anon; helper
   AND has_function_privilege('authenticated','public.quote_sale(jsonb,uuid,jsonb,jsonb)','EXECUTE')
   AND has_function_privilege('authenticated','public.get_sale(uuid)','EXECUTE')
   AND NOT has_function_privilege('anon','public.post_sale(jsonb,text,text,uuid,jsonb,jsonb,text,uuid)','EXECUTE')
-  AND NOT has_function_privilege('authenticated','app.post_sale_core(uuid,uuid,public.shifts,jsonb,uuid,numeric,text,jsonb,jsonb,text,uuid)','EXECUTE')
+  AND NOT has_function_privilege('authenticated','app.post_sale_core(uuid,uuid,public.shifts,jsonb,uuid,numeric,text,jsonb,jsonb,text,uuid,numeric)','EXECUTE')
   AND NOT has_function_privilege('authenticated','app.sale_cart(uuid,uuid,jsonb,boolean,jsonb)','EXECUTE')
   AND NOT has_function_privilege('authenticated','app.sale_json(uuid,uuid)','EXECUTE')
   AND NOT has_function_privilege('authenticated','app.post_sale_payments(public.sales,public.shifts,uuid,jsonb,numeric)','EXECUTE'));
