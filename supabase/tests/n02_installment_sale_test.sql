@@ -422,9 +422,11 @@ SELECT t.expect('read: the cashier (a customer read key, the branch) reads the c
      AND x->'customer'->>'name'='Good Customer' AND x->>'sale_number' IS NOT NULL FROM public.get_contract(t.id('c1')) x));
 SELECT t.error('read: an unknown id -> CONTRACT_NOT_FOUND',format('SELECT public.get_contract(%L)',gen_random_uuid()),'CONTRACT_NOT_FOUND');
 RESET ROLE;
+-- N03 (D78): the collection keys see every branch's contracts, so this cashier loses collection.create.
+INSERT INTO public.employee_permission_overrides(organization_id,employee_id,permission_key,granted) VALUES(t.org('a'),t.id('cashier2'),'collection.create',false);
 SELECT t.as_user('a0770000-0000-0000-8000-000000000006',t.org('a'));
 SET ROLE authenticated;
-SELECT t.error('read: a cashier of another branch -> CONTRACT_NOT_FOUND',format('SELECT public.get_contract(%L)',t.id('c1')),'CONTRACT_NOT_FOUND');
+SELECT t.error('read: a cashier of another branch (no collection key) -> CONTRACT_NOT_FOUND',format('SELECT public.get_contract(%L)',t.id('c1')),'CONTRACT_NOT_FOUND');
 RESET ROLE;
 SELECT t.as_user('a0770000-0000-0000-8000-000000000004',t.org('a'));
 SET ROLE authenticated;

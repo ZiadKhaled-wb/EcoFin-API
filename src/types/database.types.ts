@@ -3783,6 +3783,7 @@ export type Database = {
           branch_id: string;
           business_date: string;
           cash_account_id: string | null;
+          collection_id: string | null;
           created_at: string;
           created_by: string | null;
           customer_id: string | null;
@@ -3805,6 +3806,7 @@ export type Database = {
           branch_id: string;
           business_date: string;
           cash_account_id?: string | null;
+          collection_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           customer_id?: string | null;
@@ -3827,6 +3829,7 @@ export type Database = {
           branch_id?: string;
           business_date?: string;
           cash_account_id?: string | null;
+          collection_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           customer_id?: string | null;
@@ -3865,6 +3868,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'v_cash_balances';
             referencedColumns: ['cash_account_id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'payments_collection_fk';
+            columns: ['collection_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'payments';
+            referencedColumns: ['id', 'organization_id'];
           },
           {
             foreignKeyName: 'payments_created_by_fk';
@@ -8441,6 +8451,7 @@ export type Database = {
       };
       get_cash_account: { Args: { p_id: string }; Returns: Json };
       get_cash_transfer: { Args: { p_id: string }; Returns: Json };
+      get_collection: { Args: { p_id: string }; Returns: Json };
       get_contract: { Args: { p_id: string }; Returns: Json };
       get_credit_exception: { Args: { p_id: string }; Returns: Json };
       get_current_shift: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -8566,6 +8577,7 @@ export type Database = {
         Returns: Json;
       };
       list_categories: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_contracts: { Args: { p_filters?: Json }; Returns: Json };
       list_credit_exceptions: { Args: { p_status?: string }; Returns: Json };
       list_customer_guarantors: { Args: { p_customer_id: string }; Returns: Json };
       list_customer_surveys: { Args: { p_customer_id: string }; Returns: Json };
@@ -8826,6 +8838,7 @@ export type Database = {
         Args: { p_amount: string; p_id: string; p_idempotency_key: string; p_note: string };
         Returns: Json;
       };
+      post_collection: { Args: { p_body: Json; p_idempotency_key: string }; Returns: Json };
       post_expense: {
         Args: {
           p_amount: string;
@@ -8890,6 +8903,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      preview_collection: {
+        Args: { p_amount_text?: string; p_contract_id: string };
+        Returns: Json;
+      };
       preview_installment_terms: { Args: { p_body: Json }; Returns: Json };
       publish_installment_policy: { Args: { p_policy: Json }; Returns: string };
       quote_sale: {
@@ -8898,6 +8915,7 @@ export type Database = {
       };
       reassign_field_survey: { Args: { p_assigned_to: string; p_id: string }; Returns: Json };
       receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
+      record_collection_receipt_print: { Args: { p_id: string }; Returns: Json };
       record_sale_receipt_print: { Args: { p_sale_id: string }; Returns: Json };
       register_file: {
         Args: {
@@ -8943,6 +8961,10 @@ export type Database = {
       };
       resolve_device: { Args: { p_token_hash: string }; Returns: Json };
       retry_fiscal_submission: { Args: { p_id: string }; Returns: Json };
+      reverse_collection: {
+        Args: { p_body: Json; p_id: string; p_idempotency_key: string };
+        Returns: Json;
+      };
       reverse_expense: {
         Args: {
           p_cash_account_id?: string;

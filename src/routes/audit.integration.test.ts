@@ -973,6 +973,54 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         status: 201,
       };
     },
+    'POST /api/collections': async () => {
+      // N03: a part of an N02 contract's first installment, in cash, in the owner's shift.
+      const sale = await drivers['POST /api/installments/sales']!();
+      expect(sale.sent.res.status, JSON.stringify(sale.sent.res.body)).toBe(201);
+      const contract = (
+        sale.sent.res.body as { contract: { id: string; customer: { id: string } } }
+      ).contract;
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', '/api/collections', {
+          token: owner.accessToken,
+          pos,
+          key: `n03-collect-${STAMP}-${ipCounter}`,
+          body: {
+            customer_id: contract.customer.id,
+            contracts: [{ contract_id: contract.id, amount: '0.01' }],
+            payments: [{ method: 'cash', amount: '0.01' }],
+          },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'POST /api/collections/:id/prints': async () => {
+      const collected = await drivers['POST /api/collections']!();
+      expect(collected.sent.res.status, JSON.stringify(collected.sent.res.body)).toBe(201);
+      const owner = await login('owner.one@ecotech.test');
+      const id = (collected.sent.res.body as { id: string }).id;
+      return {
+        sent: await send('post', `/api/collections/${id}/prints`, { token: owner.accessToken }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/collections/:id/reverse': async () => {
+      const collected = await drivers['POST /api/collections']!();
+      expect(collected.sent.res.status, JSON.stringify(collected.sent.res.body)).toBe(201);
+      const owner = await login('owner.one@ecotech.test');
+      const id = (collected.sent.res.body as { id: string }).id;
+      return {
+        sent: await send('post', `/api/collections/${id}/reverse`, {
+          token: owner.accessToken,
+          pos,
+          key: `n03-reverse-${STAMP}-${ipCounter}`,
+          body: { reason: 'Audit reversal' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
     'POST /api/sales/discount-approvals': async () => {
       const { sent } = await newDiscountRequest();
       return { sent, org: SHOP_ONE, status: 201 };

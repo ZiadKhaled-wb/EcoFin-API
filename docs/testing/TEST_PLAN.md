@@ -343,6 +343,10 @@ See [N01 plan](plans/N01.md). Covers the Done when (schedule lines always sum to
 
 See [N02 plan](plans/N02.md). Covers the Done when (the contract total = cash price − down payment + markup; the down payment is in the drawer; the contract shows on the customer account) and the D77 rules (one transaction, every refusal leaves nothing, the customer checks, credit exceptions, guarantors and surveys, payment methods, zero down payment, idempotency, never edited, the contract read).
 
+## N03 — collections (EC-82)
+
+See [N03 plan](plans/N03.md). Covers the Done when (the same allocation for the same inputs; a double-click records one payment; the last payment closes the contract; a same-day reversal leaves the contract as it was) and the D78 rules (oldest line first, profit then principal; several contracts and split methods in one receipt; no overpayment and no store credit; no late fees; any branch; completion; reversal; visibility; the four concurrency rounds).
+
 ## S02 — split payments (EC-69)
 
 See [S02 plan](plans/S02.md). Covers the Done when (a sale paid half cash, half bank transfer posts each amount to the right place and the shift shows both) and the D64 rules (exact total, cash with change, bank reference, store credit, nothing left behind on a refusal, names-only account list, replays).

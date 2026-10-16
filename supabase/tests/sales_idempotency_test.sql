@@ -21,6 +21,8 @@ INSERT INTO t.key_functions VALUES ('public.post_purchase_return(uuid,text,text,
 ('public.post_expense(uuid,text,text,uuid,uuid,boolean,text,uuid)'),
 ('public.post_sale(jsonb,text,text,uuid,jsonb,jsonb,text,uuid)'),
 ('public.post_installment_sale(jsonb,text)'),
+('public.post_collection(jsonb,text)'),
+('public.reverse_collection(uuid,jsonb,text)'),
 ('public.void_sale(uuid,text,text)'),
 ('public.open_warranty_claim(uuid,uuid,text,text,text)');
 SELECT t.expect('generic completeness: every authenticated public definer with an idempotency argument is explicitly registered',
