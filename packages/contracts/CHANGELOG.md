@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.47.0
+
+- N02 installment sale and contract: InstallmentSaleTerms, InstallmentSaleBody, InstallmentSaleInput, ContractScheduleLine, ContractGuarantor, Contract, InstallmentSale, ContractIdParams; `SaleLines` and `SalePayments` are exported. Error codes CUSTOMER_NATIONAL_ID_REQUIRED, MARKUP_VAT_NOT_SUPPORTED (409).
+
 ## 0.46.0
 
 - N01 installment rules engine: FIRST_DUE_MAX_DAYS, MAX_INSTALLMENTS, INSTALLMENT_VIOLATION_RULES, InstallmentTermsInput, InstallmentViolationRule, InstallmentViolation, ScheduleLinePreview, InstallmentTerms, InstallmentPreviewBody, InstallmentGuarantorCheck, InstallmentPreview, PolicyChangedDetail, InstallmentTermsInvalidDetail, InstallmentEnginePolicy, computeInstallmentTerms, installmentDueDate, installmentDurationMonths. Error codes INSTALLMENT_TERMS_INVALID (400), POLICY_NOT_SET, POLICY_CHANGED, SCHEDULE_NOT_BALANCED (409).

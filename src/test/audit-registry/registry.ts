@@ -87,6 +87,7 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
     none: 'Read-only installment terms preview; nothing is written.',
   },
   'POST /api/sales': { action: 'sale.created' },
+  'POST /api/installments/sales': { action: 'contract.created' },
   'POST /api/sales/discount-approvals': { action: 'approval.requested' },
   'POST /api/sales/discount-approvals/:id/cancel': { action: 'approval.cancelled' },
   'POST /api/approvals/:id/decide': { action: 'approval.decided' },

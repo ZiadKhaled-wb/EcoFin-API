@@ -5128,6 +5128,69 @@ for (const [path, query] of [
 // N01: the preview reads only; another shop's customer and guarantors never reach the answer.
 crossShopCase({
   method: 'POST',
+  path: '/api/installments/sales',
+  name: "an installment sale refuses a foreign header, an org id, shop B's customer and guarantor; nothing is written",
+  async run(h) {
+    const theirs = await shopBGuarantor(h, 'n02-sale');
+    const mine = await openShiftOf(h, CASHIER_A_EMAIL, SHOP_A_BR1);
+    const body = {
+      lines: [{ product_id: '00000000-0000-4000-8000-00000000beef', quantity: 1 }],
+      expected_total: '1000.00',
+      customer_id: theirs.customer.id,
+      terms: {
+        down_payment: '100.00',
+        installments_count: 2,
+        frequency: 'monthly',
+        policy_version: 1,
+      },
+    };
+    const send = (sent: object, orgId?: string) =>
+      h.call('POST', '/api/installments/sales', {
+        token: mine.token,
+        deviceToken: mine.deviceToken,
+        idempotencyKey: saleKey(),
+        body: sent,
+        ...(orgId ? { orgId } : {}),
+      });
+    const foreign = await send(body, SHOP_B);
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await send({ ...body, organization_id: SHOP_B });
+    h.expect(injected.res.status).toBe(400);
+    const customer = await send(body);
+    h.expect(customer.res.status, JSON.stringify(customer.res.body)).toBe(404);
+    h.expect(h.code(customer.res)).toBe('CUSTOMER_NOT_FOUND');
+    for (const call of [foreign, injected, customer]) {
+      h.expect(await h.auditRowsFrom(SHOP_A, call.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, call.ip)).toBe(0);
+    }
+    // Nothing was sold: the shift still expects nothing and closes on an empty count.
+    await closeShiftOf(h, mine);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/contracts/:id',
+  name: 'a contract refuses a foreign header and an unknown or other-shop id',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const id = '00000000-0000-4000-8000-00000000c0de';
+    const foreign = await h.call('GET', `/api/contracts/${id}`, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const missing = await h.call('GET', `/api/contracts/${id}`, { token: a.accessToken });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('CONTRACT_NOT_FOUND');
+    const injected = await h.call('GET', `/api/contracts/${id}`, {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+  },
+});
+crossShopCase({
+  method: 'POST',
   path: '/api/installments/preview',
   name: "a preview refuses a foreign header, an org id and shop B's customer; shop B's guarantors are not counted",
   async run(h) {

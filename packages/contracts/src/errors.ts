@@ -265,6 +265,9 @@ export const errorCodeHttpStatus = {
   POLICY_NOT_SET: 409,
   POLICY_CHANGED: 409,
   SCHEDULE_NOT_BALANCED: 409,
+  // N02 installment sale and contract
+  CUSTOMER_NATIONAL_ID_REQUIRED: 409,
+  MARKUP_VAT_NOT_SUPPORTED: 409,
   // T02 ETA e-receipts
   DEVICE_NOT_FOUND: 404,
   DEVICE_SERIAL_TAKEN: 409,

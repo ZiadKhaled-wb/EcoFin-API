@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { InstallmentPreviewBody } from '@ziadkhaled-wb/contracts';
+import { InstallmentPreviewBody, InstallmentSaleBody } from '@ziadkhaled-wb/contracts';
 import { authenticate } from '../middleware/auth';
 import { loadRequestContext } from '../middleware/requestContext';
 import { requirePermission } from '../middleware/permissions';
@@ -17,5 +17,16 @@ router.post(
   requirePermission('installment.create'),
   validate({ body: InstallmentPreviewBody }),
   asyncHandler(controller.preview),
+);
+// N02 (D77). The installment sale: sale, down payment and contract in one transaction. sale.create,
+// the modules, the switch, the shift and its device are checked in SQL. The Idempotency-Key header
+// is read by the controller (IdempotencyKeyHeader).
+router.post(
+  '/sales',
+  authenticate,
+  loadRequestContext,
+  requirePermission('installment.create'),
+  validate({ body: InstallmentSaleBody }),
+  asyncHandler(controller.createSale),
 );
 export default router;
