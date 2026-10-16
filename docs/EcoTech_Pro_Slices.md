@@ -697,27 +697,29 @@ The shop lends its own money. Rules are built new on the server; nothing is reus
 **Plan:** V1 · **Agent:** Spec→Free · **Reuse:** Port (oldest-first allocation SQL) · **Depends on:** N02, K02
 **What it does:** records customers paying their installments.
 **Includes:**
-- Find a customer or contract; see what's due and overdue
-- Take a payment (full, partial or several installments); allocated in a fixed order: late fees → oldest installment (profit, then principal) → next
-- Overpayment becomes customer credit, never lost
+- Find a customer or contract (any branch); see what's due and overdue
+- Take a payment (full, partial or several installments), split across cash and bank transfers; allocated in a fixed order: oldest installment (profit, then principal) → next
+- **Owner, 16 Oct (`docs/tasks/N03.md`):** no late fees (`docs/ISLAMIC_FINANCE_RULES.md` rule 4); a customer can't pay more than what is owed (no overpayment, no store credit); a payment can be taken at any branch and its cash goes into that branch's drawer
 - Payment receipt (numbered, printed); cash goes to the current shift's drawer (or collector wallet, N06)
 - Contract balance and status update; fully paid → completed
+- A wrong collection can be reversed on the same day (money back, installments unpaid again)
 - A collection is **not** a new sale (no new revenue or VAT on the goods)
 - Idempotent
 
-**Done when:** allocation is the same every time for the same inputs; a double-click records one payment; the last payment closes the contract.
+**Done when:** allocation is the same every time for the same inputs; a double-click records one payment; the last payment closes the contract; a same-day reversal leaves the contract as it was.
 
-### N04 · Overdue and late fees
-**Plan:** V1 · **Agent:** Smart · **Reuse:** New · **Depends on:** N02, F13, P03
-**What it does:** marks late installments and applies the shop's late-fee rule.
+### N04 · Overdue tracking (no late fees)
+**Plan:** V1 · **Agent:** Smart · **Reuse:** New · **Depends on:** N02, N03, F13, P03
+**What it does:** tracks late installments and the customers behind them, without ever adding to what they owe.
 **Includes:**
-- Daily job (shop timezone): installments past due + grace days become overdue
-- Late fee per the policy (fixed amount or %, once or per period, with a cap); recorded as a separate charge, not added into principal
-- **Islamic finance (owner, 15 Oct; `docs/ISLAMIC_FINANCE_RULES.md` rule 4):** no late fee by default; the only other option is a late-payment penalty given to charity, kept in its own charity balance and never counted as the shop's income
-- Waive a fee with permission and reason
-- Overdue list with days late and amounts; feeds the aging report (D03)
+- **Owner, 16 Oct (`docs/ISLAMIC_FINANCE_RULES.md` rule 4):** no late fee and no late-payment penalty of any kind, not even to charity. The policy's late-fee fields are locked to `none` / 0 and removed from the policy screen; `charges`, `charge_waivers` and `charge.waive` stay unused
+- Daily job (shop timezone, F13): installments past due + the policy's grace days become overdue; records the contract's days late; running it twice changes nothing
+- Warnings every `overdue_warning_interval_days` while a contract is overdue (a list the staff work through; sending is N08)
+- Customer ban: a customer overdue more than `customer_ban_days` is blocked from new installment sales until they catch up (the N02 sale refuses them)
+- Legal referral flag after `legal_referral_days` per frequency (feeds L01)
+- Overdue list with days late and amounts, by branch and collector; feeds the aging report (D03)
 
-**Done when:** running the job twice in a day doesn't double the fees; a waived fee is audited.
+**Done when:** a late customer's total owed never changes; running the job twice in a day changes nothing; a policy can't be saved with a late fee; a banned customer can't buy on installments.
 
 ### N05 · Early settlement, rescheduling, write-off
 **Plan:** V1 · **Agent:** Smart · **Reuse:** New · **Depends on:** N02, N03, N04
@@ -839,7 +841,7 @@ All reports use SQL aggregates (never summing in JavaScript), have date/branch f
 ### D03 · Receivables aging
 **Plan:** V1 · **Agent:** Free · **Reuse:** New · **Depends on:** N02, N04
 **What it does:** shows who owes the shop money and how late they are.
-**Includes:** by customer, branch and collector; buckets (not due, 1–30, 31–60, 61–90, 90+ days); totals of principal, markup and fees; drill-down to contracts.
+**Includes:** by customer, branch and collector; buckets (not due, 1–30, 31–60, 61–90, 90+ days); totals of principal and markup (no fees: rule 4); drill-down to contracts.
 **Done when:** the total equals the sum of open contract balances.
 
 ### D04 · Inventory valuation
