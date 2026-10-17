@@ -228,6 +228,12 @@ describe('cross-shop route check (D19)', () => {
         'GET /api/collections/:id',
         'POST /api/collections/:id/prints',
         'POST /api/collections/:id/reverse',
+        'GET /api/overdue',
+        'GET /api/overdue/warnings',
+        'POST /api/overdue/warnings/:id/handle',
+        'GET /api/overdue/legal-referrals',
+        'POST /api/overdue/legal-referrals/:id/dismiss',
+        'POST /api/overdue/run',
         'GET /api/eta/settings',
         'PUT /api/eta/settings',
         'POST /api/eta/settings/test',
@@ -252,7 +258,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/fiscal/retry-many',
       ]),
     );
-    expect(keys).toHaveLength(243);
+    expect(keys).toHaveLength(249);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

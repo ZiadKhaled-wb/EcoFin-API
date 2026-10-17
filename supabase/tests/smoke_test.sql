@@ -246,13 +246,11 @@ SELECT t.expect_error('payment: reversed only once', $$
             '70000000-0000-0000-0000-00000000000a', '60000000-0000-0000-0000-0000000000da', 'a4000000-0000-0000-0000-000000000002',
             'again', 'pay-key-000004') $$, 'reversed_once');
 
--- late fee job twice on the same day
-INSERT INTO charges (organization_id, contract_id, schedule_line_id, assessed_on, amount)
-VALUES ('10000000-0000-0000-0000-00000000000a', 'a2000000-0000-0000-0000-00000000000a', 'a3000000-0000-0000-0000-000000000001', current_date, 50);
-SELECT t.expect_error('charges: no double fee per day', $$
+-- no late fees (N04, D79, Islamic finance rule 4): a charge row can't be written at all
+SELECT t.expect_error('charges: no late fee can be written', $$
     INSERT INTO charges (organization_id, contract_id, schedule_line_id, assessed_on, amount)
     VALUES ('10000000-0000-0000-0000-00000000000a', 'a2000000-0000-0000-0000-00000000000a', 'a3000000-0000-0000-0000-000000000001', current_date, 50) $$,
-    'charges_once_key');
+    'LATE_FEES_NOT_ALLOWED');
 
 -- store credit can't go negative
 SELECT t.expect_error('store credit: cannot go negative', $$

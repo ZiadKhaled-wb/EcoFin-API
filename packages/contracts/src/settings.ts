@@ -150,6 +150,9 @@ export const InstallmentPolicyList = z.array(InstallmentPolicy);
 /**
  * POST /api/settings/installment-policies: the changes for a new version. Keys left out keep the
  * current version's value. Same terms as the current version = no new version.
+ * N04 (D79, Islamic finance rule 4): the late-fee fields stay accepted so an older client keeps
+ * working, but only as none / 0 / false / null; anything else answers LATE_FEES_NOT_ALLOWED, and
+ * every new version is saved without a fee.
  */
 export const InstallmentPolicyBody = z
   .object(policyFields)

@@ -737,6 +737,28 @@ INSERT INTO t.denial VALUES
  ('fiscal_assign_device','fis_7_assign','fiscal.retry',$$SELECT public.fiscal_assign_device('d5000000-0000-0000-0000-0000000000f7','d5000000-0000-0000-0000-0000000000e8')$$),
  ('fiscal_check_now','fis_8_check','fiscal.retry',$$SELECT public.fiscal_check_now('d5000000-0000-0000-0000-0000000000f5')$$),
  ('fiscal_retry_many','fis_9_many','fiscal.retry',$$SELECT public.fiscal_retry_many(ARRAY['d5000000-0000-0000-0000-0000000000e3']::uuid[])$$);
+-- N04: an open warning and an open legal referral on the N02 denial contract, made on first use
+-- (the contract exists once zz_n02_1_sale ran); the denied role's call makes it, the owner's handles it.
+CREATE FUNCTION t.n04_action(p_kind public.overdue_action_kind) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $f$
+DECLARE v_id uuid; c public.contracts;
+BEGIN
+    SELECT * INTO c FROM public.contracts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-n02-sale';
+    SELECT id INTO v_id FROM public.overdue_actions WHERE contract_id=c.id AND kind=p_kind;
+    IF v_id IS NULL THEN
+        INSERT INTO public.overdue_actions(organization_id,kind,contract_id,customer_id,branch_id,schedule_line_id,business_date,days_late,overdue_amount,status)
+        SELECT c.organization_id,p_kind,c.id,c.customer_id,c.branch_id,(SELECT id FROM public.schedule_lines WHERE contract_id=c.id ORDER BY seq LIMIT 1),
+               current_date,1,1,'open'
+        RETURNING id INTO v_id;
+    END IF;
+    RETURN v_id;
+END $f$;
+INSERT INTO t.denial VALUES
+ ('list_overdue_contracts','zz_n04_1_list','overdue.view',$$SELECT public.list_overdue_contracts('{}')$$),
+ ('list_overdue_warnings','zz_n04_2_warnings','overdue.view',$$SELECT public.list_overdue_warnings('{}')$$),
+ ('list_legal_referrals','zz_n04_3_referrals','overdue.view',$$SELECT public.list_legal_referrals('{}')$$),
+ ('handle_overdue_warning','zz_n04_4_handle','overdue.handle',$$SELECT public.handle_overdue_warning(t.n04_action('warning'),'contacted')$$),
+ ('dismiss_legal_referral','zz_n04_5_dismiss','overdue.view',$$SELECT public.dismiss_legal_referral(t.n04_action('legal_referral'),'TEST-1 denial')$$),
+ ('run_overdue_check','zz_n04_6_run','overdue.view',$$SELECT public.run_overdue_check()$$);
 -- EC-147: register the new RPC without changing the completeness/denial assertions.
 INSERT INTO t.denial VALUES ('force_close_shift','shift_4_force_close','cash.adjust',$q$SELECT public.force_close_shift((SELECT id FROM public.shifts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-shift-1'),'5.00','Lost POS')$q$);
 CREATE TABLE t.write_functions AS

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.49.0
+
+- N04 overdue tracking (no late fees): OVERDUE_ACTION_KINDS, OverdueActionKind, OVERDUE_ACTION_STATUSES, OverdueActionStatus, WARNING_OUTCOMES, WarningOutcome, OverdueListQuery, OverdueListQueryInput, OverdueContractRow, OverdueTotals, OverdueListPage, OverdueAction, OverdueActionPage, OverdueWarningListQuery, OverdueWarningListQueryInput, LegalReferralListQuery, LegalReferralListQueryInput, OverdueActionIdParams, HandleWarningBody, DismissReferralBody, OverdueRunResult, OverdueActionNotOpenDetail. Permissions `overdue.view` (BRANCH_MANAGER, COLLECTOR, ACCOUNTANT, LAWYER) and `overdue.handle` (BRANCH_MANAGER, COLLECTOR). Error codes LATE_FEES_NOT_ALLOWED (422), OVERDUE_ACTION_NOT_OPEN (409), OVERDUE_ACTION_NOT_FOUND (404). `InstallmentPolicyBody` still accepts the late-fee fields, but the server refuses any fee (rule 4). No schedule-line status was added: a line inside its grace days is `due`.
+
 ## 0.48.0
 
 - N03 collections: COLLECTION_MAX_CONTRACTS, COLLECTION_MAX_PAYMENTS, CollectionPaymentInput, CollectionContractInput, CollectionBody, CollectionReverseBody, CollectionAllocationLine, CollectionAllocation, ContractDue, ContractDueLine, CollectionPreviewQuery, CollectionPreview, ContractListStatus, ContractListQuery, ContractListQueryInput, ContractListItem, ContractListPage, CollectionPaymentLine, CollectionContract, CollectionReversal, CollectionPrint, Collection, CollectionIdParams, ContractNotOpenDetail, CollectionRemainingDetail, COLLECTION_NOT_REVERSIBLE_REASONS, CollectionNotReversibleDetail. Permission `collection.reverse` (installments; OWNER and BRANCH_MANAGER by default). Error codes CONTRACT_NOT_OPEN, COLLECTION_DUE_CHANGED, COLLECTION_EXCEEDS_REMAINING, COLLECTION_NOT_REVERSIBLE (409), COLLECTION_NOT_FOUND (404).
@@ -51,7 +55,6 @@
 ## 0.36.0
 
 - S12 warranty lookup, claims, transitions and receipt contracts.
-
 
 ## 0.35.0
 

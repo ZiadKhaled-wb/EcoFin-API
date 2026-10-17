@@ -403,3 +403,7 @@ One flow, server and client together, against the fake ETA (`npm run fake-eta`):
 TEST-4 sales tests (EC-134): [coverage, CI jobs and known failures](plans/TEST-4.md).
 
 - [EC-147: revoked shift device](plans/EC-147.md) — device checks and manager force-close; local verification in progress.
+
+## N04 — overdue tracking, no late fees (EC-83)
+
+See [N04 plan](plans/N04.md). Covers the Done when (a late customer's total owed never changes; running the job twice in a day changes nothing; a policy can't be saved with a late fee; a banned customer can't buy on installments) and the D79 rules (grace; warning cadence; ban lifted only by hand; legal referral kept until handled; lists and access).

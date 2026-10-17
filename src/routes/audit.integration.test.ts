@@ -533,6 +533,42 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     return { sent, id, owner: owner.accessToken, cashier: cashier.accessToken };
   }
 
+  /** N04: an open warning or legal referral on a new N02 contract, written with the service role. */
+  async function overdueAction(kind: 'warning' | 'legal_referral'): Promise<string> {
+    const sale = await drivers['POST /api/installments/sales']!();
+    expect(sale.sent.res.status, JSON.stringify(sale.sent.res.body)).toBe(201);
+    const contract = (
+      sale.sent.res.body as {
+        contract: { id: string; branch_id: string; customer: { id: string } };
+      }
+    ).contract;
+    const line = await service
+      .from('schedule_lines')
+      .select('id')
+      .eq('contract_id', contract.id)
+      .order('seq')
+      .limit(1)
+      .single();
+    if (line.error) throw new Error(line.error.message);
+    const made = await service
+      .from('overdue_actions')
+      .insert({
+        organization_id: SHOP_ONE,
+        kind,
+        contract_id: contract.id,
+        customer_id: contract.customer.id,
+        branch_id: contract.branch_id,
+        schedule_line_id: line.data.id,
+        business_date: new Date().toISOString().slice(0, 10),
+        days_late: 1,
+        overdue_amount: '1.00',
+        status: 'open',
+      })
+      .select('id')
+      .single();
+    if (made.error) throw new Error(made.error.message);
+    return made.data.id;
+  }
   const drivers: Record<string, () => Promise<{ sent: Sent; org: string; status?: number }>> = {
     'POST /api/employees': () => staffAudit('create'),
     'PATCH /api/employees/:employeeId': () => staffAudit('update'),
@@ -1017,6 +1053,29 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
           pos,
           key: `n03-reverse-${STAMP}-${ipCounter}`,
           body: { reason: 'Audit reversal' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/overdue/warnings/:id/handle': async () => {
+      // N04: an open warning on a fresh N02 contract (the check itself needs a late contract).
+      const id = await overdueAction('warning');
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', `/api/overdue/warnings/${id}/handle`, {
+          token: owner.accessToken,
+          body: { outcome: 'contacted', note: 'Audit check' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/overdue/legal-referrals/:id/dismiss': async () => {
+      const id = await overdueAction('legal_referral');
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', `/api/overdue/legal-referrals/${id}/dismiss`, {
+          token: owner.accessToken,
+          body: { reason: 'Audit check' },
         }),
         org: SHOP_ONE,
       };

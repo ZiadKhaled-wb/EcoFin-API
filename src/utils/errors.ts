@@ -34,6 +34,7 @@ import {
   ContractNotOpenDetail,
   CollectionRemainingDetail,
   CollectionNotReversibleDetail,
+  OverdueActionNotOpenDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 import type { ZodTypeAny } from 'zod';
@@ -127,6 +128,7 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   COLLECTION_DUE_CHANGED: CollectionRemainingDetail,
   COLLECTION_EXCEEDS_REMAINING: CollectionRemainingDetail,
   COLLECTION_NOT_REVERSIBLE: CollectionNotReversibleDetail,
+  OVERDUE_ACTION_NOT_OPEN: OverdueActionNotOpenDetail,
 };
 
 /**

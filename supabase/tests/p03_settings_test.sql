@@ -125,7 +125,7 @@ SELECT t.error('amount tier above max months',$q$SELECT public.publish_installme
 SELECT t.error('max down below min down',$q$SELECT public.publish_installment_policy('{"max_down_payment_pct":"5"}')$q$,'POLICY_INVALID');
 SELECT t.error('unknown frequency',$q$SELECT public.publish_installment_policy('{"allowed_frequencies":["yearly"]}')$q$,'POLICY_INVALID');
 SELECT t.error('unknown policy key',$q$SELECT public.publish_installment_policy('{"version":9}')$q$,'POLICY_INVALID');
-SELECT t.error('percent late fee above 100',$q$SELECT public.publish_installment_policy('{"late_fee_type":"percent","late_fee_value":"150"}')$q$,'POLICY_INVALID');
+SELECT t.error('a late fee is refused (N04, rule 4)',$q$SELECT public.publish_installment_policy('{"late_fee_type":"percent","late_fee_value":"150"}')$q$,'LATE_FEES_NOT_ALLOWED');
 RESET ROLE;
 SELECT t.expect('failed publishes leave no version',(SELECT count(*)=3 FROM public.installment_policies WHERE organization_id=t.org('a')) AND (SELECT count(*)=1 FROM public.installment_policies WHERE organization_id=t.org('b')));
 SELECT t.as_user('a0300000-0000-4000-8000-000000000003',t.org('starter'));

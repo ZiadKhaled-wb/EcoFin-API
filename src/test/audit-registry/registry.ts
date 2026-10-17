@@ -97,6 +97,13 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/collections': { action: 'collection.created' },
   'POST /api/collections/:id/prints': { action: 'collection.receipt_printed' },
   'POST /api/collections/:id/reverse': { action: 'collection.reversed' },
+  // N04: the check records warnings, bans and referrals (customer.status_set and
+  // contract.legal_referred for the ones it makes; on a shop with nothing late, none).
+  'POST /api/overdue/warnings/:id/handle': { action: 'overdue.warning_handled' },
+  'POST /api/overdue/legal-referrals/:id/dismiss': { action: 'contract.legal_referral_dismissed' },
+  'POST /api/overdue/run': {
+    none: 'The manual overdue check: an audit row only for each ban (customer.status_set) or legal referral (contract.legal_referred) it makes.',
+  },
   'POST /api/sales/discount-approvals': { action: 'approval.requested' },
   'POST /api/sales/discount-approvals/:id/cancel': { action: 'approval.cancelled' },
   'POST /api/approvals/:id/decide': { action: 'approval.decided' },

@@ -93,11 +93,14 @@ BEGIN
       VALUES(t.org('a'),t.id(p_customer),p_amount,'sales_return',t.id('ret-'||p_ret),t.id('main'),t.today()-p_days_ago);
   END IF;
 END $$;
+-- N04 refuses new charges (trg_charges_refuse): these stand for rows written before that guard.
 CREATE FUNCTION t.fee(p_tag text,p_line text,p_amount numeric,p_days_ago integer) RETURNS void LANGUAGE plpgsql AS $$
 DECLARE v_id uuid;
 BEGIN
+  SET LOCAL session_replication_role = replica;
   INSERT INTO public.charges(organization_id,contract_id,schedule_line_id,assessed_on,amount)
     SELECT t.org('a'),sl.contract_id,sl.id,t.today()-p_days_ago,p_amount FROM public.schedule_lines sl WHERE sl.id=t.id('line-'||p_line) RETURNING id INTO v_id;
+  SET LOCAL session_replication_role = origin;
   INSERT INTO t.ids VALUES('fee-'||p_tag,v_id);
 END $$;
 CREATE FUNCTION t.waive(p_fee text,p_amount numeric) RETURNS void LANGUAGE sql AS $$

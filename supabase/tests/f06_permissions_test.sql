@@ -2,7 +2,7 @@
 -- Run after `npm run db:reset`:  npm run db:smoke -- supabase/tests/f06_permissions_test.sql
 -- db:smoke wraps the file in BEGIN ... ROLLBACK, so it leaves nothing behind.
 -- Expected last line: failed 0.
---   1. every one of the 62 keys: a role without it (no override) -> PERMISSION_DENIED from
+--   1. every one of the 64 keys: a role without it (no override) -> PERMISSION_DENIED from
 --      app.require_permission; an override granted=true gives it; an override granted=false
 --      removes a role default; OWNER always has it
 --   2. set_employee_permission / set_employee_branches: no employee.manage, other shop, empty
@@ -106,7 +106,7 @@ INSERT INTO employee_branches (organization_id, employee_id, branch_id) VALUES
 -- ---------------------------------------------------------------- 1. every key (as postgres)
 -- app.require_permission is only called from inside SECURITY DEFINER functions, so it isn't
 -- granted to authenticated; the JWT claims alone decide who the caller is.
-SELECT t.expect('there are 62 permission keys (61 + collection.reverse, N03)', (SELECT count(*) FROM public.permissions) = 62,
+SELECT t.expect('there are 64 permission keys (61 + collection.reverse, N03, + overdue.view and overdue.handle, N04)', (SELECT count(*) FROM public.permissions) = 64,
                 (SELECT count(*)::text FROM public.permissions));
 
 DO $$
@@ -185,11 +185,11 @@ BEGIN
         WHERE employee_id = 'f6300000-0000-0000-0000-0000000000a1' AND permission_key = k.key;
     END LOOP;
 
-    PERFORM t.expect('keys: a role without the key (no override) gets PERMISSION_DENIED, all 62', v_denied = 62, format('%s, failures: %s', v_denied, v_fail));
-    PERFORM t.expect('keys: an override granted=true gives the key, all 62', v_granted = 62, format('%s', v_granted));
+    PERFORM t.expect('keys: a role without the key (no override) gets PERMISSION_DENIED, all 64', v_denied = 64, format('%s, failures: %s', v_denied, v_fail));
+    PERFORM t.expect('keys: an override granted=true gives the key, all 64', v_granted = 64, format('%s', v_granted));
     PERFORM t.expect('keys: an override granted=false removes every non-owner role default',
-                     v_removed + v_no_default = 62 AND v_removed > 0, format('removed %s, owner-only keys %s', v_removed, v_no_default));
-    PERFORM t.expect('keys: OWNER has all 62, whatever the overrides say', v_owner = 62, format('%s', v_owner));
+                     v_removed + v_no_default = 64 AND v_removed > 0, format('removed %s, owner-only keys %s', v_removed, v_no_default));
+    PERFORM t.expect('keys: OWNER has all 64, whatever the overrides say', v_owner = 64, format('%s', v_owner));
     PERFORM t.expect('keys: no unexpected error', v_fail = '', v_fail);
 END $$;
 
@@ -303,8 +303,8 @@ SELECT t.expect_error('owner A with x-org-id = B -> NOT_AN_EMPLOYEE',
 
 -- ---------------------------------------------------------------- 3. my_permissions()
 SELECT t.as_user('f6000000-0000-0000-0000-0000000000a1');
-SELECT t.expect('my_permissions: owner has all 62 keys and all branches',
-    (SELECT cardinality(m.keys) = 62 AND m.all_branches
+SELECT t.expect('my_permissions: owner has all 64 keys and all branches',
+    (SELECT cardinality(m.keys) = 64 AND m.all_branches
             AND m.branch_ids = ARRAY['f6200000-0000-0000-0000-0000000000a1', 'f6200000-0000-0000-0000-0000000000a2']::uuid[]
      FROM public.my_permissions() m));
 
