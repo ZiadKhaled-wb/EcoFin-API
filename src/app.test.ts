@@ -111,7 +111,8 @@ describe('error handler', () => {
   });
 
   it('database error "OUT_OF_STOCK: ..." -> 409 OUT_OF_STOCK with no raw DB text', async () => {
-    const res = await request(a).get('/db-error');
+    // A fixed request id: a random one can contain "8f1c" and match the leak check by chance.
+    const res = await request(a).get('/db-error').set('x-request-id', 'req-db-error');
     expect(res.status).toBe(409);
     expectContractError(res.body, 'OUT_OF_STOCK');
     expect(JSON.stringify(res.body)).not.toMatch(/8f1c|raw-db-hint|Key \(id\)/);
