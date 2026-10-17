@@ -92,11 +92,11 @@ describe('baseline parity: permissions', () => {
   );
   const allRows = [...rows, ...addedRows];
 
-  it('has 61 keys in the seed, 62 with the later migrations, as many in the package', () => {
+  it('has 61 keys in the seed, 64 with the later migrations, as many in the package', () => {
     expect(rows).toHaveLength(61);
-    expect(allRows).toHaveLength(62);
-    expect(PERMISSION_KEYS).toHaveLength(62);
-    expect(new Set(PERMISSION_KEYS).size).toBe(62);
+    expect(allRows).toHaveLength(64);
+    expect(PERMISSION_KEYS).toHaveLength(64);
+    expect(new Set(PERMISSION_KEYS).size).toBe(64);
   });
 
   it('keys, modules and descriptions match the seed and the later migrations (same order)', () => {

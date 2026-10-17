@@ -340,8 +340,11 @@ RESET ROLE;
 SELECT t.expect('refusals: nothing written, no number taken',t.footprint()=(SELECT v FROM fp2),t.footprint()||' vs '||(SELECT v FROM fp2));
 
 -- ================================================================ no late fees (rule 4)
+-- N04 refuses new charges (trg_charges_refuse); a row written before that guard is still ignored.
+SET session_replication_role = replica;
 INSERT INTO public.charges(organization_id,contract_id,schedule_line_id,assessed_on,amount)
   VALUES(t.org('a'),t.id('c2'),(t.sched('c2',3)).id,current_date,50);
+SET session_replication_role = origin;
 SELECT t.as_user('a0780000-0000-0000-8000-000000000003',t.org('a'));
 SET ROLE authenticated;
 SELECT t.expect('no fees: a charge on the contract is not in what is left nor in the preview',

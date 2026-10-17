@@ -5374,3 +5374,75 @@ crossShopCase({
     h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
   },
 });
+
+// N04 (D79). Overdue tracking: a foreign shop header is refused, an organization id in the request
+// is refused, another shop's (here unknown) warning or referral is not found, nothing is written.
+const N04_UNKNOWN = '00000000-0000-4000-8000-0000000c0114';
+for (const path of [
+  '/api/overdue',
+  '/api/overdue/warnings',
+  '/api/overdue/legal-referrals',
+] as const) {
+  crossShopCase({
+    method: 'GET',
+    path,
+    name: `${path} refuses a foreign header and an org id; shop A reads only its own`,
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call('GET', path, { token: a.accessToken, orgId: SHOP_B });
+      h.expect(foreign.res.status).toBe(403);
+      const injected = await h.call('GET', path, {
+        token: a.accessToken,
+        query: 'organization_id=' + SHOP_B,
+      });
+      h.expect(injected.res.status).toBe(400);
+      const mine = await h.call('GET', path, { token: a.accessToken });
+      h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+    },
+  });
+}
+for (const [suffix, body, code] of [
+  ['/api/overdue/warnings/:id/handle', { outcome: 'contacted' }, 'handle'],
+  ['/api/overdue/legal-referrals/:id/dismiss', { reason: 'Cross-shop check' }, 'dismiss'],
+] as const) {
+  crossShopCase({
+    method: 'POST',
+    path: suffix,
+    name: `${code}: refuses a foreign header, an org id and an unknown or other-shop id`,
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const path = suffix.replace(':id', N04_UNKNOWN);
+      const foreign = await h.call('POST', path, { token: a.accessToken, orgId: SHOP_B, body });
+      h.expect(foreign.res.status).toBe(403);
+      const injected = await h.call('POST', path, {
+        token: a.accessToken,
+        body: { ...body, organization_id: SHOP_B },
+      });
+      h.expect(injected.res.status).toBe(400);
+      const missing = await h.call('POST', path, { token: a.accessToken, body });
+      h.expect(missing.res.status).toBe(404);
+      h.expect(h.code(missing.res)).toBe('OVERDUE_ACTION_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, missing.ip)).toBe(0);
+    },
+  });
+}
+crossShopCase({
+  method: 'POST',
+  path: '/api/overdue/run',
+  name: 'the manual overdue check refuses a foreign header and an org id; it only checks the caller’s shop',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('POST', '/api/overdue/run', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/overdue/run', {
+      token: a.accessToken,
+      body: { organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, injected.ip)).toBe(0);
+  },
+});

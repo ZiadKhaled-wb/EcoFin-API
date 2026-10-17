@@ -8347,6 +8347,7 @@ export type Database = {
         Args: { p_decision: string; p_id: string; p_note?: string };
         Returns: Json;
       };
+      dismiss_legal_referral: { Args: { p_id: string; p_reason: string }; Returns: Json };
       eta_block: {
         Args: { p_code: string; p_fiscal_id: string; p_message: string };
         Returns: boolean;
@@ -8506,6 +8507,10 @@ export type Database = {
       };
       get_unit: { Args: { p_id: string }; Returns: Json };
       get_warranty_claim: { Args: { p_claim_id: string }; Returns: Json };
+      handle_overdue_warning: {
+        Args: { p_id: string; p_note?: string; p_outcome: string };
+        Returns: Json;
+      };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
       jobs_claim: {
         Args: { p_limit?: number; p_types: string[]; p_worker: string };
@@ -8552,6 +8557,7 @@ export type Database = {
           subject_id: string;
         }[];
       };
+      jobs_overdue_run: { Args: { p_organization_id: string }; Returns: Json };
       jobs_succeed: { Args: { p_job_id: string; p_worker: string }; Returns: boolean };
       link_customer_guarantor: {
         Args: { p_customer_id: string; p_guarantor_id: string; p_relation: string };
@@ -8640,7 +8646,10 @@ export type Database = {
         Returns: Json;
       };
       list_installment_policies: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_legal_referrals: { Args: { p_filters?: Json }; Returns: Json };
       list_open_supplier_invoices: { Args: { p_supplier_id: string }; Returns: Json };
+      list_overdue_contracts: { Args: { p_filters?: Json }; Returns: Json };
+      list_overdue_warnings: { Args: { p_filters?: Json }; Returns: Json };
       list_payable_cash_accounts: { Args: { p_branch_id: string }; Returns: Json };
       list_product_units: { Args: { p_product_id: string; p_status?: string }; Returns: Json };
       list_products: {
@@ -8978,6 +8987,7 @@ export type Database = {
         Args: { p_id: string; p_idempotency_key: string; p_reason: string };
         Returns: Json;
       };
+      run_overdue_check: { Args: Record<PropertyKey, never>; Returns: Json };
       save_field_survey: { Args: { p_body: Json; p_id: string }; Returns: Json };
       save_stock_count_lines: { Args: { p_count_id: string; p_lines: Json }; Returns: Json };
       scan_stock_count: { Args: { p_code: string; p_count_id: string }; Returns: Json };

@@ -104,6 +104,12 @@ export const PERMISSIONS = [
     module: 'installments',
     description: 'Reverse a same-day collection',
   },
+  {
+    key: 'overdue.view',
+    module: 'installments',
+    description: 'See overdue contracts, warnings and legal referrals',
+  },
+  { key: 'overdue.handle', module: 'installments', description: 'Mark overdue warnings handled' },
 ] as const;
 
 export type PermissionDef = (typeof PERMISSIONS)[number];
@@ -171,6 +177,8 @@ export const PERMISSION_KEYS = [
   'legal.view',
   'legal.manage',
   'collection.reverse',
+  'overdue.view',
+  'overdue.handle',
 ] as const;
 
 export const PermissionKey = z.enum(PERMISSION_KEYS);
@@ -252,6 +260,8 @@ export const ROLE_DEFAULT_PERMISSIONS: Readonly<Record<EmployeeRole, readonly Pe
     'report.view',
     'report.financial',
     'legal.view',
+    'overdue.view',
+    'overdue.handle',
   ],
   CASHIER: [
     'sale.create',
@@ -275,7 +285,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Readonly<Record<EmployeeRole, readonly Pe
     'delivery.manage',
     'label.print',
   ],
-  COLLECTOR: ['collection.create', 'survey.submit'],
+  COLLECTOR: ['collection.create', 'survey.submit', 'overdue.view', 'overdue.handle'],
   ACCOUNTANT: [
     'cash.view',
     'cash.transfer',
@@ -290,6 +300,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Readonly<Record<EmployeeRole, readonly Pe
     'export.data',
     'audit.view',
     'stock.view',
+    'overdue.view',
   ],
-  LAWYER: ['legal.view', 'legal.manage', 'customer.view_pii'],
+  LAWYER: ['legal.view', 'legal.manage', 'customer.view_pii', 'overdue.view'],
 };

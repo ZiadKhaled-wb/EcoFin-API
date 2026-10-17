@@ -2191,6 +2191,66 @@ export const openApiSpec = {
                 responses: { 200: { description: 'Collection' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/overdue': {
+            get: {
+                tags: ['Installments'],
+                summary: 'Overdue contracts, worst first (overdue.view)',
+                description: 'N04 (D79). Open contracts with an overdue installment: the overdue amount and lines, the most days late, the oldest overdue due date, what is left, the last payment, the open warning and the legal referral, the customer (blocked once banned). An installment is overdue only after its due date plus the grace days of the contract\'s policy version; days late count from the due date. Filters: q (contract number prefix, name or phone contains, exact national ID), branch_id, min_days (default 1), limit (1-100, 25), cursor. totals: contracts, overdue amount and the aging buckets 1-30, 31-60, 61-90, 90+ for the same filters. No fee anywhere (docs/ISLAMIC_FINANCE_RULES.md rule 4). overdue.view sees every branch of the shop; works in an expired shop. Schema: OverdueListQuery → OverdueListPage.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'OverdueListPage' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/overdue/warnings': {
+            get: {
+                tags: ['Installments'],
+                summary: 'The overdue warnings work list (overdue.view)',
+                description: 'N04 (D79). The nightly check puts a warning on the first day a contract is overdue and every overdue_warning_interval_days after while it stays overdue; one that caught up is resolved, an older open one is superseded by the next. status open (default, oldest first), handled or all (newest first); branch_id, limit, cursor. Each warning has the contract, the customer, what was late when it was made and what is late now. Schema: OverdueWarningListQuery → OverdueActionPage.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'OverdueActionPage' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/overdue/warnings/{id}/handle': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Mark an overdue warning handled (overdue.handle)',
+                description: 'N04 (D79). outcome contacted, promised, no_answer, wrong_number or other (other needs a note of 3+ characters); note up to 500. Only an open warning (OVERDUE_ACTION_NOT_OPEN with details.status otherwise); OVERDUE_ACTION_NOT_FOUND for an unknown or another shop\'s id. Audit overdue.warning_handled. Schema: HandleWarningBody → OverdueAction.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'OverdueAction' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/overdue/legal-referrals': {
+            get: {
+                tags: ['Installments'],
+                summary: 'Contracts flagged for legal referral (overdue.view)',
+                description: 'N04 (D79). A contract is flagged once when its oldest overdue installment is late at least legal_referral_days for its frequency; the flag stays open until the owner dismisses it or a legal case is opened from it (L01: case_opened). status open (default), dismissed, case_opened or all; branch_id, limit, cursor. Schema: LegalReferralListQuery → OverdueActionPage.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'OverdueActionPage' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/overdue/legal-referrals/{id}/dismiss': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Dismiss a legal referral (owner)',
+                description: 'N04 (D79). The owner only (PERMISSION_DENIED otherwise), with a reason of 3-300 characters. Only an open referral (OVERDUE_ACTION_NOT_OPEN); the same late installment is never referred again, a later one may be. Audit contract.legal_referral_dismissed. Schema: DismissReferralBody → OverdueAction.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'OverdueAction' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/overdue/run': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Run the overdue check now (owner)',
+                description: 'N04 (D79). The same check as the nightly installments.overdue job (00:30 shop time), for the caller\'s shop and today: warnings, bans (customer blocked past customer_ban_days, audit customer.status_set; lifted only by hand) and legal referrals (audit contract.legal_referred). Everything is recorded under unique keys, so running it again the same day changes nothing (all counts 0). It never adds to what a customer owes: no late fee or penalty of any kind (rule 4). Schema: OverdueRunResult.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'OverdueRunResult' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/sales/quote': {
             post: {
                 tags: ['Sales'],
@@ -2890,7 +2950,7 @@ export const openApiSpec = {
                 tags: ['Settings'],
                 summary: 'Publish a new installment policy version (org.settings_manage, installments module)',
                 description:
-                    'Body: InstallmentPolicyBody, the changes from the current version. Versions are immutable; contracts keep the version they used. The same terms again return the current version. Errors: POLICY_INVALID, MODULE_NOT_IN_PLAN.',
+                    'Body: InstallmentPolicyBody, the changes from the current version. Versions are immutable; contracts keep the version they used. The same terms again return the current version. N04 (D79, Islamic finance rule 4): no late fees; the late-fee fields are accepted only as none / 0 / false / null (LATE_FEES_NOT_ALLOWED, 422, otherwise) and every new version is saved without a fee. Errors: POLICY_INVALID, LATE_FEES_NOT_ALLOWED, MODULE_NOT_IN_PLAN.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }],
                 requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
@@ -2898,6 +2958,7 @@ export const openApiSpec = {
                     201: { description: 'The current version (InstallmentPolicy)', content: { 'application/json': { schema: { type: 'object' } } } },
                     400: { $ref: '#/components/responses/Error' },
                     403: { $ref: '#/components/responses/Error' },
+                    422: { $ref: '#/components/responses/Error' },
                 },
             },
         },

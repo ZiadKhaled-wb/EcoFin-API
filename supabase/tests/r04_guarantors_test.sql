@@ -358,7 +358,7 @@ SELECT t.error('settings: 4 is refused',$q$SELECT public.publish_installment_pol
 SELECT t.error('settings: text is refused',$q$SELECT public.publish_installment_policy('{"guarantors_required_count":"many"}')$q$,'POLICY_INVALID');
 SELECT t.error('settings: 1.5 is refused',$q$SELECT public.publish_installment_policy('{"guarantors_required_count":1.5}')$q$,'POLICY_INVALID');
 SELECT t.error('settings: null is refused',$q$SELECT public.publish_installment_policy('{"guarantors_required_count":null}')$q$,'POLICY_INVALID');
-SELECT public.publish_installment_policy('{"late_fee_type":"fixed","late_fee_value":"25.00"}');
+SELECT public.publish_installment_policy('{"grace_days":4}');
 SELECT t.expect('settings: a new version keeps the previous count when the key is not sent',
   (public.get_shop_settings()->'installment_policy'->>'guarantors_required_count')='2');
 INSERT INTO t.ids SELECT 'policy-now',(public.get_shop_settings()->'installment_policy'->>'id')::uuid;
