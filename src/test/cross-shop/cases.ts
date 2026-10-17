@@ -1763,6 +1763,23 @@ async function shopACustomer(h: CrossShopHarness, tag: string) {
   return { id: (created.res.body as { id: string }).id, token: a.accessToken };
 }
 
+/**
+ * The seed gives Dev Shop One (shop A) no installment policy; on a fresh database another suite may
+ * or may not have published one yet. A case that needs one publishes it itself, so it never
+ * depends on the order the test files run in.
+ */
+async function ensureShopAPolicy(h: CrossShopHarness) {
+  const a = await h.login(OWNER_A);
+  const current = await h.call('GET', '/api/settings', { token: a.accessToken });
+  h.expect(current.res.status, JSON.stringify(current.res.body)).toBe(200);
+  if ((current.res.body as { installment_policy: unknown }).installment_policy) return;
+  const published = await h.call('POST', '/api/settings/installment-policies', {
+    token: a.accessToken,
+    body: { grace_days: 0 },
+  });
+  h.expect(published.res.status, JSON.stringify(published.res.body)).toBe(201);
+}
+
 async function shopAGuarantor(h: CrossShopHarness, tag: string) {
   const a = await h.login(OWNER_A);
   const created = await h.call('POST', '/api/guarantors', {
@@ -5194,6 +5211,7 @@ crossShopCase({
   path: '/api/installments/preview',
   name: "a preview refuses a foreign header, an org id and shop B's customer; shop B's guarantors are not counted",
   async run(h) {
+    await ensureShopAPolicy(h);
     const theirs = await shopBGuarantor(h, 'n01-preview');
     const mine = await shopACustomer(h, 'n01-preview');
     const body = {
@@ -5217,7 +5235,7 @@ crossShopCase({
       token: mine.token,
       body: { ...body, customer_id: theirs.customer.id },
     });
-    h.expect(customer.res.status).toBe(404);
+    h.expect(customer.res.status, JSON.stringify(customer.res.body)).toBe(404);
     h.expect(h.code(customer.res)).toBe('CUSTOMER_NOT_FOUND');
     const guarantors = await h.call('POST', '/api/installments/preview', {
       token: mine.token,
