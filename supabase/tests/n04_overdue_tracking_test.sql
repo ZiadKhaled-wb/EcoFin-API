@@ -327,7 +327,9 @@ SELECT t.expect('list: every overdue contract, worst first, with the customer, f
      AND (x->'totals'->>'overdue_amount')::numeric=(SELECT sum(overdue_amount) FROM public.v_contract_balances WHERE organization_id=t.org('a'))
      AND (x->'totals'->>'late_1_30')::numeric+(x->'totals'->>'late_31_60')::numeric+(x->'totals'->>'late_61_90')::numeric
          +(x->'totals'->>'late_90_plus')::numeric=(x->'totals'->>'overdue_amount')::numeric
-     AND NOT (x::text LIKE '%fee%')
+     -- field names only: ids are random hex and may contain "fee"
+     AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(x->'items') i, jsonb_object_keys(i) k WHERE k LIKE '%fee%')
+     AND NOT EXISTS (SELECT 1 FROM jsonb_object_keys(x->'totals') k WHERE k LIKE '%fee%')
    FROM (SELECT t.doc('list') x) y));
 SELECT t.expect('list: the legal flag and the open warning are on the row; the customer status shows the ban',
   (SELECT bool_or(i->'legal_referral'->>'status'='open' AND i->'contract'->>'id'=t.id('c-lg')::text)
