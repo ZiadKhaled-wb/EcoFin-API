@@ -759,6 +759,35 @@ INSERT INTO t.denial VALUES
  ('handle_overdue_warning','zz_n04_4_handle','overdue.handle',$$SELECT public.handle_overdue_warning(t.n04_action('warning'),'contacted')$$),
  ('dismiss_legal_referral','zz_n04_5_dismiss','overdue.view',$$SELECT public.dismiss_legal_referral(t.n04_action('legal_referral'),'TEST-1 denial')$$),
  ('run_overdue_check','zz_n04_6_run','overdue.view',$$SELECT public.run_overdue_check()$$);
+-- N05: each change works on its own copy of the N02 denial contract (made on first use, as a
+-- migrated contract with fresh lines; the commit-time checks never run in this rolled-back test).
+-- The reads use the reschedule's copy: they are STABLE and can't see a copy made by their own call.
+CREATE FUNCTION t.n05_contract(p_tag text) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $f$
+DECLARE v_id uuid; c public.contracts;
+BEGIN
+    SELECT id INTO v_id FROM public.contracts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-n05-'||p_tag;
+    IF v_id IS NULL THEN
+        SELECT * INTO c FROM public.contracts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-n02-sale';
+        v_id := gen_random_uuid();
+        INSERT INTO public.contracts(id,organization_id,number,customer_id,branch_id,policy_id,creditor,cash_price,down_payment,financed_amount,
+                                     markup_pct,markup_amount,total_payable,installments_count,frequency,first_due_date,is_migrated,idempotency_key)
+        VALUES (v_id,c.organization_id,c.number||'-'||p_tag,c.customer_id,c.branch_id,c.policy_id,c.creditor,c.cash_price,c.down_payment,c.financed_amount,
+                c.markup_pct,c.markup_amount,c.total_payable,c.installments_count,c.frequency,c.first_due_date,true,'denial-n05-'||p_tag);
+        INSERT INTO public.schedule_lines(organization_id,contract_id,version,seq,due_date,principal,profit)
+        SELECT organization_id,v_id,1,seq,due_date,principal,profit FROM public.schedule_lines WHERE contract_id=c.id AND version=1;
+    END IF;
+    RETURN v_id;
+END $f$;
+CREATE FUNCTION t.n05_left(p_tag text) RETURNS text LANGUAGE sql SECURITY DEFINER AS $f$
+    SELECT app.contract_remaining('d1000000-0000-0000-0000-000000000001',t.n05_contract(p_tag))::numeric(18,2)::text $f$;
+INSERT INTO t.denial VALUES
+ ('reschedule_contract','zz_n05_1_reschedule','schedule.change',$$SELECT public.reschedule_contract(t.n05_contract('r'),jsonb_build_object('installments_count',2,'frequency','monthly','first_due_date',(current_date+20)::text,'reason','TEST-1 denial','expected_remaining',t.n05_left('r')),'denial-n05-reschedule')$$),
+ ('settle_contract_early','zz_n05_2_settle','contract.settle_early',$$SELECT public.settle_contract_early(t.n05_contract('s'),jsonb_build_object('waiver','0.00','expected_remaining',t.n05_left('s'),'payments',jsonb_build_array(jsonb_build_object('method','cash','amount',t.n05_left('s')))),'denial-n05-settle')$$),
+ ('write_off_contract','zz_n05_3_write_off','contract.write_off',$$SELECT public.write_off_contract(t.n05_contract('w'),jsonb_build_object('reason','TEST-1 denial','expected_remaining',t.n05_left('w')),'denial-n05-write-off')$$),
+ ('get_settlement_quote','zz_n05_4_quote','contract.settle_early',$$SELECT public.get_settlement_quote(t.n05_contract('r'))$$),
+ ('preview_reschedule','zz_n05_5_preview','schedule.change',$$SELECT public.preview_reschedule(t.n05_contract('r'),jsonb_build_object('installments_count',2,'frequency','monthly','first_due_date',(current_date+20)::text))$$),
+ ('list_contract_changes_for','zz_n05_6_history','contract.settle_early|schedule.change|contract.write_off|collection.create|report.view',$$SELECT public.list_contract_changes_for(t.n05_contract('r'))$$),
+ ('list_contract_changes','zz_n05_7_list','report.financial|contract.settle_early|schedule.change|contract.write_off',$$SELECT public.list_contract_changes('{}')$$);
 -- EC-147: register the new RPC without changing the completeness/denial assertions.
 INSERT INTO t.denial VALUES ('force_close_shift','shift_4_force_close','cash.adjust',$q$SELECT public.force_close_shift((SELECT id FROM public.shifts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-shift-1'),'5.00','Lost POS')$q$);
 CREATE TABLE t.write_functions AS

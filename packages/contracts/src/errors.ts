@@ -278,6 +278,8 @@ export const errorCodeHttpStatus = {
   LATE_FEES_NOT_ALLOWED: 422,
   OVERDUE_ACTION_NOT_OPEN: 409,
   OVERDUE_ACTION_NOT_FOUND: 404,
+  // N05 early settlement, rescheduling, write-off
+  WAIVER_TOO_HIGH: 422,
   // T02 ETA e-receipts
   DEVICE_NOT_FOUND: 404,
   DEVICE_SERIAL_TAKEN: 409,

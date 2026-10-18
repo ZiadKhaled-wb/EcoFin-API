@@ -1057,6 +1057,68 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
+    'POST /api/contracts/:id/settle': async () => {
+      // N05: a fresh N02 contract paid off in cash in the owner's shift, nothing waived.
+      const sale = await drivers['POST /api/installments/sales']!();
+      expect(sale.sent.res.status, JSON.stringify(sale.sent.res.body)).toBe(201);
+      const contract = (
+        sale.sent.res.body as { contract: { id: string; balance: { remaining: string } } }
+      ).contract;
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', `/api/contracts/${contract.id}/settle`, {
+          token: owner.accessToken,
+          pos,
+          key: `n05-settle-${STAMP}-${ipCounter}`,
+          body: {
+            waiver: '0.00',
+            expected_remaining: contract.balance.remaining,
+            payments: [{ method: 'cash', amount: contract.balance.remaining }],
+          },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/contracts/:id/reschedule': async () => {
+      const sale = await drivers['POST /api/installments/sales']!();
+      expect(sale.sent.res.status, JSON.stringify(sale.sent.res.body)).toBe(201);
+      const contract = (
+        sale.sent.res.body as {
+          contract: { id: string; frequency: string; balance: { remaining: string } };
+        }
+      ).contract;
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', `/api/contracts/${contract.id}/reschedule`, {
+          token: owner.accessToken,
+          key: `n05-reschedule-${STAMP}-${ipCounter}`,
+          body: {
+            installments_count: 2,
+            frequency: contract.frequency,
+            first_due_date: new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10),
+            reason: 'Audit check',
+            expected_remaining: contract.balance.remaining,
+          },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/contracts/:id/write-off': async () => {
+      const sale = await drivers['POST /api/installments/sales']!();
+      expect(sale.sent.res.status, JSON.stringify(sale.sent.res.body)).toBe(201);
+      const contract = (
+        sale.sent.res.body as { contract: { id: string; balance: { remaining: string } } }
+      ).contract;
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', `/api/contracts/${contract.id}/write-off`, {
+          token: owner.accessToken,
+          key: `n05-write-off-${STAMP}-${ipCounter}`,
+          body: { reason: 'Audit check', expected_remaining: contract.balance.remaining },
+        }),
+        org: SHOP_ONE,
+      };
+    },
     'POST /api/overdue/warnings/:id/handle': async () => {
       // N04: an open warning on a fresh N02 contract (the check itself needs a late contract).
       const id = await overdueAction('warning');

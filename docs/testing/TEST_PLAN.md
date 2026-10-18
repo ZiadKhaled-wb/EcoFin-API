@@ -407,3 +407,7 @@ TEST-4 sales tests (EC-134): [coverage, CI jobs and known failures](plans/TEST-4
 ## N04 — overdue tracking, no late fees (EC-83)
 
 See [N04 plan](plans/N04.md). Covers the Done when (a late customer's total owed never changes; running the job twice in a day changes nothing; a policy can't be saved with a late fee; a banned customer can't buy on installments) and the D79 rules (grace; warning cadence; ban lifted only by hand; legal referral kept until handled; lists and access).
+
+## N05 — early settlement, rescheduling, write-off (EC-84)
+
+See [N05 plan](plans/N05.md). Covers the Done when (the old schedule is still visible after a reschedule; the customer balance after each action is correct) and the D80 rules (rule 5 safety net, waiver limits, owner-only write-off, the reversal guard, statement rows, idempotency, access).
