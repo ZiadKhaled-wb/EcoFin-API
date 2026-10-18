@@ -261,6 +261,10 @@ export const CustomerStatementKind = z.enum([
   'return',
   'fee',
   'fee_waiver',
+  /** N05: profit waived at an early settlement (a credit). */
+  'profit_waiver',
+  /** N05: a written-off balance (a credit). */
+  'write_off',
 ]);
 export type CustomerStatementKind = z.infer<typeof CustomerStatementKind>;
 

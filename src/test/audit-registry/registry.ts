@@ -101,6 +101,16 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   // contract.legal_referred for the ones it makes; on a shop with nothing late, none).
   'POST /api/overdue/warnings/:id/handle': { action: 'overdue.warning_handled' },
   'POST /api/overdue/legal-referrals/:id/dismiss': { action: 'contract.legal_referral_dismissed' },
+  // N05: the settlement pays through N03's core (collection.created, contract.completed).
+  'POST /api/contracts/:id/settle': {
+    action: 'contract.settled_early',
+    also: ['collection.created', 'contract.completed'],
+  },
+  'POST /api/contracts/:id/reschedule/preview': {
+    none: 'N05: read-only reschedule preview; nothing is written.',
+  },
+  'POST /api/contracts/:id/reschedule': { action: 'contract.rescheduled' },
+  'POST /api/contracts/:id/write-off': { action: 'contract.written_off' },
   'POST /api/overdue/run': {
     none: 'The manual overdue check: an audit row only for each ban (customer.status_set) or legal referral (contract.legal_referred) it makes.',
   },

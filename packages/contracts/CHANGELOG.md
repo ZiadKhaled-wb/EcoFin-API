@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.50.0
+
+- N05 early settlement, rescheduling, write-off: CONTRACT_CHANGE_KINDS, ContractChangeKind, ContractChange, SettlementQuote, SettleBody, SettleResponse, ReschedulePreviewBody, RescheduleLine, ReschedulePreview, RescheduleBody, ContractChangeResponse, WriteOffBody, ContractVersionLine, ContractVersion, ContractChangeHistory, ContractChangeListQuery, ContractChangeListQueryInput, ContractChangeListItem, ContractChangeTotals, ContractChangeListPage, WaiverTooHighDetail. Error code WAIVER_TOO_HIGH (422). `COLLECTION_NOT_REVERSIBLE_REASONS` gains `settlement` and `contract_changed`; `CustomerStatementKind` gains `profit_waiver` and `write_off` (credit rows). No new permission key (the baseline's `contract.settle_early`, `schedule.change`, `contract.write_off` are used) and no new contract status.
+
 ## 0.49.0
 
 - N04 overdue tracking (no late fees): OVERDUE_ACTION_KINDS, OverdueActionKind, OVERDUE_ACTION_STATUSES, OverdueActionStatus, WARNING_OUTCOMES, WarningOutcome, OverdueListQuery, OverdueListQueryInput, OverdueContractRow, OverdueTotals, OverdueListPage, OverdueAction, OverdueActionPage, OverdueWarningListQuery, OverdueWarningListQueryInput, LegalReferralListQuery, LegalReferralListQueryInput, OverdueActionIdParams, HandleWarningBody, DismissReferralBody, OverdueRunResult, OverdueActionNotOpenDetail. Permissions `overdue.view` (BRANCH_MANAGER, COLLECTOR, ACCOUNTANT, LAWYER) and `overdue.handle` (BRANCH_MANAGER, COLLECTOR). Error codes LATE_FEES_NOT_ALLOWED (422), OVERDUE_ACTION_NOT_OPEN (409), OVERDUE_ACTION_NOT_FOUND (404). `InstallmentPolicyBody` still accepts the late-fee fields, but the server refuses any fee (rule 4). No schedule-line status was added: a line inside its grace days is `due`.

@@ -2191,6 +2191,80 @@ export const openApiSpec = {
                 responses: { 200: { description: 'Collection' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/contracts/{id}/settlement-quote': {
+            get: {
+                tags: ['Installments'],
+                summary: 'Early settlement quote (contract.settle_early)',
+                description: 'N05 (D80). The payoff (what is left on the current schedule, split into principal and profit), the profit of the installments not yet due, the policy\'s suggested waiver (a suggestion only, never promised: docs/ISLAMIC_FINANCE_RULES.md rule 6) and the max waiver (the profit not yet due, leaving something to pay). CONTRACT_NOT_OPEN for a closed contract; CONTRACT_NOT_FOUND for an unknown or another shop\'s id. Read only; works in an expired shop. Schema: SettlementQuote.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'SettlementQuote' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/contracts/{id}/settle': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Settle a contract early (contract.settle_early)',
+                description: 'N05 (D80). In the caller\'s open shift (its device): the payoff minus a manager\'s voluntary waiver of profit not yet due (a reason is required when something is waived; WAIVER_TOO_HIGH with details.max_waiver above it) is collected with N03\'s payment lines (cash to the drawer, bank transfers), the old schedule is superseded by one line due today, and the contract is completed. expected_remaining must match (COLLECTION_DUE_CHANGED). The receipt is N03\'s; it can\'t be reversed (COLLECTION_NOT_REVERSIBLE, reason settlement). Same Idempotency-Key, same answer. Audit contract.settled_early (+ collection.created, contract.completed). Schema: SettleBody -> SettleResponse.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'SettleResponse' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/contracts/{id}/reschedule/preview': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Preview a reschedule (schedule.change)',
+                description: 'N05 (D80). The new lines for installments_count, frequency (one the contract\'s policy allows) and first_due_date (tomorrow to 60 days): what is left, principal and profit exactly (rule 5: a reschedule never increases what is owed), spread like N01. violations: frequency_not_allowed, first_due_date_out_of_range, rounding. Nothing is written. Schema: ReschedulePreviewBody -> ReschedulePreview.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'ReschedulePreview' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/contracts/{id}/reschedule': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Reschedule a contract (schedule.change)',
+                description: 'N05 (D80). Writes the next schedule version with exactly what is left and supersedes the current lines (kept and linked to the change); status rescheduled. reason (3-300) and expected_remaining (COLLECTION_DUE_CHANGED) are required; INSTALLMENT_TERMS_INVALID with details.violations for a bad plan. Same Idempotency-Key, same answer. Audit contract.rescheduled. Schema: RescheduleBody -> ContractChangeResponse.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'ContractChangeResponse' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/contracts/{id}/write-off': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Write off a contract (owner)',
+                description: 'N05 (D80). The owner only (PERMISSION_DENIED otherwise, even with contract.write_off granted). What is left is marked as lost: status written_off, no new schedule version; the change row keeps the amount (principal and profit) for reports. reason (3-300) and expected_remaining required. Same Idempotency-Key, same answer. Audit contract.written_off (critical). Schema: WriteOffBody -> ContractChangeResponse.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'ContractChangeResponse' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/contracts/{id}/changes': {
+            get: {
+                tags: ['Installments'],
+                summary: 'A contract\'s changes and schedule versions',
+                description: 'N05 (D80). Every early settlement, reschedule and write-off of the contract, newest first, and every schedule version (newest first; older ones superseded, each linked to the change that replaced it) with its lines, paid and status. contract.settle_early, schedule.change, contract.write_off, collection.create or report.view. Schema: ContractChangeHistory.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'ContractChangeHistory' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/contract-changes': {
+            get: {
+                tags: ['Installments'],
+                summary: 'The shop\'s contract changes (report.financial or a change key)',
+                description: 'N05 (D80). Early settlements, reschedules and write-offs, newest first. Filters: kind, branch_id, from, to (business dates), limit (1-100, 25), cursor. totals per kind: count, amount (what was left) and profit waived, for the same filters. Works in an expired shop. Schema: ContractChangeListQuery -> ContractChangeListPage.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'ContractChangeListPage' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/overdue': {
             get: {
                 tags: ['Installments'],

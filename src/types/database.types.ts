@@ -922,6 +922,8 @@ export type Database = {
           amount: number | null;
           approval_id: string | null;
           approved_by: string | null;
+          branch_id: string | null;
+          business_date: string | null;
           contract_id: string;
           created_at: string;
           created_by: string | null;
@@ -931,6 +933,9 @@ export type Database = {
           new_version: number | null;
           old_version: number;
           organization_id: string;
+          payment_id: string | null;
+          principal_amount: number | null;
+          profit_amount: number | null;
           profit_waived: number;
           reason: string;
           sales_return_id: string | null;
@@ -939,6 +944,8 @@ export type Database = {
           amount?: number | null;
           approval_id?: string | null;
           approved_by?: string | null;
+          branch_id?: string | null;
+          business_date?: string | null;
           contract_id: string;
           created_at?: string;
           created_by?: string | null;
@@ -948,6 +955,9 @@ export type Database = {
           new_version?: number | null;
           old_version: number;
           organization_id: string;
+          payment_id?: string | null;
+          principal_amount?: number | null;
+          profit_amount?: number | null;
           profit_waived?: number;
           reason: string;
           sales_return_id?: string | null;
@@ -956,6 +966,8 @@ export type Database = {
           amount?: number | null;
           approval_id?: string | null;
           approved_by?: string | null;
+          branch_id?: string | null;
+          business_date?: string | null;
           contract_id?: string;
           created_at?: string;
           created_by?: string | null;
@@ -965,6 +977,9 @@ export type Database = {
           new_version?: number | null;
           old_version?: number;
           organization_id?: string;
+          payment_id?: string | null;
+          principal_amount?: number | null;
+          profit_amount?: number | null;
           profit_waived?: number;
           reason?: string;
           sales_return_id?: string | null;
@@ -8483,6 +8498,7 @@ export type Database = {
       get_returnable_invoice: { Args: { p_invoice_id: string }; Returns: Json };
       get_sale: { Args: { p_id: string }; Returns: Json };
       get_sale_details: { Args: { p_sale_id: string }; Returns: Json };
+      get_settlement_quote: { Args: { p_contract_id: string }; Returns: Json };
       get_shift: { Args: { p_id: string }; Returns: Json };
       get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       get_shop_settings: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -8583,6 +8599,8 @@ export type Database = {
         Returns: Json;
       };
       list_categories: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_contract_changes: { Args: { p_filters?: Json }; Returns: Json };
+      list_contract_changes_for: { Args: { p_contract_id: string }; Returns: Json };
       list_contracts: { Args: { p_filters?: Json }; Returns: Json };
       list_credit_exceptions: { Args: { p_status?: string }; Returns: Json };
       list_customer_guarantors: { Args: { p_customer_id: string }; Returns: Json };
@@ -8917,6 +8935,7 @@ export type Database = {
         Returns: Json;
       };
       preview_installment_terms: { Args: { p_body: Json }; Returns: Json };
+      preview_reschedule: { Args: { p_body: Json; p_contract_id: string }; Returns: Json };
       publish_installment_policy: { Args: { p_policy: Json }; Returns: string };
       quote_sale: {
         Args: { p_customer_id?: string; p_lines: Json; p_payments?: Json; p_sale_discount?: Json };
@@ -8966,6 +8985,10 @@ export type Database = {
       require_module: { Args: { p_module: string }; Returns: undefined };
       resend_employee_invite: {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
+        Returns: Json;
+      };
+      reschedule_contract: {
+        Args: { p_body: Json; p_contract_id: string; p_idempotency_key: string };
         Returns: Json;
       };
       resolve_device: { Args: { p_token_hash: string }; Returns: Json };
@@ -9128,6 +9151,10 @@ export type Database = {
       set_product_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
       set_supplier_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
       set_tax_class_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
+      settle_contract_early: {
+        Args: { p_body: Json; p_contract_id: string; p_idempotency_key: string };
+        Returns: Json;
+      };
       submit_field_survey: { Args: { p_body?: Json; p_id: string }; Returns: Json };
       supplier_statement: { Args: { p_from?: string; p_id: string; p_to?: string }; Returns: Json };
       unlink_customer_guarantor: {
@@ -9186,6 +9213,10 @@ export type Database = {
       };
       warranty_lookup: {
         Args: { p_phone?: string; p_sale_number?: string; p_serial?: string };
+        Returns: Json;
+      };
+      write_off_contract: {
+        Args: { p_body: Json; p_contract_id: string; p_idempotency_key: string };
         Returns: Json;
       };
     };

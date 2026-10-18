@@ -5464,3 +5464,97 @@ crossShopCase({
     h.expect(await h.auditRowsFrom(SHOP_B, injected.ip)).toBe(0);
   },
 });
+
+// N05 (D80). Contract changes: a foreign shop header is refused, an organization id in the request
+// is refused, another shop's (here unknown) contract is not found, nothing is written.
+const N05_UNKNOWN = '00000000-0000-4000-8000-0000000c0115';
+for (const suffix of ['/settlement-quote', '/changes'] as const) {
+  crossShopCase({
+    method: 'GET',
+    path: `/api/contracts/:id${suffix}`,
+    name: `${suffix}: refuses a foreign header, an org id and an unknown or other-shop contract`,
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const path = `/api/contracts/${N05_UNKNOWN}${suffix}`;
+      const foreign = await h.call('GET', path, { token: a.accessToken, orgId: SHOP_B });
+      h.expect(foreign.res.status).toBe(403);
+      const injected = await h.call('GET', path, {
+        token: a.accessToken,
+        query: 'organization_id=' + SHOP_B,
+      });
+      h.expect(injected.res.status).toBe(400);
+      const missing = await h.call('GET', path, { token: a.accessToken });
+      h.expect(missing.res.status).toBe(404);
+      h.expect(h.code(missing.res)).toBe('CONTRACT_NOT_FOUND');
+    },
+  });
+}
+const n05Plan = { installments_count: 3, frequency: 'monthly', first_due_date: '2030-01-15' };
+for (const [suffix, body, keyed] of [
+  [
+    '/settle',
+    {
+      waiver: '0.00',
+      expected_remaining: '1.00',
+      payments: [{ method: 'cash', amount: '1.00' }],
+    },
+    true,
+  ],
+  ['/reschedule/preview', n05Plan, false],
+  ['/reschedule', { ...n05Plan, reason: 'Cross-shop check', expected_remaining: '1.00' }, true],
+  ['/write-off', { reason: 'Cross-shop check', expected_remaining: '1.00' }, true],
+] as const) {
+  crossShopCase({
+    method: 'POST',
+    path: `/api/contracts/:id${suffix}`,
+    name: `${suffix}: refuses a foreign header, an org id and an unknown or other-shop contract`,
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const path = `/api/contracts/${N05_UNKNOWN}${suffix}`;
+      const key = (tag: string) => (keyed ? { idempotencyKey: `n05-xshop${suffix}-${tag}` } : {});
+      const foreign = await h.call('POST', path, {
+        token: a.accessToken,
+        orgId: SHOP_B,
+        body,
+        ...key('foreign'),
+      });
+      h.expect(foreign.res.status).toBe(403);
+      const injected = await h.call('POST', path, {
+        token: a.accessToken,
+        body: { ...body, organization_id: SHOP_B },
+        ...key('injected'),
+      });
+      h.expect(injected.res.status).toBe(400);
+      // The settlement needs the caller's open shift first: refused either way, nothing written.
+      const missing = await h.call('POST', path, { token: a.accessToken, body, ...key('missing') });
+      h.expect([403, 404, 409]).toContain(missing.res.status);
+      h.expect(
+        suffix === '/settle'
+          ? ['SHIFT_REQUIRED', 'DEVICE_REVOKED', 'DEVICE_MISMATCH', 'CONTRACT_NOT_FOUND']
+          : ['CONTRACT_NOT_FOUND'],
+      ).toContain(h.code(missing.res));
+      h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, missing.ip)).toBe(0);
+    },
+  });
+}
+crossShopCase({
+  method: 'GET',
+  path: '/api/contract-changes',
+  name: 'the contract change list refuses a foreign header and an org id; shop A reads only its own',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/contract-changes', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/contract-changes', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const mine = await h.call('GET', '/api/contract-changes', { token: a.accessToken });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+  },
+});

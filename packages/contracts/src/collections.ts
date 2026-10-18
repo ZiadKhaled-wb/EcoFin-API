@@ -270,6 +270,10 @@ export const COLLECTION_NOT_REVERSIBLE_REASONS = [
   'not_same_day',
   'shift_closed',
   'not_latest',
+  /** N05: the collection paid an early settlement (its waiver can't be undone this way). */
+  'settlement',
+  /** N05: the contract was rescheduled or settled after this collection. */
+  'contract_changed',
 ] as const;
 export const CollectionNotReversibleDetail = z.object({
   reason: z.enum(COLLECTION_NOT_REVERSIBLE_REASONS),
