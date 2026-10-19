@@ -141,6 +141,10 @@ export type CustomerStatusBody = z.infer<typeof CustomerStatusBody>;
 export const CustomerIdParams = z.object({ id: Uuid }).strict();
 export type CustomerIdParams = z.infer<typeof CustomerIdParams>;
 
+/** N06: the collector assigned to a customer (employee). */
+export const CustomerCollector = z.object({ id: Uuid, name: z.string() });
+export type CustomerCollector = z.infer<typeof CustomerCollector>;
+
 export const Customer = z.object({
   id: Uuid,
   full_name: z.string(),
@@ -162,6 +166,8 @@ export const Customer = z.object({
   status: CustomerStatus,
   notes: z.string().nullable(),
   id_photos_count: z.number().int().nonnegative(),
+  /** N06: the assigned collector, or null. */
+  collector: CustomerCollector.nullable(),
   created_at: IsoTimestamp,
   updated_at: IsoTimestamp,
 });

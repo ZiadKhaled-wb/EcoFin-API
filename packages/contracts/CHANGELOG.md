@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.51.0
+
+- N06 collector wallets: FieldCollectionBody, WalletCollectorRef, WalletLastSettlement, MyWallet, WalletRow, WalletListQuery, WalletListResponse, WalletIdParams, WalletMovementQuery, WalletMovement, WalletMovementPage, SettleWalletBody, WalletSettlement, WalletBalanceDetail, SetCustomerCollectorBody, CollectorRouteQuery, CollectorRouteContract, CollectorRouteStop, CollectorRoute, CustomerCollector. `Customer.collector` (nullable); `OverdueListQuery.collector_id` and `OverdueCustomerRef.collector_id`; `COLLECTION_NOT_REVERSIBLE_REASONS` gains `handed_in`. Error codes CUSTOMER_NOT_ASSIGNED (403), COLLECTOR_INVALID (422), WALLET_BALANCE_CHANGED (409), SELF_SETTLEMENT (403), WALLET_NOT_FOUND (404). `collector_commission_pct` is deprecated: always 0, never read, still accepted. No new permission key and no new enum value.
+
 ## 0.50.0
 
 - N05 early settlement, rescheduling, write-off: CONTRACT_CHANGE_KINDS, ContractChangeKind, ContractChange, SettlementQuote, SettleBody, SettleResponse, ReschedulePreviewBody, RescheduleLine, ReschedulePreview, RescheduleBody, ContractChangeResponse, WriteOffBody, ContractVersionLine, ContractVersion, ContractChangeHistory, ContractChangeListQuery, ContractChangeListQueryInput, ContractChangeListItem, ContractChangeTotals, ContractChangeListPage, WaiverTooHighDetail. Error code WAIVER_TOO_HIGH (422). `COLLECTION_NOT_REVERSIBLE_REASONS` gains `settlement` and `contract_changed`; `CustomerStatementKind` gains `profit_waiver` and `write_off` (credit rows). No new permission key (the baseline's `contract.settle_early`, `schedule.change`, `contract.write_off` are used) and no new contract status.

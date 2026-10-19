@@ -241,6 +241,13 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/contracts/:id/write-off',
         'GET /api/contracts/:id/changes',
         'GET /api/contract-changes',
+        'POST /api/collections/field',
+        'GET /api/wallets/me',
+        'GET /api/wallets',
+        'GET /api/wallets/:id/movements',
+        'POST /api/wallets/:id/settle',
+        'PUT /api/customers/:id/collector',
+        'GET /api/collectors/route',
         'GET /api/eta/settings',
         'PUT /api/eta/settings',
         'POST /api/eta/settings/test',
@@ -265,7 +272,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/fiscal/retry-many',
       ]),
     );
-    expect(keys).toHaveLength(256);
+    expect(keys).toHaveLength(263);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

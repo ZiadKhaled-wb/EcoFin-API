@@ -36,6 +36,7 @@ import {
   CollectionNotReversibleDetail,
   OverdueActionNotOpenDetail,
   WaiverTooHighDetail,
+  WalletBalanceDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 import type { ZodTypeAny } from 'zod';
@@ -131,6 +132,7 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   COLLECTION_NOT_REVERSIBLE: CollectionNotReversibleDetail,
   OVERDUE_ACTION_NOT_OPEN: OverdueActionNotOpenDetail,
   WAIVER_TOO_HIGH: WaiverTooHighDetail,
+  WALLET_BALANCE_CHANGED: WalletBalanceDetail,
 };
 
 /**

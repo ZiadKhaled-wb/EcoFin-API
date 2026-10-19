@@ -39,6 +39,8 @@ import contractsRoutes from './routes/contracts.js';
 import collectionsRoutes from './routes/collections.js';
 import overdueRoutes from './routes/overdue.js';
 import contractChangeRoutes from './routes/contractChanges.js';
+import walletsRoutes from './routes/wallets.js';
+import collectorsRoutes from './routes/collectors.js';
 import creditRoutes from './routes/credit.js';
 import cashAccountsRoutes from './routes/cashAccounts.js';
 import cashTransfersRoutes from './routes/cashTransfers.js';
@@ -111,6 +113,8 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/collections', collectionsRoutes);
   mountRouter(app, '/api/overdue', overdueRoutes);
   mountRouter(app, '/api/contract-changes', contractChangeRoutes);
+  mountRouter(app, '/api/wallets', walletsRoutes);
+  mountRouter(app, '/api/collectors', collectorsRoutes);
   mountRouter(app, '/api/credit-exceptions', creditRoutes);
   mountRouter(app, '/api/cash-accounts', cashAccountsRoutes);
   mountRouter(app, '/api/cash-transfers', cashTransfersRoutes);

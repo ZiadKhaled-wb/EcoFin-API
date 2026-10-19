@@ -52,12 +52,16 @@ const OverdueCustomerRef = z.object({
   /** `blocked` once the overdue check (or the owner) banned the customer. */
   status: CustomerStatus,
 });
+/** N06: a list row also tells who the customer's collector is. */
+const OverdueListCustomerRef = OverdueCustomerRef.extend({ collector_id: Uuid.nullable() });
 
 /** `GET /api/overdue`: filters. Worst first (most days late). */
 export const OverdueListQuery = z
   .object({
     q: z.string().trim().min(1).max(100).optional(),
     branch_id: Uuid.optional(),
+    /** N06: only this collector's customers. A collector is limited to their own anyway. */
+    collector_id: Uuid.optional(),
     /** Only contracts at least this many days late (default 1). */
     min_days: z.coerce.number().int().min(1).max(100000).optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
@@ -69,7 +73,7 @@ export type OverdueListQueryInput = z.input<typeof OverdueListQuery>;
 
 export const OverdueContractRow = z.object({
   contract: OverdueContractRef,
-  customer: OverdueCustomerRef,
+  customer: OverdueListCustomerRef,
   overdue_amount: Money,
   overdue_lines: z.number().int(),
   max_days_late: z.number().int(),
