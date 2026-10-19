@@ -1104,6 +1104,19 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
         org: SHOP_ONE,
       };
     },
+    'POST /api/contracts/:id/document-prints': async () => {
+      const sale = await drivers['POST /api/installments/sales']!();
+      expect(sale.sent.res.status, JSON.stringify(sale.sent.res.body)).toBe(201);
+      const contract = (sale.sent.res.body as { contract: { id: string } }).contract;
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', `/api/contracts/${contract.id}/document-prints`, {
+          token: owner.accessToken,
+          body: { document: 'contract' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
     'POST /api/contracts/:id/write-off': async () => {
       const sale = await drivers['POST /api/installments/sales']!();
       expect(sale.sent.res.status, JSON.stringify(sale.sent.res.body)).toBe(201);

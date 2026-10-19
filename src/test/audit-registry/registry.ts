@@ -115,6 +115,8 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   },
   'POST /api/contracts/:id/reschedule': { action: 'contract.rescheduled' },
   'POST /api/contracts/:id/write-off': { action: 'contract.written_off' },
+  // N07: the print log (S04 / N03 pattern): the audit log is the print log.
+  'POST /api/contracts/:id/document-prints': { action: 'contract.document_printed' },
   'POST /api/overdue/run': {
     none: 'The manual overdue check: an audit row only for each ban (customer.status_set) or legal referral (contract.legal_referred) it makes.',
   },

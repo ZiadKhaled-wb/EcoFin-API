@@ -8473,6 +8473,7 @@ export type Database = {
       get_collection: { Args: { p_id: string }; Returns: Json };
       get_collector_route: { Args: { p_filters?: Json }; Returns: Json };
       get_contract: { Args: { p_id: string }; Returns: Json };
+      get_contract_documents: { Args: { p_id: string }; Returns: Json };
       get_credit_exception: { Args: { p_id: string }; Returns: Json };
       get_current_shift: { Args: Record<PropertyKey, never>; Returns: Json };
       get_customer: { Args: { p_id: string }; Returns: Json };
@@ -8955,6 +8956,10 @@ export type Database = {
       reassign_field_survey: { Args: { p_assigned_to: string; p_id: string }; Returns: Json };
       receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
       record_collection_receipt_print: { Args: { p_id: string }; Returns: Json };
+      record_contract_document_print: {
+        Args: { p_document: string; p_id: string };
+        Returns: Json;
+      };
       record_sale_receipt_print: { Args: { p_sale_id: string }; Returns: Json };
       register_file: {
         Args: {

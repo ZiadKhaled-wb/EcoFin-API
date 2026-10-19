@@ -37,6 +37,8 @@ import {
   OverdueActionNotOpenDetail,
   WaiverTooHighDetail,
   WalletBalanceDetail,
+  TemplateInvalidDetail,
+  TemplateNotAllowedDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 import type { ZodTypeAny } from 'zod';
@@ -133,6 +135,8 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   OVERDUE_ACTION_NOT_OPEN: OverdueActionNotOpenDetail,
   WAIVER_TOO_HIGH: WaiverTooHighDetail,
   WALLET_BALANCE_CHANGED: WalletBalanceDetail,
+  TEMPLATE_INVALID: TemplateInvalidDetail,
+  TEMPLATE_NOT_ALLOWED: TemplateNotAllowedDetail,
 };
 
 /**

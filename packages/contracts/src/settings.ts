@@ -12,6 +12,11 @@ export const INSTALLMENT_FREQUENCIES = ['monthly', 'weekly', 'daily'] as const;
 export const InstallmentFrequency = z.enum(INSTALLMENT_FREQUENCIES);
 export type InstallmentFrequency = z.infer<typeof InstallmentFrequency>;
 
+/** One promissory note per installment (the default), or a single note for what is left (N07). */
+export const PROMISSORY_NOTES_MODES = ['per_installment', 'single'] as const;
+export const PromissoryNotesMode = z.enum(PROMISSORY_NOTES_MODES);
+export type PromissoryNotesMode = z.infer<typeof PromissoryNotesMode>;
+
 /** Fields the printed receipt can show or hide. */
 export const RECEIPT_FIELDS = [
   'logo',
@@ -205,6 +210,10 @@ const settingsFields = {
   installment_markup_vat: z.enum(['not_taxed', 'taxed']),
   delivery_fee_tax_class_id: Uuid.nullable(),
   deposit_vat_timing: z.enum(['on_delivery', 'on_deposit']),
+  // Printed contract (N07, D82)
+  /** The terms text on the printed contract; null means the default text (DEFAULT_CONTRACT_TERMS_AR). */
+  contract_terms: z.string().max(20000).nullable(),
+  promissory_notes_mode: PromissoryNotesMode,
 };
 
 export const TaxClassOption = z.object({

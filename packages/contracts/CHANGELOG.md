@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.52.0
+
+- N07 printed contract and promissory notes: CONTRACT_DOCUMENT_KINDS, ContractDocumentKind, ContractDocumentPrintBody, ContractDocumentPrint, DocumentParty, DocumentGuarantor, DocumentGood, DocumentShop, PromissoryNote, ContractDocumentContract, ContractDocuments, CONTRACT_STATUS_MARKS, CONTRACT_TERMS_MAX_LENGTH, CONTRACT_TEMPLATE_PLACEHOLDERS, CONTRACT_TEMPLATE_FORBIDDEN_WORDS, ContractTemplatePlaceholder, ContractTemplateCheck, checkContractTemplate, renderContractTemplate, DEFAULT_CONTRACT_TERMS_AR, amountInWordsAr, TemplateInvalidDetail, TemplateNotAllowedDetail, PROMISSORY_NOTES_MODES, PromissoryNotesMode. `ShopSettings` and `ShopSettingsUpdateBody` gain `contract_terms` (nullable; null = the default text) and `promissory_notes_mode` (`per_installment` | `single`). Error codes TEMPLATE_INVALID (422) and TEMPLATE_NOT_ALLOWED (422). No new permission key and no new enum value.
+
 ## 0.51.0
 
 - N06 collector wallets: FieldCollectionBody, WalletCollectorRef, WalletLastSettlement, MyWallet, WalletRow, WalletListQuery, WalletListResponse, WalletIdParams, WalletMovementQuery, WalletMovement, WalletMovementPage, SettleWalletBody, WalletSettlement, WalletBalanceDetail, SetCustomerCollectorBody, CollectorRouteQuery, CollectorRouteContract, CollectorRouteStop, CollectorRoute, CustomerCollector. `Customer.collector` (nullable); `OverdueListQuery.collector_id` and `OverdueCustomerRef.collector_id`; `COLLECTION_NOT_REVERSIBLE_REASONS` gains `handed_in`. Error codes CUSTOMER_NOT_ASSIGNED (403), COLLECTOR_INVALID (422), WALLET_BALANCE_CHANGED (409), SELF_SETTLEMENT (403), WALLET_NOT_FOUND (404). `collector_commission_pct` is deprecated: always 0, never read, still accepted. No new permission key and no new enum value.
