@@ -1353,6 +1353,7 @@ export type Database = {
           archived_at: string | null;
           birth_date: string | null;
           city: string | null;
+          collector_id: string | null;
           created_at: string;
           created_by: string | null;
           credit_limit: number;
@@ -1378,6 +1379,7 @@ export type Database = {
           archived_at?: string | null;
           birth_date?: string | null;
           city?: string | null;
+          collector_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           credit_limit?: number;
@@ -1403,6 +1405,7 @@ export type Database = {
           archived_at?: string | null;
           birth_date?: string | null;
           city?: string | null;
+          collector_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           credit_limit?: number;
@@ -8468,6 +8471,7 @@ export type Database = {
       get_cash_account: { Args: { p_id: string }; Returns: Json };
       get_cash_transfer: { Args: { p_id: string }; Returns: Json };
       get_collection: { Args: { p_id: string }; Returns: Json };
+      get_collector_route: { Args: { p_filters?: Json }; Returns: Json };
       get_contract: { Args: { p_id: string }; Returns: Json };
       get_credit_exception: { Args: { p_id: string }; Returns: Json };
       get_current_shift: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -8491,6 +8495,7 @@ export type Database = {
         Args: { p_customer_id: string; p_financed_amount: string };
         Returns: Json;
       };
+      get_my_wallet: { Args: Record<PropertyKey, never>; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
       get_purchase_order: { Args: { p_id: string }; Returns: Json };
@@ -8599,6 +8604,7 @@ export type Database = {
         Returns: Json;
       };
       list_categories: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_collector_wallets: { Args: { p_filters?: Json }; Returns: Json };
       list_contract_changes: { Args: { p_filters?: Json }; Returns: Json };
       list_contract_changes_for: { Args: { p_contract_id: string }; Returns: Json };
       list_contracts: { Args: { p_filters?: Json }; Returns: Json };
@@ -8790,6 +8796,7 @@ export type Database = {
       };
       list_tax_classes: { Args: Record<PropertyKey, never>; Returns: Json };
       list_transfer_destinations: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_wallet_movements: { Args: { p_filters?: Json; p_id: string }; Returns: Json };
       list_warranty_claims: {
         Args: {
           p_branch_id?: string;
@@ -8877,6 +8884,10 @@ export type Database = {
           p_note?: string;
           p_receipt_file_id?: string;
         };
+        Returns: Json;
+      };
+      post_field_collection: {
+        Args: { p_body: Json; p_idempotency_key: string };
         Returns: Json;
       };
       post_installment_sale: { Args: { p_body: Json; p_idempotency_key: string }; Returns: Json };
@@ -9082,6 +9093,10 @@ export type Database = {
         Args: { p_archived: boolean; p_id: string; p_move_to?: string };
         Returns: undefined;
       };
+      set_customer_collector: {
+        Args: { p_customer_id: string; p_employee_id: string; p_reason?: string };
+        Returns: Json;
+      };
       set_customer_credit_limit: {
         Args: { p_customer_id: string; p_limit: string; p_reason?: string };
         Returns: Json;
@@ -9151,6 +9166,10 @@ export type Database = {
       set_product_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
       set_supplier_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
       set_tax_class_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
+      settle_collector_wallet: {
+        Args: { p_body: Json; p_id: string; p_idempotency_key: string };
+        Returns: Json;
+      };
       settle_contract_early: {
         Args: { p_body: Json; p_contract_id: string; p_idempotency_key: string };
         Returns: Json;

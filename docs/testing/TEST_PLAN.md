@@ -411,3 +411,7 @@ See [N04 plan](plans/N04.md). Covers the Done when (a late customer's total owed
 ## N05 — early settlement, rescheduling, write-off (EC-84)
 
 See [N05 plan](plans/N05.md). Covers the Done when (the old schedule is still visible after a reschedule; the customer balance after each action is correct) and the D80 rules (rule 5 safety net, waiver limits, owner-only write-off, the reversal guard, statement rows, idempotency, access).
+
+## N06 — collector wallets (EC-85)
+
+See [N06 plan](plans/N06.md). Covers the Done when (a field collection is counted once, in the wallet, until settled; the wallet balance equals its ledger) and the D81 rules (no commission, assignment and who may collect, partial settlement with a recorded shortage, reversal while the cash is in the wallet, route, overdue filter, access and isolation).

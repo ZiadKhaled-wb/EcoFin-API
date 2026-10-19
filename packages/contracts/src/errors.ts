@@ -280,6 +280,12 @@ export const errorCodeHttpStatus = {
   OVERDUE_ACTION_NOT_FOUND: 404,
   // N05 early settlement, rescheduling, write-off
   WAIVER_TOO_HIGH: 422,
+  // N06 collector wallets
+  CUSTOMER_NOT_ASSIGNED: 403,
+  COLLECTOR_INVALID: 422,
+  WALLET_BALANCE_CHANGED: 409,
+  SELF_SETTLEMENT: 403,
+  WALLET_NOT_FOUND: 404,
   // T02 ETA e-receipts
   DEVICE_NOT_FOUND: 404,
   DEVICE_SERIAL_TAKEN: 409,

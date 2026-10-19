@@ -320,6 +320,8 @@ INSERT INTO t.replay_tested VALUES
    ('public.post_collection','n03_collections_test.sql: same key -> same receipt, nothing written twice; a sale''s key -> IDEMPOTENCY_CONFLICT'),
    ('public.reverse_collection','n03_collections_test.sql: same key -> same reversal; another key -> already_reversed'),
    ('public.settle_contract_early','n05_contract_changes_test.sql: same key -> same change and receipt, no second payment'),
+   ('public.post_field_collection','n06_collector_wallets_test.sql: same key -> same receipt, one collection and one wallet movement; another collector or a sale''s key -> IDEMPOTENCY_CONFLICT'),
+   ('public.settle_collector_wallet','n06_collector_wallets_test.sql: same key -> same settlement, one transfer and no second movement; another wallet''s key -> IDEMPOTENCY_CONFLICT'),
    ('public.reschedule_contract','n05_contract_changes_test.sql: same key -> same change; another contract''s or a sale''s key -> IDEMPOTENCY_CONFLICT'),
    ('public.write_off_contract','n05_contract_changes_test.sql: same key -> same change, one row'),
    ('public.post_installment_sale','n02_installment_sale_test.sql: same key -> same sale and contract; nothing written twice; a cash sale''s key -> IDEMPOTENCY_CONFLICT'),

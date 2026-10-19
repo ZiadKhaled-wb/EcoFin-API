@@ -97,6 +97,10 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/collections': { action: 'collection.created' },
   'POST /api/collections/:id/prints': { action: 'collection.receipt_printed' },
   'POST /api/collections/:id/reverse': { action: 'collection.reversed' },
+  // N06: a field collection pays through N03's core (collection.created).
+  'POST /api/collections/field': { action: 'collection.created' },
+  'POST /api/wallets/:id/settle': { action: 'collector.wallet_settled' },
+  'PUT /api/customers/:id/collector': { action: 'customer.collector_set' },
   // N04: the check records warnings, bans and referrals (customer.status_set and
   // contract.legal_referred for the ones it makes; on a shop with nothing late, none).
   'POST /api/overdue/warnings/:id/handle': { action: 'overdue.warning_handled' },
