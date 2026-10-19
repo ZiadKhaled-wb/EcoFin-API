@@ -2185,7 +2185,7 @@ export const openApiSpec = {
             post: {
                 tags: ['Installments'],
                 summary: 'Reverse a same-day collection (collection.reverse)',
-                description: 'N03 (D78). Undoes a whole collection: one reversing payment row per payment row, the cash paid back out of the drawer that took it and bank money recorded as returned; the installments are unpaid again and a contract it completed is open again (audit collection.reversed, + contract.reopened). Only on the collection\'s business day, only when it is the latest collection of every contract it paid, and while its shift is still open (COLLECTION_NOT_REVERSIBLE, details reason already_reversed, not_same_day, not_latest or shift_closed). collection.reverse: owner and branch manager by default, grantable to any employee. A reason is required. The same Idempotency-Key returns the same answer. Schema: CollectionReverseBody → Collection.',
+                description: 'N03 (D78). N06 (D81): a field collection (no shift) reverses too, out of the same collector wallet, only while none of its cash was handed in after it (reason handed_in). Undoes a whole collection: one reversing payment row per payment row, the cash paid back out of the drawer that took it and bank money recorded as returned; the installments are unpaid again and a contract it completed is open again (audit collection.reversed, + contract.reopened). Only on the collection\'s business day, only when it is the latest collection of every contract it paid, and while its shift is still open (COLLECTION_NOT_REVERSIBLE, details reason already_reversed, not_same_day, not_latest or shift_closed). collection.reverse: owner and branch manager by default, grantable to any employee. A reason is required. The same Idempotency-Key returns the same answer. Schema: CollectionReverseBody → Collection.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }],
                 responses: { 200: { description: 'Collection' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
@@ -2265,11 +2265,84 @@ export const openApiSpec = {
                 responses: { 200: { description: 'ContractChangeListPage' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/collections/field': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Collect in the field (collection.create)',
+                description: 'N06 (D81). N03\'s collection (same body: CollectionBody) taken in the field: no shift and no POS device; the cash goes into the caller\'s own collector wallet (made by the first field collection, under their default branch), bank transfers into the bank account as in N03. The customer must be assigned to the caller (CUSTOMER_NOT_ASSIGNED) unless the caller holds collector.settle. Same Idempotency-Key, same answer. Audit collection.created. Answer: Collection (shift_id null). Schema: FieldCollectionBody -> Collection.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 201: { description: 'Collection' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/wallets/me': {
+            get: {
+                tags: ['Installments'],
+                summary: 'My collector wallet (collection.create)',
+                description: 'N06 (D81). The caller\'s own wallet: balance, today\'s field collections (count, amount, cash), the oldest business date of the cash still in it and the last settlement. No collection yet means no wallet and zeros. Works in an expired shop. Schema: MyWallet.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'MyWallet' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/wallets': {
+            get: {
+                tags: ['Installments'],
+                summary: 'Collector wallets (collector.settle or cash.view)',
+                description: 'N06 (D81). One row per wallet of the caller\'s branches (OWNER: all): collector, branch, balance, the oldest unsettled date and the last settlement. Filter: branch_id. Works in an expired shop. Schema: WalletListQuery -> WalletListResponse.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'branch_id', in: 'query', required: false, schema: { type: 'string' } }],
+                responses: { 200: { description: 'WalletListResponse' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/wallets/{id}/movements': {
+            get: {
+                tags: ['Installments'],
+                summary: 'A wallet\'s ledger',
+                description: 'N06 (D81). The wallet\'s movements newest first with the running balance; settlements carry their handed amount, shortage and reason. The collector\'s own wallet, or collector.settle / cash.view with branch access. Filters: from, to (business dates), limit (1-100, 50), cursor. WALLET_NOT_FOUND for an unknown or another shop\'s id. Schema: WalletMovementQuery -> WalletMovementPage.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'from', in: 'query', required: false, schema: { type: 'string' } }, { name: 'to', in: 'query', required: false, schema: { type: 'string' } }, { name: 'limit', in: 'query', required: false, schema: { type: 'string' } }, { name: 'cursor', in: 'query', required: false, schema: { type: 'string' } }],
+                responses: { 200: { description: 'WalletMovementPage' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/wallets/{id}/settle': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Settle a collector wallet (collector.settle)',
+                description: 'N06 (D81). In one transaction: handed moves from the wallet to an active safe of the wallet\'s branch (a cash transfer of kind collector_settlement, number CX), and a shortage is booked as an adjustment on the wallet and recorded with its reason (never deducted from anyone). Partial settlement is allowed: handed > 0 and handed + shortage <= the balance (INSUFFICIENT_FUNDS above it). expected_balance must equal the wallet\'s balance (WALLET_BALANCE_CHANGED with details.balance). A shortage needs a reason (3-300). Settling your own wallet is SELF_SETTLEMENT. Same Idempotency-Key, same answer. Audit collector.wallet_settled (warning with a shortage). Schema: SettleWalletBody -> WalletSettlement.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'WalletSettlement' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/customers/{id}/collector': {
+            put: {
+                tags: ['Customers'],
+                summary: 'Assign, change or clear a customer\'s collector (customer.edit)',
+                description: 'N06 (D81). One collector covers all of a customer\'s contracts. employee_id null clears it; otherwise an active employee of the shop holding collection.create (COLLECTOR_INVALID). The same collector again changes nothing. reason optional (3-300). Audit customer.collector_set. Answer: Customer (with collector). Schema: SetCustomerCollectorBody -> Customer.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'Customer' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/collectors/route': {
+            get: {
+                tags: ['Installments'],
+                summary: 'A collector\'s daily route (collection.create)',
+                description: 'N06 (D81). The collector\'s assigned customers with an open contract that has something due or overdue on the date (default today), with phone, address, city, amount due (the overdue part included), amount overdue, max days late and the next due date; sorted by city, address, name. A collector reads only their own; collector.settle reads any collector (employee_id). Works in an expired shop. Schema: CollectorRouteQuery -> CollectorRoute.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'employee_id', in: 'query', required: false, schema: { type: 'string' } }, { name: 'date', in: 'query', required: false, schema: { type: 'string' } }],
+                responses: { 200: { description: 'CollectorRoute' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/overdue': {
             get: {
                 tags: ['Installments'],
                 summary: 'Overdue contracts, worst first (overdue.view)',
-                description: 'N04 (D79). Open contracts with an overdue installment: the overdue amount and lines, the most days late, the oldest overdue due date, what is left, the last payment, the open warning and the legal referral, the customer (blocked once banned). An installment is overdue only after its due date plus the grace days of the contract\'s policy version; days late count from the due date. Filters: q (contract number prefix, name or phone contains, exact national ID), branch_id, min_days (default 1), limit (1-100, 25), cursor. totals: contracts, overdue amount and the aging buckets 1-30, 31-60, 61-90, 90+ for the same filters. No fee anywhere (docs/ISLAMIC_FINANCE_RULES.md rule 4). overdue.view sees every branch of the shop; works in an expired shop. Schema: OverdueListQuery → OverdueListPage.',
+                description: 'N04 (D79). Open contracts with an overdue installment: the overdue amount and lines, the most days late, the oldest overdue due date, what is left, the last payment, the open warning and the legal referral, the customer (blocked once banned). An installment is overdue only after its due date plus the grace days of the contract\'s policy version; days late count from the due date. Filters: q (contract number prefix, name or phone contains, exact national ID), branch_id, collector_id (N06: the customer\'s assigned collector; a collector who holds collection.create but not collector.settle sees only their own customers, whatever they ask for), min_days (default 1), limit (1-100, 25), cursor. totals: contracts, overdue amount and the aging buckets 1-30, 31-60, 61-90, 90+ for the same filters. No fee anywhere (docs/ISLAMIC_FINANCE_RULES.md rule 4). overdue.view sees every branch of the shop; works in an expired shop. Schema: OverdueListQuery → OverdueListPage.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }],
                 responses: { 200: { description: 'OverdueListPage' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },

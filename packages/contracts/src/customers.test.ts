@@ -31,6 +31,7 @@ const customer = {
   status: 'active',
   notes: null,
   id_photos_count: 2,
+  collector: null,
   created_at: '2026-10-12T08:00:00.000Z',
   updated_at: '2026-10-12T08:00:00.000Z',
 };

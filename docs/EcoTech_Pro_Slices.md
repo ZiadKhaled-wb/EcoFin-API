@@ -740,7 +740,7 @@ The shop lends its own money. Rules are built new on the server; nothing is reus
 - Each collector has a wallet (its own cash ledger)
 - Field collections go into the wallet, **not** the main vault
 - Settlement: the collector hands cash to a vault; the wallet goes down and the vault goes up in one transaction; shortages recorded with a reason
-- Collector commission calculated separately (a payable to the collector), never mixed into the cash
+- **Owner, 18 Oct (`docs/tasks/N06.md`):** no collector commission of any kind; collectors are paid a salary
 - Collector's list of assigned customers and a daily route list
 
 **Done when:** a field collection is counted once (wallet) until settled (vault); the wallet balance equals its ledger.

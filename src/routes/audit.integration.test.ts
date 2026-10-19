@@ -23,6 +23,7 @@ import { DEVICE_TOKEN_HEADER, pairTestDevice } from '../test/posDevice';
 const RUN = process.env['RUN_INTEGRATION'] === '1';
 const SEED_PASSWORD = 'LocalDev-Only-2026!';
 const SHOP_ONE = 'd1000000-0000-0000-0000-000000000001';
+const CASHIER_ONE_EMPLOYEE = 'd3000000-0000-0000-0000-000000000012';
 const SHOP_TWO = 'd1000000-0000-0000-0000-000000000002';
 const BR1 = 'd2000000-0000-0000-0000-000000000011';
 const BR2 = 'd2000000-0000-0000-0000-000000000012';
@@ -1115,6 +1116,93 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
           token: owner.accessToken,
           key: `n05-write-off-${STAMP}-${ipCounter}`,
           body: { reason: 'Audit check', expected_remaining: contract.balance.remaining },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/collections/field': async () => {
+      // N06: a part of an N02 contract's first installment, in cash, in the field (the owner holds
+      // collector.settle, so the customer needs no collector; the cash goes to the owner's wallet).
+      const sale = await drivers['POST /api/installments/sales']!();
+      expect(sale.sent.res.status, JSON.stringify(sale.sent.res.body)).toBe(201);
+      const contract = (
+        sale.sent.res.body as { contract: { id: string; customer: { id: string } } }
+      ).contract;
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', '/api/collections/field', {
+          token: owner.accessToken,
+          key: `n06-field-${STAMP}-${ipCounter}`,
+          body: {
+            customer_id: contract.customer.id,
+            contracts: [{ contract_id: contract.id, amount: '0.01' }],
+            payments: [{ method: 'cash', amount: '0.01' }],
+          },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'PUT /api/customers/:id/collector': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const id = await newCustomer(owner.accessToken);
+      return {
+        sent: await send('put', `/api/customers/${id}/collector`, {
+          token: owner.accessToken,
+          body: { employee_id: CASHIER_ONE_EMPLOYEE, reason: `F07 ${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/wallets/:id/settle': async () => {
+      // N06: the cashier (assigned the customer) collects 5.00 in the field; the owner settles 0.01.
+      const sale = await drivers['POST /api/installments/sales']!();
+      expect(sale.sent.res.status, JSON.stringify(sale.sent.res.body)).toBe(201);
+      const contract = (
+        sale.sent.res.body as { contract: { id: string; customer: { id: string } } }
+      ).contract;
+      const owner = await login('owner.one@ecotech.test');
+      const cashier = await login('cashier.one@ecotech.test');
+      const assigned = await send('put', `/api/customers/${contract.customer.id}/collector`, {
+        token: owner.accessToken,
+        body: { employee_id: CASHIER_ONE_EMPLOYEE },
+      });
+      expect(assigned.res.status, JSON.stringify(assigned.res.body)).toBe(200);
+      const collected = await send('post', '/api/collections/field', {
+        token: cashier.accessToken,
+        key: `n06-settle-collect-${STAMP}-${ipCounter}`,
+        body: {
+          customer_id: contract.customer.id,
+          contracts: [{ contract_id: contract.id, amount: '5.00' }],
+          payments: [{ method: 'cash', amount: '5.00' }],
+        },
+      });
+      expect(collected.res.status, JSON.stringify(collected.res.body)).toBe(201);
+      const mine = await send('get', '/api/wallets/me', { token: cashier.accessToken });
+      expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+      const wallet = mine.res.body as {
+        balance: string;
+        wallet: { id: string; branch_id: string };
+      };
+      const safe = await service
+        .from('cash_accounts')
+        .select('id')
+        .eq('organization_id', SHOP_ONE)
+        .eq('branch_id', wallet.wallet.branch_id)
+        .eq('kind', 'safe')
+        .eq('is_active', true)
+        .limit(1)
+        .single();
+      expect(safe.error).toBeNull();
+      return {
+        sent: await send('post', `/api/wallets/${wallet.wallet.id}/settle`, {
+          token: owner.accessToken,
+          key: `n06-settle-${STAMP}-${ipCounter}`,
+          body: {
+            to_account_id: safe.data!.id as string,
+            handed: '0.01',
+            expected_balance: wallet.balance,
+          },
         }),
         org: SHOP_ONE,
       };

@@ -23,7 +23,8 @@ describe('N04 lists', () => {
       min_days: 30,
       limit: 10,
     });
-    expect(OverdueListQuery.safeParse({ collector_id: ID }).success).toBe(false);
+    expect(OverdueListQuery.safeParse({ collector_id: ID }).success).toBe(true);
+    expect(OverdueListQuery.safeParse({ collector_id: 'x' }).success).toBe(false);
     expect(OverdueListQuery.safeParse({ min_days: '0' }).success).toBe(false);
     expect(OverdueWarningListQuery.safeParse({ status: 'dismissed' }).success).toBe(false);
     expect(LegalReferralListQuery.safeParse({ status: 'dismissed' }).success).toBe(true);
@@ -34,7 +35,7 @@ describe('N04 lists', () => {
       items: [
         {
           contract,
-          customer,
+          customer: { ...customer, collector_id: null },
           overdue_amount: '2000.00',
           overdue_lines: 2,
           max_days_late: 64,

@@ -5558,3 +5558,169 @@ crossShopCase({
     h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
   },
 });
+
+// N06 (D81). Collector wallets: a foreign shop header is refused, an organization id in the request
+// is refused, another shop's (here unknown) wallet, customer or employee is not found, nothing is
+// written.
+const N06_UNKNOWN = '00000000-0000-4000-8000-0000000c0116';
+crossShopCase({
+  method: 'GET',
+  path: '/api/wallets/me',
+  name: 'my wallet refuses a foreign header; shop A reads only its own',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/wallets/me', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const mine = await h.call('GET', '/api/wallets/me', { token: a.accessToken });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/wallets',
+  name: 'the wallet list refuses a foreign header and an org id; shop A reads only its own',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/wallets', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/wallets', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const mine = await h.call('GET', '/api/wallets', { token: a.accessToken });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/wallets/:id/movements',
+  name: 'a wallet ledger refuses a foreign header, an org id and an unknown or other-shop wallet',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const path = `/api/wallets/${N06_UNKNOWN}/movements`;
+    const foreign = await h.call('GET', path, { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', path, {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('GET', path, { token: a.accessToken });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('WALLET_NOT_FOUND');
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/wallets/:id/settle',
+  name: 'settling refuses a foreign header, an org id and an unknown or other-shop wallet',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const path = `/api/wallets/${N06_UNKNOWN}/settle`;
+    const body = { to_account_id: N06_UNKNOWN, handed: '1.00', expected_balance: '1.00' };
+    const foreign = await h.call('POST', path, {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+      idempotencyKey: 'n06-xshop-settle-foreign',
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', path, {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+      idempotencyKey: 'n06-xshop-settle-injected',
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('POST', path, {
+      token: a.accessToken,
+      body,
+      idempotencyKey: 'n06-xshop-settle-missing',
+    });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('WALLET_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, missing.ip)).toBe(0);
+  },
+});
+crossShopCase({
+  method: 'PUT',
+  path: '/api/customers/:id/collector',
+  name: 'assigning a collector refuses a foreign header, an org id and an unknown or other-shop customer',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const path = `/api/customers/${N06_UNKNOWN}/collector`;
+    const body = { employee_id: null };
+    const foreign = await h.call('PUT', path, { token: a.accessToken, orgId: SHOP_B, body });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('PUT', path, {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('PUT', path, { token: a.accessToken, body });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('CUSTOMER_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, missing.ip)).toBe(0);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/collectors/route',
+  name: 'the route refuses a foreign header and an org id; an unknown employee is not found',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/collectors/route', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/collectors/route', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('GET', '/api/collectors/route', {
+      token: a.accessToken,
+      query: 'employee_id=' + N06_UNKNOWN,
+    });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('EMPLOYEE_NOT_FOUND');
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/collections/field',
+  name: 'a field collection refuses a foreign header, an org id and an unknown or other-shop customer',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = {
+      customer_id: N06_UNKNOWN,
+      contracts: [{ contract_id: N06_UNKNOWN, amount: '1.00' }],
+      payments: [{ method: 'cash', amount: '1.00' }],
+    };
+    const foreign = await h.call('POST', '/api/collections/field', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+      idempotencyKey: 'n06-xshop-field-foreign',
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/collections/field', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+      idempotencyKey: 'n06-xshop-field-injected',
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('POST', '/api/collections/field', {
+      token: a.accessToken,
+      body,
+      idempotencyKey: 'n06-xshop-field-missing',
+    });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('CUSTOMER_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, missing.ip)).toBe(0);
+  },
+});

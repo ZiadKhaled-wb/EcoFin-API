@@ -14,6 +14,7 @@ import {
   CustomerStatusBody,
   CustomerUpdateBody,
   GuarantorRequirementQuery,
+  SetCustomerCollectorBody,
   SurveyRequirementQuery,
 } from '@ziadkhaled-wb/contracts';
 import { authenticate } from '../middleware/auth';
@@ -26,6 +27,7 @@ import * as guarantors from '../controllers/guarantors.controller';
 import * as credit from '../controllers/credit.controller';
 import * as account from '../controllers/customerAccount.controller';
 import * as surveys from '../controllers/surveys.controller';
+import * as wallets from '../controllers/wallets.controller';
 const router = Router();
 // Reads: any customer read key (D63 rule 6) and the plan module, both checked in SQL, so they are
 // authenticatedOnly() here. The national ID is masked in SQL unless the caller has customer.view_pii.
@@ -68,6 +70,16 @@ router.post(
   requirePermission('customer.edit'),
   validate({ params: CustomerIdParams, body: CustomerStatusBody }),
   asyncHandler(controller.setStatus),
+);
+// N06 (D81): assign, change or clear the customer's collector (customer.edit; the collector must hold
+// collection.create: checked in SQL).
+router.put(
+  '/:id/collector',
+  authenticate,
+  loadRequestContext,
+  requirePermission('customer.edit'),
+  validate({ params: CustomerIdParams, body: SetCustomerCollectorBody }),
+  asyncHandler(wallets.setCustomerCollector),
 );
 // R04 (D71): a customer's guarantors. Reads: the customer read guard in SQL. Linking: guarantor.manage
 // OR customer.create, so authenticatedOnly() and the database function asks for either key; the

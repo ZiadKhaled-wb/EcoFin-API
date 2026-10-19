@@ -788,6 +788,35 @@ INSERT INTO t.denial VALUES
  ('preview_reschedule','zz_n05_5_preview','schedule.change',$$SELECT public.preview_reschedule(t.n05_contract('r'),jsonb_build_object('installments_count',2,'frequency','monthly','first_due_date',(current_date+20)::text))$$),
  ('list_contract_changes_for','zz_n05_6_history','contract.settle_early|schedule.change|contract.write_off|collection.create|report.view',$$SELECT public.list_contract_changes_for(t.n05_contract('r'))$$),
  ('list_contract_changes','zz_n05_7_list','report.financial|contract.settle_early|schedule.change|contract.write_off',$$SELECT public.list_contract_changes('{}')$$);
+-- N06: the owner's calls run on the N02 denial customer and contract; settling needs a wallet of
+-- someone else, so a funded one is made on first use (a SECURITY DEFINER helper, rolled back with the test).
+CREATE FUNCTION t.n06_wallet() RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $f$
+DECLARE v_id uuid; v_safe public.cash_accounts; v_emp uuid;
+BEGIN
+    SELECT id INTO v_id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial N06 wallet';
+    IF v_id IS NULL THEN
+        SELECT * INTO v_safe FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND kind='safe' AND is_active ORDER BY created_at, id LIMIT 1;
+        SELECT id INTO v_emp FROM public.employees WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND role<>'OWNER' AND is_active ORDER BY created_at, id LIMIT 1;
+        v_id := gen_random_uuid();
+        INSERT INTO public.cash_accounts(id,organization_id,branch_id,name,kind,employee_id)
+        VALUES (v_id,v_safe.organization_id,v_safe.branch_id,'TEST-1 denial N06 wallet','collector_wallet',v_emp);
+        INSERT INTO public.cash_movements(organization_id,cash_account_id,branch_id,amount,type,source_type,source_id,business_date)
+        VALUES (v_safe.organization_id,v_id,v_safe.branch_id,50,'collection','payment',gen_random_uuid(),current_date);
+    END IF;
+    RETURN v_id;
+END $f$;
+CREATE FUNCTION t.n06_safe() RETURNS uuid LANGUAGE sql SECURITY DEFINER AS $f$
+    SELECT id FROM public.cash_accounts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND kind='safe' AND is_active ORDER BY created_at, id LIMIT 1 $f$;
+CREATE FUNCTION t.n06_owner() RETURNS uuid LANGUAGE sql SECURITY DEFINER AS $f$
+    SELECT id FROM public.employees WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND role='OWNER' $f$;
+INSERT INTO t.denial VALUES
+ ('set_customer_collector','zz_n06_1_assign','customer.edit',$$SELECT public.set_customer_collector('d9020000-0000-0000-0000-000000000001',t.n06_owner(),'TEST-1 denial')$$),
+ ('post_field_collection','zz_n06_2_field','collection.create',$$SELECT public.post_field_collection(jsonb_build_object('customer_id','d9020000-0000-0000-0000-000000000001','contracts',jsonb_build_array(jsonb_build_object('contract_id',(SELECT id FROM public.contracts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-n02-sale'),'amount','10.00')),'payments',jsonb_build_array(jsonb_build_object('method','cash','amount','10.00'))),'denial-n06-field')$$),
+ ('get_my_wallet','zz_n06_3_mine','collection.create',$$SELECT public.get_my_wallet()$$),
+ ('list_collector_wallets','zz_n06_4_wallets','collector.settle|cash.view',$$SELECT public.list_collector_wallets('{}')$$),
+ ('list_wallet_movements','zz_n06_6_ledger','collector.settle|cash.view|collection.create',$$SELECT public.list_wallet_movements(t.n06_wallet(),'{}')$$),
+ ('settle_collector_wallet','zz_n06_5_settle','collector.settle',$$SELECT public.settle_collector_wallet(t.n06_wallet(),jsonb_build_object('to_account_id',t.n06_safe(),'handed','10.00','expected_balance','50.00'),'denial-n06-settle')$$),
+ ('get_collector_route','zz_n06_7_route','collection.create',$$SELECT public.get_collector_route('{}')$$);
 -- EC-147: register the new RPC without changing the completeness/denial assertions.
 INSERT INTO t.denial VALUES ('force_close_shift','shift_4_force_close','cash.adjust',$q$SELECT public.force_close_shift((SELECT id FROM public.shifts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-shift-1'),'5.00','Lost POS')$q$);
 CREATE TABLE t.write_functions AS

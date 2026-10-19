@@ -187,6 +187,7 @@ const settingsFields = {
     .string()
     .regex(/^\d{1,4}(\.\d{1,2})?$/)
     .nullable(),
+  /** @deprecated N06 (owner decision): collectors are salaried, no commission exists. Always 0 and never read; still accepted from an older client. */
   collector_commission_pct: Percent,
   allow_negative_bank: z.boolean(),
   // Appearance

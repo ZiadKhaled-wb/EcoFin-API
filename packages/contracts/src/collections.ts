@@ -274,6 +274,8 @@ export const COLLECTION_NOT_REVERSIBLE_REASONS = [
   'settlement',
   /** N05: the contract was rescheduled or settled after this collection. */
   'contract_changed',
+  /** N06: a field collection whose cash was handed in (settled) after it. */
+  'handed_in',
 ] as const;
 export const CollectionNotReversibleDetail = z.object({
   reason: z.enum(COLLECTION_NOT_REVERSIBLE_REASONS),
