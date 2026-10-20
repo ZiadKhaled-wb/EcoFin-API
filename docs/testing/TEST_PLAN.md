@@ -419,3 +419,7 @@ See [N06 plan](plans/N06.md). Covers the Done when (a field collection is counte
 ## N07 — printed contract and promissory notes (EC-86)
 
 See [N07 plan](plans/N07.md). Covers the Done when (the paper matches the contract exactly; the notes sum to what is left; rules on paper; original then COPY, a reschedule starts an original; access and isolation) and the D82 rules.
+
+## INT-5 — installment lifecycle end to end (EC-135)
+
+See [INT-5 report](int-5/REPORT.md): one flow in a fresh shop through the screens (customer, guarantor, field survey, credit limit, installment sale, printed contract and notes, field collection into the collector's wallet, settlement into the safe, early settlement, an overdue installment that gets a warning and never a fee, the customer account in English and Arabic), with the database checks in `scripts/int5-db.mjs verify`. Spec: EcoFin-Web `e2e/int5-installment-lifecycle.spec.ts`.
