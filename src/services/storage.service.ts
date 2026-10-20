@@ -24,6 +24,16 @@ export async function putObject(path: string, body: Buffer, contentType: string)
   }
 }
 
+/** Reads one object into memory. The caller has already checked that the path is its own shop's. */
+export async function getObject(path: string): Promise<Buffer> {
+  const { data, error } = await supabaseAdmin.storage.from(FILE_BUCKET).download(path);
+  if (error || !data) {
+    logger.error({ err: error, path }, 'storage.getObject failed');
+    throw ServerError('Request failed.');
+  }
+  return Buffer.from(await data.arrayBuffer());
+}
+
 /** A download link valid for `ttlSeconds`. */
 export async function createSignedUrl(path: string, ttlSeconds: number): Promise<string> {
   const { data, error } = await supabaseAdmin.storage

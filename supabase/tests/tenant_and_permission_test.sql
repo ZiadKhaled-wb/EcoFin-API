@@ -821,6 +821,39 @@ INSERT INTO t.denial VALUES
 INSERT INTO t.denial VALUES
  ('get_contract_documents','zz_n07_1_documents','installment.create|customer.view_pii',$$SELECT public.get_contract_documents((SELECT id FROM public.contracts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-n02-sale'))$$),
  ('record_contract_document_print','zz_n07_2_print','installment.create|customer.view_pii',$$SELECT public.record_contract_document_print((SELECT id FROM public.contracts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-n02-sale'),'contract')$$);
+-- M01: an import file and validated import jobs of the denial shop (made once per tag, superuser).
+CREATE FUNCTION t.m01_file() RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $f$
+DECLARE v_id uuid;
+BEGIN
+    SELECT id INTO v_id FROM public.files WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND path LIKE '%/import/denial-m01.csv';
+    IF v_id IS NULL THEN
+        INSERT INTO public.files(organization_id,path,original_name,mime,size_bytes,sha256,purpose)
+        VALUES ('d1000000-0000-0000-0000-000000000001','d1000000-0000-0000-0000-000000000001/import/denial-m01.csv','denial-m01.csv','text/csv',10,repeat('a',64),'import')
+        RETURNING id INTO v_id;
+    END IF;
+    RETURN v_id;
+END $f$;
+CREATE FUNCTION t.m01_job(p_tag text) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $f$
+DECLARE v_id uuid;
+BEGIN
+    SELECT id INTO v_id FROM public.import_jobs WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND report->>'idempotency_key'='denial-m01-'||p_tag;
+    IF v_id IS NULL THEN
+        INSERT INTO public.import_jobs(organization_id,kind,status,file_id,rows_total,rows_ok,report)
+        VALUES ('d1000000-0000-0000-0000-000000000001','suppliers','validated',t.m01_file(),1,1,
+                jsonb_build_object('columns',jsonb_build_object('mapping','{}'::jsonb,'unmapped_headers','[]'::jsonb),'idempotency_key','denial-m01-'||p_tag))
+        RETURNING id INTO v_id;
+    END IF;
+    RETURN v_id;
+END $f$;
+-- A STABLE read does not see a row made in its own statement, so the job it reads is made first.
+SELECT t.m01_job('get');
+INSERT INTO t.denial VALUES
+ ('create_import','zz_m01_1_create','import.data',$$SELECT public.create_import('suppliers',t.m01_file(),NULL,'[{"row":2,"values":{"name":"TEST-1 denial import supplier"}}]'::jsonb,'{}','denial-m01-create')$$),
+ ('get_import_job','zz_m01_2_get','import.data|export.data',$$SELECT public.get_import_job(t.m01_job('get'))$$),
+ ('list_import_jobs','zz_m01_3_list','import.data|export.data',$$SELECT public.list_import_jobs('{}')$$),
+ ('queue_import','zz_m01_4_queue','import.data',$$SELECT public.queue_import(t.m01_job('queue'),'denial-m01-queue-run')$$),
+ ('cancel_import_job','zz_m01_5_cancel','import.data',$$SELECT public.cancel_import_job(t.m01_job('cancel'))$$),
+ ('attach_import_result','zz_m01_6_attach','import.data',$$SELECT public.attach_import_result(t.m01_job('attach'),gen_random_uuid(),'d1000000-0000-0000-0000-000000000001/export/denial-m01.csv','denial-m01.csv','text/csv',1,repeat('a',64))$$);
 -- EC-147: register the new RPC without changing the completeness/denial assertions.
 INSERT INTO t.denial VALUES ('force_close_shift','shift_4_force_close','cash.adjust',$q$SELECT public.force_close_shift((SELECT id FROM public.shifts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-shift-1'),'5.00','Lost POS')$q$);
 CREATE TABLE t.write_functions AS

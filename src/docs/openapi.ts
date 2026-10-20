@@ -3030,6 +3030,77 @@ export const openApiSpec = {
                 responses: { 200: { description: 'CashTransfer' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/imports/templates/{kind}': {
+            get: {
+                tags: ['Import'],
+                summary: 'Download the empty import file of a kind (import.data)',
+                description: 'M01 (D83). kind: suppliers, products, customers, opening_stock. format: xlsx (default; a Template sheet and a Help sheet) or csv (UTF-8 with BOM). Row 1 holds the field keys, row 2 the Arabic labels (the importer skips it). Built from IMPORT_COLUMNS, so the template and the parser agree. Schema: ImportKindParams, ImportTemplateQuery.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'kind', in: 'path', required: true, schema: { type: 'string', enum: ['suppliers', 'products', 'customers', 'opening_stock'] } }, { name: 'format', in: 'query', schema: { type: 'string', enum: ['xlsx', 'csv'], default: 'xlsx' } }],
+                responses: { 200: { description: 'The file' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/imports/inspect': {
+            post: {
+                tags: ['Import'],
+                summary: 'Read an uploaded import file (import.data)',
+                description: 'M01 (D83). The file is uploaded first through POST /api/files (purpose import, csv or xlsx; 5 MB, 5,000 data rows). Answers the type, the sheets, the headers, the first rows and the automatic column mapping (field -> header, unmatched headers, missing required fields). Saves nothing. IMPORT_FILE_UNREADABLE (422): not csv/xlsx, broken zip, password-protected, empty. IMPORT_TOO_MANY_ROWS (413). IMPORT_SHEET_NOT_FOUND (422). FILE_NOT_FOUND (404; another shop\'s file too). Schema: InspectImportBody -> ImportInspection.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'ImportInspection' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 413: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/imports': {
+            get: {
+                tags: ['Import'],
+                summary: 'Import history (import.data or export.data)',
+                description: 'M01 (D83). Newest first with a keyset cursor. Filters: kind, status, limit (1-100, 25), cursor. Works in an expired shop. Schema: ImportListQuery -> ImportListResponse.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'kind', in: 'query', schema: { type: 'string' } }, { name: 'status', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 25 } }, { name: 'cursor', in: 'query', schema: { type: 'string' } }],
+                responses: { 200: { description: 'ImportListResponse' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Import'],
+                summary: 'Check an import file: the dry run (import.data)',
+                description: 'M01 (D83). Reads the uploaded file, matches its headers to the kind\'s fields (the body\'s mapping field -> header overrides the automatic match), checks every row in SQL and saves nothing but the job. Every error is listed by row and column (a failed run also gets a CSV of them, result_file_id, through GET /api/files/:id/url). status validated = no errors: it can be run; failed = errors. branch_id is for opening_stock only. IMPORT_MISSING_COLUMNS (422, details.columns), IMPORT_MAPPING_INVALID (422), IMPORT_FILE_UNREADABLE, IMPORT_TOO_MANY_ROWS, IMPORT_SHEET_NOT_FOUND. The same idempotency_key returns the same job. Audit import.validated. Schema: CreateImportBody -> ImportJob.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 201: { description: 'ImportJob' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 413: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/imports/{id}': {
+            get: {
+                tags: ['Import'],
+                summary: 'One import job with its full report (import.data or export.data)',
+                description: 'M01 (D83). IMPORT_JOB_NOT_FOUND (404) for an unknown or another shop\'s id. National IDs are masked in the preview. Schema: ImportJob.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'ImportJob' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/imports/{id}/run': {
+            post: {
+                tags: ['Import'],
+                summary: 'Run a validated import (import.data)',
+                description: 'M01 (D83). Queues the background job import.apply and answers 202 with the job (importing). The worker re-checks every row and writes all of them in one transaction or none (failed, with the new errors). Poll GET /api/imports/:id until completed or failed. Only a validated job: IMPORT_NOT_VALIDATED (409, details.status). The same idempotency_key on an importing job answers it again. Audit import.started, then import.completed or import.failed. Schema: RunImportBody -> ImportJob.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 202: { description: 'ImportJob' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/imports/{id}/cancel': {
+            post: {
+                tags: ['Import'],
+                summary: 'Cancel an import that has not run (import.data)',
+                description: 'M01 (D83). uploaded, validated or failed jobs; cancelled is final. IMPORT_NOT_VALIDATED (409) for an importing or finished job. Audit import.cancelled. Schema: ImportJob.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'ImportJob' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/units': {
             get: {
                 tags: ['Inventory'],

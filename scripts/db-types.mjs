@@ -74,6 +74,10 @@ generated = generated.replace(
   /"?(?:create_stock_transfer|update_stock_transfer)"?:\s*\{[\s\S]*?Returns:/g,
   (signature) => signature.replace(/("?p_notes"?:\s*string)(?! \| null)/g, '$1 | null'),
 );
+// M01: only opening stock has a branch.
+generated = generated.replace(/"?create_import"?:\s*\{[\s\S]*?Returns:/, (signature) =>
+  signature.replace(/("?p_branch_id"?:\s*string)(?! \| null)/g, '$1 | null'),
+);
 // I04: a registration note is optional.
 generated = generated.replace(/"?register_units"?:\s*\{[\s\S]*?Returns:/, (signature) =>
   signature.replace(/("?p_note"?:\s*string)(?! \| null)/g, '$1 | null'),

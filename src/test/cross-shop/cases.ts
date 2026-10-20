@@ -5726,3 +5726,124 @@ crossShopCase({
     h.expect(await h.auditRowsFrom(SHOP_B, missing.ip)).toBe(0);
   },
 });
+
+// M01 (D83). Import: a foreign shop header is refused, an organization id in the request is refused,
+// and a file or job that is not the caller's shop's (here an id nobody has; the SQL tests and
+// imports.integration.test.ts use a real file and job of the other shop) is "not found", with
+// nothing written.
+const M01_UNKNOWN = '00000000-0000-4000-8000-0000000d0183';
+const M01_BODY = { kind: 'suppliers', file_id: M01_UNKNOWN };
+crossShopCase({
+  method: 'GET',
+  path: '/api/imports/templates/:kind',
+  name: 'a template refuses a foreign shop header; the owner downloads their own',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/imports/templates/products', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const mine = await h.call('GET', '/api/imports/templates/products?format=csv', {
+      token: a.accessToken,
+    });
+    h.expect(mine.res.status).toBe(200);
+    h.expect(String(mine.res.headers['content-type'])).toContain('text/csv');
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/imports/inspect',
+  name: 'inspecting refuses a foreign header, an org id and a file of no shop of ours',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('POST', '/api/imports/inspect', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: M01_BODY,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/imports/inspect', {
+      token: a.accessToken,
+      body: { ...M01_BODY, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('POST', '/api/imports/inspect', {
+      token: a.accessToken,
+      body: M01_BODY,
+    });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('FILE_NOT_FOUND');
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/imports',
+  name: 'a dry run refuses a foreign header, an org id and a file of no shop of ours; nothing is written',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = { ...M01_BODY, idempotency_key: 'm01-xshop-create-0001' };
+    const foreign = await h.call('POST', '/api/imports', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/imports', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('POST', '/api/imports', { token: a.accessToken, body });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('FILE_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, missing.ip)).toBe(0);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/imports',
+  name: 'the import history refuses a foreign header and an org id; shop A reads only its own',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/imports', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/imports', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const mine = await h.call('GET', '/api/imports', { token: a.accessToken });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+  },
+});
+for (const [method, suffix, body] of [
+  ['GET', '', undefined],
+  ['POST', '/run', { idempotency_key: 'm01-xshop-run-0001' }],
+  ['POST', '/cancel', undefined],
+] as const) {
+  crossShopCase({
+    method,
+    path: `/api/imports/:id${suffix}`,
+    name: `an import job (${method} ${suffix || 'read'}) refuses a foreign header and an unknown or other-shop id`,
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const path = `/api/imports/${M01_UNKNOWN}${suffix}`;
+      const foreign = await h.call(method, path, {
+        token: a.accessToken,
+        orgId: SHOP_B,
+        ...(body ? { body } : {}),
+      });
+      h.expect(foreign.res.status).toBe(403);
+      const missing = await h.call(method, path, {
+        token: a.accessToken,
+        ...(body ? { body } : {}),
+      });
+      h.expect(missing.res.status).toBe(404);
+      h.expect(h.code(missing.res)).toBe('IMPORT_JOB_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, missing.ip)).toBe(0);
+    },
+  });
+}

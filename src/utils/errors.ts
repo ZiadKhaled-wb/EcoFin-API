@@ -39,6 +39,7 @@ import {
   WalletBalanceDetail,
   TemplateInvalidDetail,
   TemplateNotAllowedDetail,
+  ImportNotValidatedDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 import type { ZodTypeAny } from 'zod';
@@ -137,6 +138,7 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   WALLET_BALANCE_CHANGED: WalletBalanceDetail,
   TEMPLATE_INVALID: TemplateInvalidDetail,
   TEMPLATE_NOT_ALLOWED: TemplateNotAllowedDetail,
+  IMPORT_NOT_VALIDATED: ImportNotValidatedDetail,
 };
 
 /**
