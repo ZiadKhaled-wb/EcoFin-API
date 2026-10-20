@@ -602,7 +602,49 @@ M01 Audit ${STAMP}-${ipCounter}
     if (made.error) throw new Error(made.error.message);
     return made.data.id;
   }
+  /** K04: an old, empty day of branch 1 that no earlier run closed, previewed for its hash. */
+  async function k04Day(token: string): Promise<{ date: string; hash: string }> {
+    for (let i = 0; i < 10; i += 1) {
+      const date = new Date(Date.UTC(2000, 0, 1) + Math.floor(Math.random() * 7000) * 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+      const p = await send('get', `/api/day-closes/preview?branch_id=${BR1}&date=${date}`, {
+        token,
+      });
+      if (p.res.status === 200) return { date, hash: (p.res.body as { hash: string }).hash };
+    }
+    throw new Error('K04 audit driver: no open old day found');
+  }
+  async function k04Close(token: string): Promise<Sent> {
+    const day = await k04Day(token);
+    return send('post', '/api/day-closes', {
+      token,
+      body: {
+        branch_id: BR1,
+        business_date: day.date,
+        preview_hash: day.hash,
+        note: 'F07 audit driver',
+      },
+    });
+  }
   const drivers: Record<string, () => Promise<{ sent: Sent; org: string; status?: number }>> = {
+    'POST /api/day-closes': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return { sent: await k04Close(owner.accessToken), org: SHOP_ONE, status: 201 };
+    },
+    'POST /api/day-closes/:id/reopen': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const closed = await k04Close(owner.accessToken);
+      expect(closed.res.status, JSON.stringify(closed.res.body)).toBe(201);
+      const id = (closed.res.body as { id: string }).id;
+      return {
+        sent: await send('post', `/api/day-closes/${id}/reopen`, {
+          token: owner.accessToken,
+          body: { reason: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
     'POST /api/employees': () => staffAudit('create'),
     'PATCH /api/employees/:employeeId': () => staffAudit('update'),
     'PUT /api/employees/:employeeId/active': () => staffAudit('active'),

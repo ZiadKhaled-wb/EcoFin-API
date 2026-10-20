@@ -856,6 +856,14 @@ INSERT INTO t.denial VALUES
  ('attach_import_result','zz_m01_6_attach','import.data',$$SELECT public.attach_import_result(t.m01_job('attach'),gen_random_uuid(),'d1000000-0000-0000-0000-000000000001/export/denial-m01.csv','denial-m01.csv','text/csv',1,repeat('a',64))$$);
 -- EC-147: register the new RPC without changing the completeness/denial assertions.
 INSERT INTO t.denial VALUES ('force_close_shift','shift_4_force_close','cash.adjust',$q$SELECT public.force_close_shift((SELECT id FROM public.shifts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-shift-1'),'5.00','Lost POS')$q$);
+-- K04: an old day of the denial shop's branch, closed (case 1) then reopened (case 2) by the owner.
+INSERT INTO t.denial VALUES
+ ('close_day','zz_k04_1_close','day.close',$q$SELECT public.close_day('d2000000-0000-0000-0000-000000000011','2020-01-01',(public.get_day_close_preview('d2000000-0000-0000-0000-000000000011','2020-01-01')->>'hash'),'TEST-1 denial close')$q$),
+ ('reopen_day','zz_k04_2_reopen','day.reopen',$q$SELECT public.reopen_day((SELECT id FROM public.day_closes WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND business_date='2020-01-01'),'TEST-1 denial reopen')$q$),
+ ('get_day_close','zz_k04_3_get','day.close|cash.view',$q$SELECT public.get_day_close((SELECT id FROM public.day_closes WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND business_date='2020-01-01'))$q$),
+ ('get_day_close_preview','zz_k04_4_preview','day.close|cash.view',$q$SELECT public.get_day_close_preview('d2000000-0000-0000-0000-000000000011','2020-01-02')$q$),
+ ('list_day_closes','zz_k04_5_list','day.close|cash.view',$q$SELECT public.list_day_closes()$q$),
+ ('day_close_alerts','zz_k04_6_alerts','day.close|cash.view',$q$SELECT public.day_close_alerts()$q$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

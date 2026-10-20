@@ -1478,6 +1478,51 @@ export type Database = {
           },
         ];
       };
+      day_checks: {
+        Row: {
+          branch_id: string;
+          business_date: string;
+          checked_at: string;
+          drift: boolean;
+          id: string;
+          issues: NonNullable<Json>;
+          organization_id: string;
+        };
+        Insert: {
+          branch_id: string;
+          business_date: string;
+          checked_at?: string;
+          drift?: boolean;
+          id?: string;
+          issues?: NonNullable<Json>;
+          organization_id: string;
+        };
+        Update: {
+          branch_id?: string;
+          business_date?: string;
+          checked_at?: string;
+          drift?: boolean;
+          id?: string;
+          issues?: NonNullable<Json>;
+          organization_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'day_checks_branch_id_organization_id_fkey';
+            columns: ['branch_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'branches';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'day_checks_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       day_closes: {
         Row: {
           branch_id: string;
@@ -8386,6 +8431,15 @@ export type Database = {
       cancel_purchase_order: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_stock_count: { Args: { p_count_id: string }; Returns: Json };
       cancel_stock_transfer: { Args: { p_id: string }; Returns: Json };
+      close_day: {
+        Args: {
+          p_branch_id: string;
+          p_business_date: string;
+          p_note?: string;
+          p_preview_hash: string;
+        };
+        Returns: Json;
+      };
       close_shift: {
         Args: { p_counts: Json; p_difference_reason?: string; p_id: string; p_vault_id?: string };
         Returns: Json;
@@ -8514,6 +8568,7 @@ export type Database = {
         Args: { p_customer_id: string; p_from?: string; p_to?: string };
         Returns: Json;
       };
+      day_close_alerts: { Args: Record<PropertyKey, never>; Returns: Json };
       decide_credit_exception: {
         Args: { p_approval_id: string; p_approve: boolean; p_note?: string };
         Returns: Json;
@@ -8648,6 +8703,11 @@ export type Database = {
         Returns: Json;
       };
       get_customer_credit_profile: { Args: { p_customer_id: string }; Returns: Json };
+      get_day_close: { Args: { p_id: string }; Returns: Json };
+      get_day_close_preview: {
+        Args: { p_branch_id: string; p_business_date: string };
+        Returns: Json;
+      };
       get_discount_approval: { Args: { p_approval_id: string }; Returns: Json };
       get_eta_settings: { Args: Record<PropertyKey, never>; Returns: Json };
       get_expense: { Args: { p_id: string }; Returns: Json };
@@ -8722,6 +8782,7 @@ export type Database = {
           isSetofReturn: true;
         };
       };
+      jobs_day_check: { Args: { p_as_of?: string; p_organization_id: string }; Returns: Json };
       jobs_enqueue_daily: {
         Args: { p_job_type: string; p_local_time: string; p_max_attempts?: number; p_now?: string };
         Returns: number;
@@ -8792,6 +8853,10 @@ export type Database = {
       list_customer_surveys: { Args: { p_customer_id: string }; Returns: Json };
       list_customers: {
         Args: { p_limit?: number; p_offset?: number; p_search?: string; p_status?: string };
+        Returns: Json;
+      };
+      list_day_closes: {
+        Args: { p_branch_id?: string; p_from?: string; p_status?: string; p_to?: string };
         Returns: Json;
       };
       list_devices: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -9163,6 +9228,7 @@ export type Database = {
       reject_purchase_invoice: { Args: { p_id: string; p_reason: string }; Returns: Json };
       rename_cash_account: { Args: { p_id: string; p_name: string }; Returns: Json };
       rename_expense_category: { Args: { p_id: string; p_name: string }; Returns: Json };
+      reopen_day: { Args: { p_id: string; p_reason: string }; Returns: Json };
       request_claim_refund: { Args: { p_claim_id: string }; Returns: undefined };
       request_credit_exception: {
         Args: { p_customer_id: string; p_financed_amount: string; p_reason: string };

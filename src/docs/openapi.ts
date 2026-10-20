@@ -3101,6 +3101,66 @@ export const openApiSpec = {
                 responses: { 200: { description: 'ImportJob' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/day-closes': {
+            get: {
+                tags: ['Cash'],
+                summary: 'Business days of the caller\'s branches (day.close or cash.view)',
+                description: 'K04 (D84). Days of a range (default the last 30, at most 92) that have activity or a day close: status open | closed | reopened, who closed, the sales total and the count of blocking and warning issues (of the stored close, else of the last nightly check). Filters: branch_id, from, to, status. Works in an expired shop. BRANCH_NOT_FOUND for another shop\'s branch. Schema: DayCloseListQuery -> DayCloseListResponse.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'branch_id', in: 'query', required: false, schema: { type: 'string' } }, { name: 'from', in: 'query', required: false, schema: { type: 'string' } }, { name: 'to', in: 'query', required: false, schema: { type: 'string' } }, { name: 'status', in: 'query', required: false, schema: { type: 'string' } }],
+                responses: { 200: { description: 'DayCloseListResponse' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Cash'],
+                summary: 'Close a branch\'s business day (day.close)',
+                description: 'K04 (D84). One transaction under the day lock: the numbers are computed again and must hash to preview_hash (DAY_CHANGED otherwise: something was posted after the preview); a blocking issue (an open shift) is DAY_CLOSE_BLOCKED with details.issues; warnings need a note of 3-500 characters (NOTE_REQUIRED). Stores the totals and issues as the snapshot; from then on any new entry dated that day in that branch is DAY_CLOSED. Today may be closed. A closed day again is DAY_ALREADY_CLOSED with details.id. No Idempotency-Key. Audit day.closed (warning when warnings were acknowledged). Schema: CloseDayBody -> DayClose.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 201: { description: 'DayClose' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/day-closes/preview': {
+            get: {
+                tags: ['Cash'],
+                summary: 'The live numbers of a business day (day.close or cash.view)',
+                description: 'K04 (D84). For an open or reopened day of a branch: sales by payment method, voids, returns, collections (principal, profit, in the field), expenses by category, supplier payments and refunds, every cash account of the branch (opening, in, out, closing, by type; a shop-wide bank shows only this branch\'s movements), the shifts and the ETA status; the issues with a link to their cause (SHIFT_OPEN blocking; LEDGER_MISMATCH, DOCUMENT_WITHOUT_LEDGER, ETA_NOT_ACCEPTED warnings; SHIFT_DIFFERENCE, WALLET_SHORTAGE, EARLIER_DAY_OPEN info) and the hash the close sends back. A closed day is DAY_ALREADY_CLOSED with details.id; a future date FUTURE_BUSINESS_DATE. Works in an expired shop. Schema: DayClosePreviewQuery -> DayClosePreview.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'branch_id', in: 'query', required: true, schema: { type: 'string' } }, { name: 'date', in: 'query', required: true, schema: { type: 'string' } }],
+                responses: { 200: { description: 'DayClosePreview' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/day-closes/alerts': {
+            get: {
+                tags: ['Cash'],
+                summary: 'Day-close alerts for the dashboard (day.close or cash.view)',
+                description: 'K04 (D84). Per branch of the caller: days with activity in the last 14 days (today left out) that are not closed, and the last nightly check (warnings, critical findings, drift). Only branches with something to show. Schema: DayCloseAlerts.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'DayCloseAlerts' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/day-closes/{id}': {
+            get: {
+                tags: ['Cash'],
+                summary: 'A stored day close (day.close or cash.view)',
+                description: 'K04 (D84). The snapshot, the issues, the note, who closed and reopened, and drift: true when a closed day\'s live numbers no longer equal the snapshot (the ETA status excluded). NOT_FOUND for an unknown or another shop\'s id. Schema: DayClose.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'DayClose' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/day-closes/{id}/reopen': {
+            post: {
+                tags: ['Cash'],
+                summary: 'Reopen a closed day (day.reopen)',
+                description: 'K04 (D84). The owner by default. A reason of 3-500 characters (REASON_REQUIRED). Only a closed day (DAY_NOT_CLOSED). The day takes entries again; closing it again stores a new snapshot. Audit day.reopened (warning). Schema: ReopenDayBody -> DayClose.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'DayClose' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/units': {
             get: {
                 tags: ['Inventory'],

@@ -40,6 +40,8 @@ import {
   TemplateInvalidDetail,
   TemplateNotAllowedDetail,
   ImportNotValidatedDetail,
+  DayAlreadyClosedDetail,
+  DayCloseBlockedDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 import type { ZodTypeAny } from 'zod';
@@ -139,6 +141,8 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   TEMPLATE_INVALID: TemplateInvalidDetail,
   TEMPLATE_NOT_ALLOWED: TemplateNotAllowedDetail,
   IMPORT_NOT_VALIDATED: ImportNotValidatedDetail,
+  DAY_ALREADY_CLOSED: DayAlreadyClosedDetail,
+  DAY_CLOSE_BLOCKED: DayCloseBlockedDetail,
 };
 
 /**

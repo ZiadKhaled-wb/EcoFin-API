@@ -6,13 +6,16 @@
 //   each receipt status change, not daily.
 //   M01 'import.apply' (D83): queued by public.queue_import when the owner runs a validated import.
 //   N04 'installments.overdue' (daily, D79): warnings, bans and legal referrals; never a late fee
-//   (Islamic finance rule 4). K04 daily reconciliation, Q03 backups check: added by those slices.
+//   (Islamic finance rule 4).
+//   K04 'day.check' (daily, D84): yesterday's day-close checks per branch and drift on closed days;
+//   never closes a day. Q03 backups check: added by that slice.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Logger } from 'pino';
 import { etaJobHandlers } from '../eta/jobs';
 import { etaRuntime } from '../eta/runtime';
 import { supabaseEtaStore } from '../eta/store';
+import { dayCheck } from './handlers/dayCheck';
 import { importApply } from './handlers/importApply';
 import { ledgerReconcile } from './handlers/ledgerReconcile';
 import { overdueCheck } from './handlers/overdueCheck';
@@ -25,6 +28,7 @@ export function jobHandlers(db: SupabaseClient, logger: Logger): Record<string, 
   return {
     'ledger.reconcile': ledgerReconcile(db),
     'installments.overdue': overdueCheck(db),
+    'day.check': dayCheck(db),
     // M01 (D83): queued by public.queue_import, not daily.
     'import.apply': importApply(db),
     ...etaJobHandlers({ store: supabaseEtaStore(db), client, hosts, logger }),
@@ -36,6 +40,8 @@ export const DAILY_JOBS: readonly DailyJob[] = [
   // Before the shop's day starts, so the morning's overdue list is ready.
   { type: 'installments.overdue', localTime: '00:30' },
   { type: 'ledger.reconcile', localTime: '03:00' },
+  // After ledger.reconcile, so the night's mismatch log comes first (K04, D84).
+  { type: 'day.check', localTime: '03:30' },
 ];
 
 export function createJobWorker(

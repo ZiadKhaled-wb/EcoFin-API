@@ -108,6 +108,8 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   // N06: a field collection pays through N03's core (collection.created).
   'POST /api/collections/field': { action: 'collection.created' },
   'POST /api/wallets/:id/settle': { action: 'collector.wallet_settled' },
+  'POST /api/day-closes': { action: 'day.closed' },
+  'POST /api/day-closes/:id/reopen': { action: 'day.reopened' },
   'PUT /api/customers/:id/collector': { action: 'customer.collector_set' },
   // N04: the check records warnings, bans and referrals (customer.status_set and
   // contract.legal_referred for the ones it makes; on a shop with nothing late, none).

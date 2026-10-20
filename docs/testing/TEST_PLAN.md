@@ -427,3 +427,7 @@ See [INT-5 report](int-5/REPORT.md): one flow in a fresh shop through the screen
 ## TEST-5 — installment money tests (EC-136)
 
 See [TEST-5 plan](plans/TEST-5.md): schedules that add up over 108 real sales, the allocation order (no late fees: oldest installment, profit then principal), a late installment that never costs more, the credit limit enforced by the server with nothing written on a refusal, a new policy for new contracts only, and the collector wallet equal to its ledger after a mixed day. New: `supabase/tests/test5_installment_money_test.sql` and one case in `src/routes/contracts.integration.test.ts`.
+
+## K04 — day close and reconciliation (EC-62)
+
+See [K04 plan](plans/K04.md). Covers the Done when (the day-close numbers equal the sum of the day's documents; a broken balance is flagged by the preview, the stored issues and the nightly check) and the D84 rules (an open shift blocks, the hash, a note with warnings, a closed day refuses entries for its branch only, reopen and close again, drift, access and isolation).
