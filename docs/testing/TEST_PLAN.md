@@ -423,3 +423,7 @@ See [N07 plan](plans/N07.md). Covers the Done when (the paper matches the contra
 ## INT-5 — installment lifecycle end to end (EC-135)
 
 See [INT-5 report](int-5/REPORT.md): one flow in a fresh shop through the screens (customer, guarantor, field survey, credit limit, installment sale, printed contract and notes, field collection into the collector's wallet, settlement into the safe, early settlement, an overdue installment that gets a warning and never a fee, the customer account in English and Arabic), with the database checks in `scripts/int5-db.mjs verify`. Spec: EcoFin-Web `e2e/int5-installment-lifecycle.spec.ts`.
+
+## TEST-5 — installment money tests (EC-136)
+
+See [TEST-5 plan](plans/TEST-5.md): schedules that add up over 108 real sales, the allocation order (no late fees: oldest installment, profit then principal), a late installment that never costs more, the credit limit enforced by the server with nothing written on a refusal, a new policy for new contracts only, and the collector wallet equal to its ledger after a mixed day. New: `supabase/tests/test5_installment_money_test.sql` and one case in `src/routes/contracts.integration.test.ts`.
