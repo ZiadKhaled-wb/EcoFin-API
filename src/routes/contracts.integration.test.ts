@@ -284,6 +284,46 @@ describe.skipIf(!RUN)('N02 installment sale and contract against local stack', (
     expect(bad.status).toBe(400);
   });
 
+  // TEST-5: the limit is the server's, whatever the client sends; a refused sale writes nothing.
+  it('refuses a sale above the credit limit sent straight to the API, and writes nothing', async () => {
+    const limited = await newCustomer('limited', '29001010100792');
+    const lowered = await call('put', `/api/customers/${limited}/credit-limit`, owner, {
+      credit_limit: '15000.00',
+      reason: 'TEST-5 integration',
+    });
+    expect(lowered.status, JSON.stringify(lowered.body)).toBe(200);
+    const fits = await call('post', '/api/installments/sales', cashier, sale(limited), key('l1'));
+    expect(fits.status, JSON.stringify(fits.body)).toBe(201);
+
+    const snapshot = async () => {
+      const [contracts, sales, stock, drawer, counters] = await Promise.all([
+        service
+          .from('contracts')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', org),
+        service
+          .from('sales')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', org),
+        service.from('stock_levels').select('on_hand').eq('product_id', tv),
+        service.from('cash_movements').select('amount').eq('shift_id', shift.id),
+        service.from('document_counters').select('doc_type, next_value').eq('organization_id', org),
+      ]);
+      return {
+        contracts: contracts.count,
+        sales: sales.count,
+        stock: stock.data,
+        drawer: drawer.data?.length,
+        counters: counters.data?.sort((a, b) => String(a.doc_type).localeCompare(b.doc_type)),
+      };
+    };
+    const before = await snapshot();
+    const over = await call('post', '/api/installments/sales', cashier, sale(limited), key('l2'));
+    expect(over.status, JSON.stringify(over.body)).toBe(409);
+    expect(code(over)).toBe('CREDIT_LIMIT_EXCEEDED');
+    expect(await snapshot()).toEqual(before);
+  });
+
   it('answers CONTRACT_NOT_FOUND for an unknown contract', async () => {
     const res = await call('get', '/api/contracts/00000000-0000-4000-8000-00000000c0de', owner);
     expect(res.status).toBe(404);
