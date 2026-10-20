@@ -756,7 +756,7 @@ export const openApiSpec = {
                 tags: ['Settings'],
                 summary: 'Shop settings (P03)',
                 description:
-                    'Any employee of the shop. Money and column percentages are decimal strings. Includes the caller\'s own discount cap (my_discount), the current installment policy and the tax class options. Schema: ShopSettings in @ziadkhaled-wb/contracts.',
+                    'Any employee of the shop. Money and column percentages are decimal strings. Includes the caller\'s own discount cap (my_discount), the current installment policy and the tax class options. N07 adds contract_terms (null = default text) and promissory_notes_mode. Schema: ShopSettings in @ziadkhaled-wb/contracts.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }],
                 responses: {
@@ -2116,6 +2116,27 @@ export const openApiSpec = {
                     { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } },
                 ],
                 responses: { 201: { description: 'InstallmentSale' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/contracts/{id}/documents': {
+            get: {
+                tags: ['Installments'],
+                summary: 'Data of the printed contract and promissory notes (installment.create or customer.view_pii)',
+                description: 'N07 (D82). One read for both documents: the contract of its current schedule version (without the cash price: rule 1), the customer and every guarantor with full national ID, address and job, the goods (names and quantities), the shop and branch, the terms text (null while the default is used), the notes mode and the notes (computed from what is left on the current version; empty for a closed contract), the next print number per document, the status mark and what the current version replaces. Cache-Control: no-store (national IDs). CONTRACT_NOT_FOUND for an unknown or the id of another shop. Works in an expired shop. Schema: ContractDocuments.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'ContractDocuments' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/contracts/{id}/document-prints': {
+            post: {
+                tags: ['Installments'],
+                summary: 'Log a printed contract document (installment.create or customer.view_pii)',
+                description: 'N07 (D82). Body { document: contract | promissory_notes }. Print 1 of a schedule version is the original, later ones copies (print_no, copy); a reschedule starts an original again. The audit log is the print log (contract.document_printed). CONTRACT_NOT_OPEN for the notes of a closed contract; refused in an expired shop (the client prints a copy). Schema: ContractDocumentPrintBody -> ContractDocumentPrint.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'ContractDocumentPrint' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
         '/api/contracts/{id}': {

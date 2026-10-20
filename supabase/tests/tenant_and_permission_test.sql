@@ -817,6 +817,10 @@ INSERT INTO t.denial VALUES
  ('list_wallet_movements','zz_n06_6_ledger','collector.settle|cash.view|collection.create',$$SELECT public.list_wallet_movements(t.n06_wallet(),'{}')$$),
  ('settle_collector_wallet','zz_n06_5_settle','collector.settle',$$SELECT public.settle_collector_wallet(t.n06_wallet(),jsonb_build_object('to_account_id',t.n06_safe(),'handed','10.00','expected_balance','50.00'),'denial-n06-settle')$$),
  ('get_collector_route','zz_n06_7_route','collection.create',$$SELECT public.get_collector_route('{}')$$);
+-- N07: the printed contract and notes of the denial shop's N02 contract (any of the two keys allows it).
+INSERT INTO t.denial VALUES
+ ('get_contract_documents','zz_n07_1_documents','installment.create|customer.view_pii',$$SELECT public.get_contract_documents((SELECT id FROM public.contracts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-n02-sale'))$$),
+ ('record_contract_document_print','zz_n07_2_print','installment.create|customer.view_pii',$$SELECT public.record_contract_document_print((SELECT id FROM public.contracts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-n02-sale'),'contract')$$);
 -- EC-147: register the new RPC without changing the completeness/denial assertions.
 INSERT INTO t.denial VALUES ('force_close_shift','shift_4_force_close','cash.adjust',$q$SELECT public.force_close_shift((SELECT id FROM public.shifts WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-shift-1'),'5.00','Lost POS')$q$);
 CREATE TABLE t.write_functions AS

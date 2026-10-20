@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   CollectionPreviewQuery,
+  ContractDocumentPrintBody,
   ContractIdParams,
   ContractListQuery,
   ReschedulePreviewBody,
@@ -16,6 +17,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 import * as controller from '../controllers/installments.controller';
 import * as collections from '../controllers/collections.controller';
 import * as changes from '../controllers/contractChanges.controller';
+import * as documents from '../controllers/contractDocuments.controller';
 const router = Router();
 // N03 (D78). The contract search: any customer read key, checked in SQL; the collection keys see
 // every branch of the shop, anyone else only their own branches.
@@ -91,6 +93,25 @@ router.get(
   authenticatedOnly(),
   validate({ params: ContractIdParams }),
   asyncHandler(changes.history),
+);
+// N07 (D82). The printed contract and promissory notes: one read (installment.create or
+// customer.view_pii and the contract visibility rule, checked in SQL; full national IDs, never
+// cached; an expired shop may read), and the print log (a write: refused in an expired shop).
+router.get(
+  '/:id/documents',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ params: ContractIdParams }),
+  asyncHandler(documents.documents),
+);
+router.post(
+  '/:id/document-prints',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ params: ContractIdParams, body: ContractDocumentPrintBody }),
+  asyncHandler(documents.print),
 );
 // N02 (D77). A contract: any customer read key and the contract's branch, or any branch for the
 // collection keys (N03, D78), checked in SQL (CONTRACT_NOT_FOUND otherwise); an expired shop may read.

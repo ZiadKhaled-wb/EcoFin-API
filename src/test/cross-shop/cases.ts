@@ -5465,10 +5465,10 @@ crossShopCase({
   },
 });
 
-// N05 (D80). Contract changes: a foreign shop header is refused, an organization id in the request
+// N05 (D80) and N07 (D82). Contract changes and documents: a foreign shop header is refused, an organization id in the request
 // is refused, another shop's (here unknown) contract is not found, nothing is written.
 const N05_UNKNOWN = '00000000-0000-4000-8000-0000000c0115';
-for (const suffix of ['/settlement-quote', '/changes'] as const) {
+for (const suffix of ['/settlement-quote', '/changes', '/documents'] as const) {
   crossShopCase({
     method: 'GET',
     path: `/api/contracts/:id${suffix}`,
@@ -5503,6 +5503,8 @@ for (const [suffix, body, keyed] of [
   ['/reschedule/preview', n05Plan, false],
   ['/reschedule', { ...n05Plan, reason: 'Cross-shop check', expected_remaining: '1.00' }, true],
   ['/write-off', { reason: 'Cross-shop check', expected_remaining: '1.00' }, true],
+  // N07 (D82): the print log of another shop's contract writes nothing.
+  ['/document-prints', { document: 'contract' }, false],
 ] as const) {
   crossShopCase({
     method: 'POST',

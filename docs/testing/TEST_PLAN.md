@@ -415,3 +415,7 @@ See [N05 plan](plans/N05.md). Covers the Done when (the old schedule is still vi
 ## N06 — collector wallets (EC-85)
 
 See [N06 plan](plans/N06.md). Covers the Done when (a field collection is counted once, in the wallet, until settled; the wallet balance equals its ledger) and the D81 rules (no commission, assignment and who may collect, partial settlement with a recorded shortage, reversal while the cash is in the wallet, route, overdue filter, access and isolation).
+
+## N07 — printed contract and promissory notes (EC-86)
+
+See [N07 plan](plans/N07.md). Covers the Done when (the paper matches the contract exactly; the notes sum to what is left; rules on paper; original then COPY, a reschedule starts an original; access and isolation) and the D82 rules.

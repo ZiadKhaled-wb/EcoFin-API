@@ -95,6 +95,7 @@ INSERT INTO t.no_permission_ok VALUES
   ('get_purchase_invoice', 'U02: read-only purchase invoice of the caller''s branches; any purchasing read key (D53)'),
   ('list_purchase_approvals', 'U06: read-only purchase approvals of the caller''s branches; checks app.has_permission(purchase.invoice_approve) so an expired shop can still read'),
   ('quote_sale', 'S01: read-only price quote of a cart; checks app.has_permission(sale.create); works in an expired shop'),
+  ('get_contract_documents', 'N07: read-only data of the printed contract and notes; checks app.has_permission(installment.create or customer.view_pii), the installments module and the contract visibility rule, so an expired shop can still read'),
   ('get_contract', 'N02: read-only contract with its schedule and balance; any customer read key (D63), the customers module and the contract''s branch; works in an expired shop'),
   ('preview_collection', 'N03: read-only due summary and allocation preview of a contract; checks app.has_permission(collection.create) and the installments module, so an expired shop can still look'),
   ('list_contracts', 'N03: read-only contract search; any customer read key (D63); the collection keys see every branch, others only their own'),

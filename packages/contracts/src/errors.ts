@@ -286,6 +286,9 @@ export const errorCodeHttpStatus = {
   WALLET_BALANCE_CHANGED: 409,
   SELF_SETTLEMENT: 403,
   WALLET_NOT_FOUND: 404,
+  // N07 printed contract and promissory notes
+  TEMPLATE_INVALID: 422,
+  TEMPLATE_NOT_ALLOWED: 422,
   // T02 ETA e-receipts
   DEVICE_NOT_FOUND: 404,
   DEVICE_SERIAL_TAKEN: 409,
