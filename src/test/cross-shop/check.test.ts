@@ -274,7 +274,18 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/fiscal/retry-many',
       ]),
     );
-    expect(keys).toHaveLength(265);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'GET /api/imports/templates/:kind',
+        'POST /api/imports/inspect',
+        'GET /api/imports',
+        'POST /api/imports',
+        'GET /api/imports/:id',
+        'POST /api/imports/:id/run',
+        'POST /api/imports/:id/cancel',
+      ]),
+    );
+    expect(keys).toHaveLength(272);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

@@ -113,6 +113,38 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
       employee_id: string | null;
     }[];
   }
+  /** M01: uploads a one-supplier CSV as an import file; returns its id. */
+  async function uploadImportFile(token: string): Promise<string> {
+    const res = await request(app)
+      .post('/api/files')
+      .set('X-Forwarded-For', nextIp())
+      .set('Authorization', `Bearer ${token}`)
+      .field('purpose', 'import')
+      .attach(
+        'file',
+        Buffer.from(`name
+
+M01 Audit ${STAMP}-${ipCounter}
+
+`),
+        'suppliers.csv',
+      );
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return (res.body as { id: string }).id;
+  }
+  async function createImportJob(token: string): Promise<string> {
+    const file = await uploadImportFile(token);
+    const { res } = await send('post', '/api/imports', {
+      token,
+      body: {
+        kind: 'suppliers',
+        file_id: file,
+        idempotency_key: `m01-audit-job-${STAMP}-${ipCounter}`,
+      },
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return (res.body as { id: string }).id;
+  }
   const code = (res: request.Response) => ErrorResponse.parse(res.body).error.code;
   const taxClassBody = () => ({
     name: `F07 ${STAMP}-${ipCounter}`,
@@ -2291,6 +2323,44 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
           token: owner.accessToken,
           body: { decision: 'approve' },
         }),
+        org: SHOP_ONE,
+      };
+    },
+    // M01: a one-row suppliers file, uploaded as an import file; the dry run, the start and the
+    // cancel each write exactly one row.
+    'POST /api/imports': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const file = await uploadImportFile(owner.accessToken);
+      return {
+        sent: await send('post', '/api/imports', {
+          token: owner.accessToken,
+          body: {
+            kind: 'suppliers',
+            file_id: file,
+            idempotency_key: `m01-audit-create-${STAMP}-${ipCounter}`,
+          },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'POST /api/imports/:id/run': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const job = await createImportJob(owner.accessToken);
+      return {
+        sent: await send('post', `/api/imports/${job}/run`, {
+          token: owner.accessToken,
+          body: { idempotency_key: `m01-audit-run-${STAMP}-${ipCounter}` },
+        }),
+        org: SHOP_ONE,
+        status: 202,
+      };
+    },
+    'POST /api/imports/:id/cancel': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const job = await createImportJob(owner.accessToken);
+      return {
+        sent: await send('post', `/api/imports/${job}/cancel`, { token: owner.accessToken }),
         org: SHOP_ONE,
       };
     },

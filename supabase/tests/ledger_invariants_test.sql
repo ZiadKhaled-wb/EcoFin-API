@@ -334,6 +334,8 @@ INSERT INTO t.replay_tested VALUES
  ('public.post_supplier_payment','u03_supplier_payments_test.sql: same key -> same payment, the safe, the balances and the movement count unchanged'),
  ('public.reverse_supplier_payment','u03_supplier_payments_test.sql: same key -> same reversal, nothing moves; the key of another payment -> IDEMPOTENCY_CONFLICT'),
  ('public.post_purchase_return','u04_purchase_returns_test.sql: same key -> same return, stock and balance unchanged'),
+ ('public.create_import','m01_import_test.sql: same key -> same job, no second row or audit row'),
+ ('public.queue_import','m01_import_test.sql: same key on an importing job -> the same job, one background job and one audit row'),
  ('public.create_cash_transfer','k01_vaults_test.sql: same key -> same transfer, nothing new'),
  ('public.post_cash_opening','k01_vaults_test.sql: same key -> nothing new; the key used for another account -> VALIDATION_FAILED'),
  ('public.post_stock_count','i02_stock_adjustments_test.sql: same key -> same adjustment, nothing posted twice; key reused for another count -> IDEMPOTENCY_CONFLICT');

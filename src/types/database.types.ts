@@ -1000,6 +1000,13 @@ export type Database = {
             referencedColumns: ['id', 'organization_id'];
           },
           {
+            foreignKeyName: 'contract_changes_branch_fk';
+            columns: ['branch_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'branches';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
             foreignKeyName: 'contract_changes_contract_id_organization_id_fkey';
             columns: ['contract_id', 'organization_id'];
             isOneToOne: false;
@@ -1026,6 +1033,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'organizations';
             referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'contract_changes_payment_fk';
+            columns: ['payment_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'payments';
+            referencedColumns: ['id', 'organization_id'];
           },
           {
             foreignKeyName: 'contract_changes_sales_return_id_organization_id_fkey';
@@ -1427,6 +1441,13 @@ export type Database = {
           updated_by?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: 'customers_collector_fk';
+            columns: ['collector_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id', 'organization_id'];
+          },
           {
             foreignKeyName: 'customers_created_by_fk';
             columns: ['created_by', 'organization_id'];
@@ -3384,6 +3405,7 @@ export type Database = {
         Row: {
           allow_negative_bank: boolean;
           collector_commission_pct: number;
+          contract_terms: string | null;
           credit_limit_income_multiple: number | null;
           credit_min_score: number;
           credit_score_weights: NonNullable<Json>;
@@ -3399,6 +3421,7 @@ export type Database = {
           organization_id: string;
           overdue_warning_interval_days: number;
           prices_include_vat: boolean;
+          promissory_notes_mode: string;
           purchase_approval_threshold: number | null;
           receipt_fields: NonNullable<Json>;
           receipt_footer: string | null;
@@ -3412,6 +3435,7 @@ export type Database = {
         Insert: {
           allow_negative_bank?: boolean;
           collector_commission_pct?: number;
+          contract_terms?: string | null;
           credit_limit_income_multiple?: number | null;
           credit_min_score?: number;
           credit_score_weights?: NonNullable<Json>;
@@ -3427,6 +3451,7 @@ export type Database = {
           organization_id: string;
           overdue_warning_interval_days?: number;
           prices_include_vat?: boolean;
+          promissory_notes_mode?: string;
           purchase_approval_threshold?: number | null;
           receipt_fields?: NonNullable<Json>;
           receipt_footer?: string | null;
@@ -3440,6 +3465,7 @@ export type Database = {
         Update: {
           allow_negative_bank?: boolean;
           collector_commission_pct?: number;
+          contract_terms?: string | null;
           credit_limit_income_multiple?: number | null;
           credit_min_score?: number;
           credit_score_weights?: NonNullable<Json>;
@@ -3455,6 +3481,7 @@ export type Database = {
           organization_id?: string;
           overdue_warning_interval_days?: number;
           prices_include_vat?: boolean;
+          promissory_notes_mode?: string;
           purchase_approval_threshold?: number | null;
           receipt_fields?: NonNullable<Json>;
           receipt_footer?: string | null;
@@ -3619,6 +3646,116 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'plans';
             referencedColumns: ['key'];
+          },
+        ];
+      };
+      overdue_actions: {
+        Row: {
+          branch_id: string;
+          business_date: string;
+          contract_id: string;
+          created_at: string;
+          customer_id: string;
+          days_late: number;
+          handled_at: string | null;
+          handled_by: string | null;
+          id: string;
+          kind: Database['public']['Enums']['overdue_action_kind'];
+          legal_case_id: string | null;
+          note: string | null;
+          organization_id: string;
+          outcome: string | null;
+          overdue_amount: number;
+          schedule_line_id: string;
+          status: Database['public']['Enums']['overdue_action_status'];
+        };
+        Insert: {
+          branch_id: string;
+          business_date: string;
+          contract_id: string;
+          created_at?: string;
+          customer_id: string;
+          days_late: number;
+          handled_at?: string | null;
+          handled_by?: string | null;
+          id?: string;
+          kind: Database['public']['Enums']['overdue_action_kind'];
+          legal_case_id?: string | null;
+          note?: string | null;
+          organization_id: string;
+          outcome?: string | null;
+          overdue_amount: number;
+          schedule_line_id: string;
+          status: Database['public']['Enums']['overdue_action_status'];
+        };
+        Update: {
+          branch_id?: string;
+          business_date?: string;
+          contract_id?: string;
+          created_at?: string;
+          customer_id?: string;
+          days_late?: number;
+          handled_at?: string | null;
+          handled_by?: string | null;
+          id?: string;
+          kind?: Database['public']['Enums']['overdue_action_kind'];
+          legal_case_id?: string | null;
+          note?: string | null;
+          organization_id?: string;
+          outcome?: string | null;
+          overdue_amount?: number;
+          schedule_line_id?: string;
+          status?: Database['public']['Enums']['overdue_action_status'];
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'overdue_actions_branch_id_organization_id_fkey';
+            columns: ['branch_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'branches';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'overdue_actions_contract_id_customer_id_organization_id_fkey';
+            columns: ['contract_id', 'customer_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'contracts';
+            referencedColumns: ['id', 'customer_id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'overdue_actions_contract_id_customer_id_organization_id_fkey';
+            columns: ['contract_id', 'customer_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_contract_balances';
+            referencedColumns: ['contract_id', 'customer_id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'overdue_actions_handled_by_organization_id_fkey';
+            columns: ['handled_by', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'overdue_actions_legal_case_id_organization_id_fkey';
+            columns: ['legal_case_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'legal_cases';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'overdue_actions_schedule_line_id_fkey';
+            columns: ['schedule_line_id'];
+            isOneToOne: false;
+            referencedRelation: 'schedule_lines';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'overdue_actions_schedule_line_id_fkey';
+            columns: ['schedule_line_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_schedule_line_status';
+            referencedColumns: ['schedule_line_id'];
           },
         ];
       };
@@ -8225,6 +8362,18 @@ export type Database = {
       };
       approve_purchase_invoice: { Args: { p_id: string; p_note?: string }; Returns: Json };
       assign_field_survey: { Args: { p_body: Json }; Returns: Json };
+      attach_import_result: {
+        Args: {
+          p_file_id: string;
+          p_job_id: string;
+          p_mime: string;
+          p_original_name: string;
+          p_path: string;
+          p_sha256: string;
+          p_size_bytes: number;
+        };
+        Returns: Json;
+      };
       auth_clear_must_change_password: { Args: { p_auth_user_id: string }; Returns: number };
       auth_record_login: { Args: Record<PropertyKey, never>; Returns: undefined };
       auth_record_logout: { Args: Record<PropertyKey, never>; Returns: undefined };
@@ -8233,6 +8382,7 @@ export type Database = {
       cancel_credit_exception: { Args: { p_approval_id: string }; Returns: Json };
       cancel_discount_approval: { Args: { p_approval_id: string }; Returns: Json };
       cancel_field_survey: { Args: { p_id: string; p_reason: string }; Returns: Json };
+      cancel_import_job: { Args: { p_id: string }; Returns: Json };
       cancel_purchase_order: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_stock_count: { Args: { p_count_id: string }; Returns: Json };
       cancel_stock_transfer: { Args: { p_id: string }; Returns: Json };
@@ -8292,6 +8442,17 @@ export type Database = {
       };
       create_expense_category: { Args: { p_name: string }; Returns: Json };
       create_guarantor: { Args: { p_body: Json }; Returns: Json };
+      create_import: {
+        Args: {
+          p_branch_id: string | null;
+          p_file_id: string;
+          p_idempotency_key: string;
+          p_kind: string;
+          p_meta: Json;
+          p_rows: Json;
+        };
+        Returns: Json;
+      };
       create_invoice_from_po: {
         Args: { p_idempotency_key: string; p_lines?: Json; p_po_id: string };
         Returns: Json;
@@ -8496,6 +8657,7 @@ export type Database = {
         Args: { p_customer_id: string; p_financed_amount: string };
         Returns: Json;
       };
+      get_import_job: { Args: { p_id: string }; Returns: Json };
       get_my_wallet: { Args: Record<PropertyKey, never>; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
@@ -8508,6 +8670,7 @@ export type Database = {
       get_shift: { Args: { p_id: string }; Returns: Json };
       get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       get_shop_settings: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_shop_settings_t01: { Args: Record<PropertyKey, never>; Returns: Json };
       get_stock_adjustment: { Args: { p_id: string }; Returns: Json };
       get_stock_count: {
         Args: {
@@ -8567,6 +8730,21 @@ export type Database = {
         Args: { p_error: string; p_job_id: string; p_retry_in: string; p_worker: string };
         Returns: Database['public']['Enums']['job_status'];
       };
+      jobs_import_apply: { Args: { p_job_id: string; p_rows: Json }; Returns: Json };
+      jobs_import_attach_result: {
+        Args: {
+          p_file_id: string;
+          p_job_id: string;
+          p_mime: string;
+          p_original_name: string;
+          p_path: string;
+          p_sha256: string;
+          p_size_bytes: number;
+        };
+        Returns: Json;
+      };
+      jobs_import_fail: { Args: { p_job_id: string; p_reason: string }; Returns: Json };
+      jobs_import_prepare: { Args: { p_job_id: string }; Returns: Json };
       jobs_ledger_mismatches: {
         Args: { p_organization_id: string };
         Returns: {
@@ -8670,6 +8848,7 @@ export type Database = {
         Args: { p_limit?: number; p_offset?: number; p_search?: string; p_status?: string };
         Returns: Json;
       };
+      list_import_jobs: { Args: { p_filters?: Json }; Returns: Json };
       list_installment_policies: { Args: Record<PropertyKey, never>; Returns: Json };
       list_legal_referrals: { Args: { p_filters?: Json }; Returns: Json };
       list_open_supplier_invoices: { Args: { p_supplier_id: string }; Returns: Json };
@@ -8887,10 +9066,7 @@ export type Database = {
         };
         Returns: Json;
       };
-      post_field_collection: {
-        Args: { p_body: Json; p_idempotency_key: string };
-        Returns: Json;
-      };
+      post_field_collection: { Args: { p_body: Json; p_idempotency_key: string }; Returns: Json };
       post_installment_sale: { Args: { p_body: Json; p_idempotency_key: string }; Returns: Json };
       post_purchase_return: {
         Args: {
@@ -8949,6 +9125,7 @@ export type Database = {
       preview_installment_terms: { Args: { p_body: Json }; Returns: Json };
       preview_reschedule: { Args: { p_body: Json; p_contract_id: string }; Returns: Json };
       publish_installment_policy: { Args: { p_policy: Json }; Returns: string };
+      queue_import: { Args: { p_id: string; p_idempotency_key: string }; Returns: Json };
       quote_sale: {
         Args: { p_customer_id?: string; p_lines: Json; p_payments?: Json; p_sale_discount?: Json };
         Returns: Json;
@@ -8956,10 +9133,7 @@ export type Database = {
       reassign_field_survey: { Args: { p_assigned_to: string; p_id: string }; Returns: Json };
       receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
       record_collection_receipt_print: { Args: { p_id: string }; Returns: Json };
-      record_contract_document_print: {
-        Args: { p_document: string; p_id: string };
-        Returns: Json;
-      };
+      record_contract_document_print: { Args: { p_document: string; p_id: string }; Returns: Json };
       record_sale_receipt_print: { Args: { p_sale_id: string }; Returns: Json };
       register_file: {
         Args: {
@@ -8999,12 +9173,12 @@ export type Database = {
         Returns: Json;
       };
       require_module: { Args: { p_module: string }; Returns: undefined };
-      resend_employee_invite: {
-        Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
-        Returns: Json;
-      };
       reschedule_contract: {
         Args: { p_body: Json; p_contract_id: string; p_idempotency_key: string };
+        Returns: Json;
+      };
+      resend_employee_invite: {
+        Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
         Returns: Json;
       };
       resolve_device: { Args: { p_token_hash: string }; Returns: Json };
@@ -9222,6 +9396,7 @@ export type Database = {
       update_org_profile: { Args: { p_changes: Json }; Returns: undefined };
       update_org_settings: { Args: { p_changes: Json }; Returns: undefined };
       update_org_settings_p03: { Args: { p_changes: Json }; Returns: undefined };
+      update_org_settings_p04: { Args: { p_changes: Json }; Returns: undefined };
       update_product: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
       update_purchase_invoice: { Args: { p_changes: Json; p_id: string }; Returns: Json };
       update_purchase_order: { Args: { p_changes: Json; p_id: string }; Returns: Json };
@@ -9357,6 +9532,9 @@ export type Database = {
       legal_status: 'preparing' | 'filed' | 'in_court' | 'judgment' | 'closed';
       order_status: 'open' | 'partially_delivered' | 'delivered' | 'cancelled';
       org_status: 'active' | 'suspended' | 'expired' | 'closed';
+      overdue_action_kind: 'warning' | 'ban' | 'legal_referral';
+      overdue_action_status:
+        'open' | 'handled' | 'superseded' | 'resolved' | 'dismissed' | 'case_opened';
       payment_direction: 'in' | 'out';
       payment_method: 'cash' | 'bank_transfer' | 'store_credit';
       po_status: 'draft' | 'sent' | 'partially_received' | 'received' | 'cancelled';
@@ -9617,6 +9795,15 @@ export const Constants = {
       legal_status: ['preparing', 'filed', 'in_court', 'judgment', 'closed'],
       order_status: ['open', 'partially_delivered', 'delivered', 'cancelled'],
       org_status: ['active', 'suspended', 'expired', 'closed'],
+      overdue_action_kind: ['warning', 'ban', 'legal_referral'],
+      overdue_action_status: [
+        'open',
+        'handled',
+        'superseded',
+        'resolved',
+        'dismissed',
+        'case_opened',
+      ],
       payment_direction: ['in', 'out'],
       payment_method: ['cash', 'bank_transfer', 'store_credit'],
       po_status: ['draft', 'sent', 'partially_received', 'received', 'cancelled'],

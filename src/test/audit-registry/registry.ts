@@ -97,6 +97,14 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/collections': { action: 'collection.created' },
   'POST /api/collections/:id/prints': { action: 'collection.receipt_printed' },
   'POST /api/collections/:id/reverse': { action: 'collection.reversed' },
+  // M01: one audit row per dry run, per start and per cancel; the import itself is written by the
+  // background job (import.completed / import.failed), not by a route.
+  'POST /api/imports/inspect': {
+    none: 'Read-only: reads the uploaded file and suggests a column mapping.',
+  },
+  'POST /api/imports': { action: 'import.validated' },
+  'POST /api/imports/:id/run': { action: 'import.started' },
+  'POST /api/imports/:id/cancel': { action: 'import.cancelled' },
   // N06: a field collection pays through N03's core (collection.created).
   'POST /api/collections/field': { action: 'collection.created' },
   'POST /api/wallets/:id/settle': { action: 'collector.wallet_settled' },
