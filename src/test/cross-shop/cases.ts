@@ -5847,3 +5847,143 @@ for (const [method, suffix, body] of [
     },
   });
 }
+
+// K04 (D84). Day close: a foreign shop header is refused, an organization id in the request is
+// refused (strict schemas), and another shop's branch or day close is not found.
+const K04_UNKNOWN = '00000000-0000-4000-8000-0000000004c4';
+crossShopCase({
+  method: 'GET',
+  path: '/api/day-closes',
+  name: 'the day list refuses a foreign header and an org id; a branch of another shop is not found',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/day-closes', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/day-closes', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const other = await h.call('GET', '/api/day-closes', {
+      token: a.accessToken,
+      query: 'branch_id=' + SHOP_B_BR1,
+    });
+    h.expect(other.res.status).toBe(404);
+    h.expect(h.code(other.res)).toBe('BRANCH_NOT_FOUND');
+    const mine = await h.call('GET', '/api/day-closes', { token: a.accessToken });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/day-closes/preview',
+  name: 'the day preview refuses a foreign header, an org id and a branch of another shop',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const query = 'date=2020-01-03&branch_id=';
+    const foreign = await h.call('GET', '/api/day-closes/preview', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      query: query + SHOP_A_BR1,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/day-closes/preview', {
+      token: a.accessToken,
+      query: query + SHOP_A_BR1 + '&organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const other = await h.call('GET', '/api/day-closes/preview', {
+      token: a.accessToken,
+      query: query + SHOP_B_BR1,
+    });
+    h.expect(other.res.status).toBe(404);
+    h.expect(h.code(other.res)).toBe('BRANCH_NOT_FOUND');
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/day-closes/alerts',
+  name: 'the day-close alerts refuse a foreign header and an org id',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/day-closes/alerts', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const mine = await h.call('GET', '/api/day-closes/alerts', { token: a.accessToken });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+    const branches = (mine.res.body as { branches: { branch_id: string }[] }).branches;
+    h.expect(branches.some((b) => b.branch_id === SHOP_B_BR1)).toBe(false);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/day-closes/:id',
+  name: 'a day close refuses a foreign header, an org id and an unknown or other-shop id',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const path = `/api/day-closes/${K04_UNKNOWN}`;
+    const foreign = await h.call('GET', path, { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', path, {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('GET', path, { token: a.accessToken });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('NOT_FOUND');
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/day-closes',
+  name: 'closing refuses a foreign header, an org id and a branch of another shop',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = {
+      branch_id: SHOP_B_BR1,
+      business_date: '2020-01-04',
+      preview_hash: '0123456789abcdef0123456789abcdef',
+      note: 'cross-shop',
+    };
+    const foreign = await h.call('POST', '/api/day-closes', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/day-closes', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const other = await h.call('POST', '/api/day-closes', { token: a.accessToken, body });
+    h.expect(other.res.status).toBe(404);
+    h.expect(h.code(other.res)).toBe('BRANCH_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, other.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, other.ip)).toBe(0);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/day-closes/:id/reopen',
+  name: 'reopening refuses a foreign header, an org id and an unknown or other-shop id',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const path = `/api/day-closes/${K04_UNKNOWN}/reopen`;
+    const body = { reason: 'cross-shop' };
+    const foreign = await h.call('POST', path, { token: a.accessToken, orgId: SHOP_B, body });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', path, {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('POST', path, { token: a.accessToken, body });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+  },
+});
