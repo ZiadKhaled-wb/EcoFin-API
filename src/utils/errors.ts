@@ -42,6 +42,9 @@ import {
   ImportNotValidatedDetail,
   DayAlreadyClosedDetail,
   DayCloseBlockedDetail,
+  MigrationTotalMismatchDetail,
+  MigrationSignedOffDetail,
+  MigrationNotReversibleDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 import type { ZodTypeAny } from 'zod';
@@ -143,6 +146,9 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   IMPORT_NOT_VALIDATED: ImportNotValidatedDetail,
   DAY_ALREADY_CLOSED: DayAlreadyClosedDetail,
   DAY_CLOSE_BLOCKED: DayCloseBlockedDetail,
+  MIGRATION_TOTAL_MISMATCH: MigrationTotalMismatchDetail,
+  MIGRATION_SIGNED_OFF: MigrationSignedOffDetail,
+  MIGRATION_NOT_REVERSIBLE: MigrationNotReversibleDetail,
 };
 
 /**

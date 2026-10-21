@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { BusinessDate, IsoTimestamp, Money, Uuid } from './common.js';
 import { CustomerStatus } from './customers.js';
 import { InstallmentFrequency } from './settings.js';
+import { ContractMigrationSource } from './migration.js';
 
 /**
  * R02 customer account (D74). Read only: one page shows everything about a customer's money.
@@ -103,6 +104,8 @@ export const CustomerContractSummary = z.object({
   sale_number: z.string().nullable(),
   issued_at: IsoTimestamp,
   is_migrated: z.boolean(),
+  /** M02: what the old system remembered, null on a contract made here. */
+  migration_source: ContractMigrationSource.nullable().optional(),
   cash_price: Money,
   down_payment: Money,
   financed_amount: Money,

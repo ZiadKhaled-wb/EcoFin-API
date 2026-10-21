@@ -18,7 +18,7 @@ export function safeCsvCell(value: string): string {
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
-function csv(rows: readonly (readonly string[])[]): Buffer {
+export function csv(rows: readonly (readonly string[])[]): Buffer {
   return Buffer.from(
     BOM + rows.map((r) => r.map(safeCsvCell).join(',')).join('\r\n') + '\r\n',
     'utf8',

@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { IdempotencyKey, IsoTimestamp, Uuid } from './common.js';
+import { IdempotencyKey, IsoTimestamp, Money, Uuid } from './common.js';
 
 /**
- * M01 import (D83): products, customers, suppliers and opening stock from Excel or CSV.
+ * M01 import (D83): products, customers, suppliers and opening stock from Excel or CSV; M02 (D85)
+ * adds the opening installment contracts and the opening cash.
  *
  * Every kind is described ONCE here (`IMPORT_COLUMNS`). The template download, the header matching
  * (`suggestImportMapping`), the Web mapping screen and the error messages all read this list, so a
@@ -10,16 +11,25 @@ import { IdempotencyKey, IsoTimestamp, Uuid } from './common.js';
  * themselves (what is valid, who matches whom) live in SQL, not here.
  */
 
-export const IMPORT_KINDS = ['suppliers', 'products', 'customers', 'opening_stock'] as const;
+export const IMPORT_KINDS = [
+  'suppliers',
+  'products',
+  'customers',
+  'opening_stock',
+  'opening_contracts',
+  'opening_cash',
+] as const;
 export const ImportKind = z.enum(IMPORT_KINDS);
 export type ImportKind = z.infer<typeof ImportKind>;
 
-/** The order a shop follows: opening stock needs the products. */
+/** The order a shop follows: opening stock needs the products, open contracts need the customers. */
 export const IMPORT_KIND_ORDER: readonly ImportKind[] = [
   'suppliers',
   'products',
   'customers',
   'opening_stock',
+  'opening_contracts',
+  'opening_cash',
 ];
 
 /** The database's `import_status` enum. */
@@ -82,6 +92,87 @@ export interface ImportColumnDef {
 }
 
 const col = (def: ImportColumnDef): ImportColumnDef => def;
+
+const GUARANTOR_RELATION_VALUES = [
+  'father',
+  'mother',
+  'brother',
+  'sister',
+  'spouse',
+  'son',
+  'daughter',
+  'relative',
+  'friend',
+  'colleague',
+  'employer',
+  'neighbour',
+  'other',
+] as const;
+
+/** The five cells of one guarantor of an opening contract (M02). */
+const guarantorColumns = (n: 1 | 2): ImportColumnDef[] => {
+  const ar = n === 1 ? 'الأول' : 'الثاني';
+  const en = `Guarantor ${n}`;
+  return [
+    col({
+      key: `guarantor${n}_national_id`,
+      label_ar: `الرقم القومي للضامن ${ar}`,
+      label_en: `${en} national ID`,
+      type: 'national_id',
+      required: false,
+      aliases: [`guarantor ${n} nid`, `ضامن ${n} رقم قومي`],
+      example: n === 1 ? '28805050100022' : '',
+      help_ar: 'اختياري. ضامن موجود يُعرف بالرقم القومي. ضامن جديد يحتاج الاسم والهاتف أيضاً.',
+      help_en:
+        'Optional. An existing guarantor is found by national ID. A new one also needs a name and a phone.',
+    }),
+    col({
+      key: `guarantor${n}_name`,
+      label_ar: `اسم الضامن ${ar}`,
+      label_en: `${en} name`,
+      type: 'text',
+      required: false,
+      aliases: [`guarantor ${n}`, `ضامن ${n}`],
+      example: n === 1 ? 'محمود حسن' : '',
+      help_ar: 'مطلوب للضامن الجديد فقط.',
+      help_en: 'Needed for a new guarantor only.',
+    }),
+    col({
+      key: `guarantor${n}_phone`,
+      label_ar: `هاتف الضامن ${ar}`,
+      label_en: `${en} phone`,
+      type: 'phones',
+      required: false,
+      aliases: [`guarantor ${n} mobile`, `ضامن ${n} موبايل`],
+      example: n === 1 ? '01055550001' : '',
+      help_ar: 'مطلوب للضامن الجديد فقط.',
+      help_en: 'Needed for a new guarantor only.',
+    }),
+    col({
+      key: `guarantor${n}_address`,
+      label_ar: `عنوان الضامن ${ar}`,
+      label_en: `${en} address`,
+      type: 'text',
+      required: false,
+      aliases: [`guarantor ${n} location`],
+      example: '',
+      help_ar: 'حتى 300 حرف.',
+      help_en: 'Up to 300 characters.',
+    }),
+    col({
+      key: `guarantor${n}_relation`,
+      label_ar: `صلة الضامن ${ar}`,
+      label_en: `${en} relation`,
+      type: 'text',
+      required: false,
+      aliases: [`guarantor ${n} relationship`],
+      example: n === 1 ? 'brother' : '',
+      allowed: GUARANTOR_RELATION_VALUES,
+      help_ar: 'صلة القرابة بالعميل. الافتراضي: other.',
+      help_en: 'Relation to the customer. Default: other.',
+    }),
+  ];
+};
 
 export const IMPORT_COLUMNS: Record<ImportKind, readonly ImportColumnDef[]> = {
   suppliers: [
@@ -576,6 +667,290 @@ export const IMPORT_COLUMNS: Record<ImportKind, readonly ImportColumnDef[]> = {
       help_en: 'Required. Cost of one unit, up to 2 decimals.',
     }),
   ],
+  opening_contracts: [
+    col({
+      key: 'contract_ref',
+      label_ar: 'رقم العقد (النظام القديم)',
+      label_en: 'Contract number (old system)',
+      type: 'text',
+      required: true,
+      aliases: [
+        'contract',
+        'contract no',
+        'contract number',
+        'ref',
+        'reference',
+        'old contract number',
+        'رقم العقد',
+        'العقد',
+      ],
+      example: 'K-1001',
+      help_ar: 'مطلوب. نفس الرقم يتكرر في كل أقساط العقد ولا يتكرر بين عقدين.',
+      help_en:
+        'Required. The same number on every installment row of the contract; unique per contract.',
+    }),
+    col({
+      key: 'customer_national_id',
+      label_ar: 'الرقم القومي للعميل',
+      label_en: 'Customer national ID',
+      type: 'national_id',
+      required: false,
+      requiredOneOf: 'customer',
+      aliases: [
+        'national id',
+        'nid',
+        'id number',
+        'customer nid',
+        'الرقم القومي',
+        'رقم قومي',
+        'بطاقة العميل',
+      ],
+      example: '29101010100501',
+      help_ar: 'العميل يجب أن يكون مسجلاً (استورد العملاء أولاً). الرقم القومي أو الهاتف.',
+      help_en: 'The customer must already exist (import customers first). National ID or phone.',
+    }),
+    col({
+      key: 'customer_phone',
+      label_ar: 'هاتف العميل',
+      label_en: 'Customer phone',
+      type: 'phones',
+      required: false,
+      requiredOneOf: 'customer',
+      aliases: [
+        'phone',
+        'mobile',
+        'tel',
+        'customer mobile',
+        'الهاتف',
+        'رقم الهاتف',
+        'موبايل العميل',
+        'تليفون العميل',
+      ],
+      example: '',
+      help_ar: 'يُستخدم عند غياب الرقم القومي.',
+      help_en: 'Used when there is no national ID.',
+    }),
+    col({
+      key: 'branch_code',
+      label_ar: 'كود الفرع',
+      label_en: 'Branch code',
+      type: 'text',
+      required: false,
+      aliases: ['branch', 'الفرع', 'فرع'],
+      example: '',
+      help_ar: 'اختياري. الافتراضي: الفرع الرئيسي.',
+      help_en: 'Optional. Default: the main branch.',
+    }),
+    col({
+      key: 'contract_date',
+      label_ar: 'تاريخ العقد',
+      label_en: 'Contract date',
+      type: 'date',
+      required: true,
+      aliases: [
+        'signing date',
+        'sale date',
+        'contract signing date',
+        'تاريخ التعاقد',
+        'تاريخ البيع',
+      ],
+      example: '2025-03-15',
+      help_ar: 'مطلوب. تاريخ التوقيع في النظام القديم (YYYY-MM-DD).',
+      help_en: 'Required. The signing date in the old system (YYYY-MM-DD).',
+    }),
+    col({
+      key: 'original_total',
+      label_ar: 'إجمالي العقد الأصلي',
+      label_en: 'Original total',
+      type: 'money',
+      required: true,
+      aliases: [
+        'total',
+        'contract total',
+        'installment price',
+        'total price',
+        'إجمالي العقد',
+        'اجمالي العقد',
+        'سعر التقسيط',
+        'الاجمالي',
+      ],
+      example: '12000',
+      help_ar: 'مطلوب. سعر التقسيط الذي وقّع عليه العميل.',
+      help_en: 'Required. The installment price the customer signed for.',
+    }),
+    col({
+      key: 'paid_before',
+      label_ar: 'المدفوع سابقاً',
+      label_en: 'Paid before',
+      type: 'money',
+      required: true,
+      aliases: [
+        'paid',
+        'total paid',
+        'paid so far',
+        'paid to date',
+        'المدفوع',
+        'المدفوع سابقا',
+        'ما تم دفعه',
+      ],
+      example: '3000',
+      help_ar:
+        'مطلوب (0 إن لم يُدفع شيء). كل ما دُفع قبل النقل بما فيه المقدم. المتبقي = الإجمالي − المدفوع.',
+      help_en:
+        'Required (0 if nothing). Everything paid before the migration, down payment included. Left = total − paid.',
+    }),
+    col({
+      key: 'frequency',
+      label_ar: 'دورية السداد',
+      label_en: 'Frequency',
+      type: 'text',
+      required: false,
+      aliases: ['period', 'payment frequency', 'الدورية'],
+      example: 'monthly',
+      allowed: ['monthly', 'weekly', 'شهري', 'أسبوعي'],
+      help_ar: 'اختياري. الافتراضي: شهري.',
+      help_en: 'Optional. Default: monthly.',
+    }),
+    col({
+      key: 'remaining_principal',
+      label_ar: 'المتبقي من أصل المبلغ',
+      label_en: 'Remaining principal',
+      type: 'money',
+      required: false,
+      aliases: ['principal left', 'remaining price', 'المتبقي أصل'],
+      example: '',
+      help_ar: 'اختياري، مع المتبقي من الربح. إن لم يُذكرا فكل المتبقي أصل والربح صفر.',
+      help_en:
+        'Optional, together with the remaining profit. Without both, everything left is principal and the profit is 0.',
+    }),
+    col({
+      key: 'remaining_profit',
+      label_ar: 'المتبقي من الربح',
+      label_en: 'Remaining profit',
+      type: 'money',
+      required: false,
+      aliases: ['profit left', 'remaining markup', 'المتبقي ربح'],
+      example: '',
+      help_ar: 'اختياري، مع المتبقي من أصل المبلغ. مجموعهما = مجموع الأقساط.',
+      help_en:
+        'Optional, together with the remaining principal. Their sum must equal the installments.',
+    }),
+    col({
+      key: 'notes',
+      label_ar: 'ملاحظات',
+      label_en: 'Notes',
+      type: 'text',
+      required: false,
+      aliases: ['note', 'remarks', 'comment', 'comments', 'ملاحظة'],
+      example: '',
+      help_ar: 'حتى 500 حرف.',
+      help_en: 'Up to 500 characters.',
+    }),
+    col({
+      key: 'due_date',
+      label_ar: 'تاريخ الاستحقاق',
+      label_en: 'Due date',
+      type: 'date',
+      required: true,
+      aliases: [
+        'due',
+        'installment date',
+        'payment date',
+        'تاريخ القسط',
+        'موعد القسط',
+        'الاستحقاق',
+      ],
+      example: '2026-11-15',
+      help_ar: 'مطلوب. صف لكل قسط متبقٍ.',
+      help_en: 'Required. One row per remaining installment.',
+    }),
+    col({
+      key: 'amount',
+      label_ar: 'المتبقي من القسط',
+      label_en: 'Installment amount left',
+      type: 'money',
+      required: true,
+      aliases: [
+        'installment',
+        'installment amount',
+        'installment left',
+        'remaining',
+        'remaining amount',
+        'left',
+        'القسط',
+        'قيمة القسط',
+        'المتبقي',
+        'المبلغ المتبقي',
+      ],
+      example: '1000',
+      help_ar: 'مطلوب. ما بقي من القسط (قسط مدفوع جزئياً يحمل الجزء غير المدفوع فقط).',
+      help_en:
+        'Required. What is left on the installment (one paid in part carries only its unpaid part).',
+    }),
+    ...guarantorColumns(1),
+    ...guarantorColumns(2),
+  ],
+  opening_cash: [
+    col({
+      key: 'branch_code',
+      label_ar: 'كود الفرع',
+      label_en: 'Branch code',
+      type: 'text',
+      required: false,
+      aliases: ['branch', 'الفرع', 'فرع'],
+      example: '',
+      help_ar: 'اختياري. الافتراضي: الفرع الرئيسي.',
+      help_en: 'Optional. Default: the main branch.',
+    }),
+    col({
+      key: 'account_name',
+      label_ar: 'اسم الحساب',
+      label_en: 'Account name',
+      type: 'text',
+      required: true,
+      aliases: ['account', 'name', 'safe', 'bank', 'الحساب', 'اسم الخزنة', 'اسم البنك', 'الاسم'],
+      example: 'الخزنة الرئيسية',
+      help_ar: 'مطلوب. حساب موجود بنفس الاسم في الفرع يُستخدم، وإلا يُنشأ.',
+      help_en:
+        'Required. An existing account of the branch with this name is used, else it is created.',
+    }),
+    col({
+      key: 'kind',
+      label_ar: 'نوع الحساب',
+      label_en: 'Account kind',
+      type: 'text',
+      required: true,
+      aliases: ['type', 'account type', 'النوع'],
+      example: 'safe',
+      allowed: ['safe', 'bank', 'خزينة', 'بنك'],
+      help_ar: 'مطلوب: خزينة أو بنك. الأدراج ومحافظ المحصلين لا تُستورد.',
+      help_en: 'Required: safe or bank. Drawers and collector wallets are not imported.',
+    }),
+    col({
+      key: 'bank_shop_wide',
+      label_ar: 'بنك لكل المتجر',
+      label_en: 'Shop-wide bank',
+      type: 'boolean',
+      required: false,
+      aliases: ['shop wide', 'all branches', 'لكل الفروع'],
+      example: '',
+      allowed: ['yes', 'no', 'نعم', 'لا'],
+      help_ar: 'للبنك فقط: نعم = حساب واحد لكل الفروع.',
+      help_en: 'Banks only: yes = one account for every branch.',
+    }),
+    col({
+      key: 'balance',
+      label_ar: 'الرصيد',
+      label_en: 'Balance',
+      type: 'money',
+      required: true,
+      aliases: ['opening balance', 'amount', 'cash', 'الرصيد الافتتاحي', 'رصيد افتتاحي', 'المبلغ'],
+      example: '5000',
+      help_ar: 'مطلوب. الرصيد الافتتاحي (0 ينشئ الحساب فقط). يُسجل مرة واحدة على حساب بلا حركات.',
+      help_en:
+        'Required. The opening balance (0 only creates the account). Posted once, on an account with no movements.',
+    }),
+  ],
 };
 
 export function importColumn(kind: ImportKind, key: string): ImportColumnDef | undefined {
@@ -792,6 +1167,18 @@ export const IMPORT_ROW_ERROR_CODES = [
   'TAX_CLASS_NOT_FOUND',
   'MODULE_NOT_IN_PLAN',
   'OUT_OF_STOCK',
+  // M02
+  'IMPORT_CONTRACT_ROWS_DIFFER',
+  'IMPORT_CONTRACT_NOT_BALANCED',
+  'IMPORT_CONTRACT_EXISTS',
+  'IMPORT_CUSTOMER_NOT_FOUND',
+  'IMPORT_GUARANTOR_INCOMPLETE',
+  'IMPORT_ACCOUNT_KIND',
+  'CASH_ACCOUNT_HAS_MOVEMENTS',
+  'CASH_ACCOUNT_INACTIVE',
+  'CASH_ACCOUNT_NAME_TAKEN',
+  'DAY_CLOSED',
+  'POLICY_NOT_SET',
 ] as const;
 export const ImportRowErrorCode = z.enum(IMPORT_ROW_ERROR_CODES);
 export type ImportRowErrorCode = z.infer<typeof ImportRowErrorCode>;
@@ -832,6 +1219,31 @@ export const ImportActions = z.object({
 });
 export type ImportActions = z.infer<typeof ImportActions>;
 
+/** Opening contracts (M02): the dry run's totals. */
+export const ImportContractsSummary = z.object({
+  contracts: z.number().int().min(0),
+  lines: z.number().int().min(0),
+  open_total: Money,
+  overdue_total: Money,
+  overdue_contracts: z.number().int().min(0),
+  new_guarantors: z.number().int().min(0),
+});
+export type ImportContractsSummary = z.infer<typeof ImportContractsSummary>;
+
+/** Opening contracts (M02): one contract of the file, as the dry run shows it. */
+export const ImportContractPreview = z.object({
+  row: z.number().int().min(1),
+  contract_ref: z.string(),
+  customer: z.string().nullable(),
+  lines: z.number().int().min(1),
+  open_total: Money,
+  /** What is already late today; N04 reacts to it the next night (never a fee). */
+  overdue_total: Money,
+  overdue_days: z.number().int().min(0),
+  new_guarantors: z.number().int().min(0),
+});
+export type ImportContractPreview = z.infer<typeof ImportContractPreview>;
+
 export const ImportReport = z.object({
   columns: z.object({
     mapping: ImportMapping,
@@ -850,6 +1262,9 @@ export const ImportReport = z.object({
   applied: ImportActions.nullable(),
   /** Why the import failed outside the rows (a thrown database error), if it did. */
   failure: z.string().nullable(),
+  /** Opening contracts only (at most 200 contracts are listed). */
+  summary: ImportContractsSummary.optional(),
+  contracts: z.array(ImportContractPreview).optional(),
 });
 export type ImportReport = z.infer<typeof ImportReport>;
 

@@ -80,6 +80,8 @@ INSERT INTO t.no_permission_ok VALUES
   ('get_day_close', 'K04: read-only stored day close with drift; app.has_permission(day.close or cash.view) and branch access'),
   ('list_day_closes', 'K04: read-only list of days of the caller''s branches; app.has_permission(day.close or cash.view)'),
   ('day_close_alerts', 'K04: read-only dashboard counts of the caller''s branches; app.has_permission(day.close or cash.view)'),
+  ('get_migration_report', 'M02: read-only reconciliation report of the caller''s branches; app.has_permission(import.data or report.financial) (app.migration_read_guard), so an expired shop can still read'),
+  ('list_migration_signoffs', 'M02: read-only list of the signed reconciliations; app.has_permission(import.data or report.financial) (app.migration_read_guard)'),
   ('list_customers', 'R01: read-only customer list, national IDs masked without customer.view_pii; checks app.has_permission on any customer read key (D63) and the customers module, so an expired shop can still read'),
   ('get_customer', 'R01: read-only customer, national ID masked without customer.view_pii; checks app.has_permission on any customer read key (D63) and the customers module'),
   ('list_guarantors', 'R04: read-only guarantor list, national IDs masked without customer.view_pii; checks app.has_permission on any customer read key (D63) and the customers module, so an expired shop can still read'),
