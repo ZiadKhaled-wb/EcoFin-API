@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   CreateImportBody,
   IMPORT_COLUMNS,
+  IMPORT_KIND_ORDER,
   IMPORT_KINDS,
   IMPORT_ROW_ERROR_CODES,
   ImportListQuery,
@@ -121,7 +122,7 @@ describe('M01 import contracts', () => {
   it('list query defaults and limits', () => {
     expect(ImportListQuery.parse({}).limit).toBe(25);
     expect(ImportListQuery.safeParse({ limit: '101' }).success).toBe(false);
-    expect(ImportListQuery.safeParse({ kind: 'opening_cash' }).success).toBe(false);
+    expect(ImportListQuery.safeParse({ kind: 'full_export' }).success).toBe(false);
   });
 
   it('a report shape', () => {
@@ -181,6 +182,32 @@ describe('M01 import contracts', () => {
         'notes',
       ],
       opening_stock: ['sku', 'barcode', 'quantity', 'serial', 'unit_cost'],
+      opening_contracts: [
+        'contract_ref',
+        'customer_national_id',
+        'customer_phone',
+        'branch_code',
+        'contract_date',
+        'original_total',
+        'paid_before',
+        'frequency',
+        'remaining_principal',
+        'remaining_profit',
+        'notes',
+        'due_date',
+        'amount',
+        'guarantor1_national_id',
+        'guarantor1_name',
+        'guarantor1_phone',
+        'guarantor1_address',
+        'guarantor1_relation',
+        'guarantor2_national_id',
+        'guarantor2_name',
+        'guarantor2_phone',
+        'guarantor2_address',
+        'guarantor2_relation',
+      ],
+      opening_cash: ['branch_code', 'account_name', 'kind', 'bank_shop_wide', 'balance'],
     };
     for (const kind of IMPORT_KINDS) {
       expect(IMPORT_COLUMNS[kind].map((c) => c.key)).toEqual(expected[kind]);
@@ -215,7 +242,123 @@ describe('M01 import contracts', () => {
       'TAX_CLASS_NOT_FOUND',
       'MODULE_NOT_IN_PLAN',
       'OUT_OF_STOCK',
+      'IMPORT_CONTRACT_ROWS_DIFFER',
+      'IMPORT_CONTRACT_NOT_BALANCED',
+      'IMPORT_CONTRACT_EXISTS',
+      'IMPORT_CUSTOMER_NOT_FOUND',
+      'IMPORT_GUARANTOR_INCOMPLETE',
+      'IMPORT_ACCOUNT_KIND',
+      'CASH_ACCOUNT_HAS_MOVEMENTS',
+      'CASH_ACCOUNT_INACTIVE',
+      'CASH_ACCOUNT_NAME_TAKEN',
+      'DAY_CLOSED',
+      'POLICY_NOT_SET',
     ]);
+  });
+
+  it('M02: the opening kinds come last; open contracts need the customer by national ID or phone', () => {
+    expect(IMPORT_KIND_ORDER.slice(-2)).toEqual(['opening_contracts', 'opening_cash']);
+    expect(missingImportColumns('opening_contracts', ['contract_ref'])).toEqual([
+      'contract_date',
+      'original_total',
+      'paid_before',
+      'due_date',
+      'amount',
+      'customer_national_id|customer_phone',
+    ]);
+    expect(
+      missingImportColumns('opening_contracts', [
+        'contract_ref',
+        'customer_phone',
+        'contract_date',
+        'original_total',
+        'paid_before',
+        'due_date',
+        'amount',
+      ]),
+    ).toEqual([]);
+    expect(missingImportColumns('opening_cash', ['account_name', 'kind'])).toEqual(['balance']);
+  });
+
+  it('M02: Arabic and English headers of an old system are matched to the opening contract fields', () => {
+    const s = suggestImportMapping('opening_contracts', [
+      'رقم العقد',
+      'الرقم القومي',
+      'تاريخ العقد',
+      'إجمالي العقد',
+      'المدفوع سابقا',
+      'تاريخ الاستحقاق',
+      'المتبقي',
+      'Guarantor 1 national ID',
+      'Guarantor 1 name',
+      'Guarantor 2 phone',
+      'Branch',
+      'Mystery',
+    ]);
+    expect(s.mapping).toMatchObject({
+      contract_ref: 'رقم العقد',
+      customer_national_id: 'الرقم القومي',
+      contract_date: 'تاريخ العقد',
+      original_total: 'إجمالي العقد',
+      paid_before: 'المدفوع سابقا',
+      due_date: 'تاريخ الاستحقاق',
+      amount: 'المتبقي',
+      guarantor1_national_id: 'Guarantor 1 national ID',
+      guarantor1_name: 'Guarantor 1 name',
+      guarantor2_phone: 'Guarantor 2 phone',
+      branch_code: 'Branch',
+    });
+    expect(s.unmapped_headers).toEqual(['Mystery']);
+    expect(s.missing_required).toEqual([]);
+    const cash = suggestImportMapping('opening_cash', ['Account', 'Type', 'Opening balance']);
+    expect(cash.mapping).toEqual({
+      account_name: 'Account',
+      kind: 'Type',
+      balance: 'Opening balance',
+    });
+  });
+
+  it('M02: the report carries the optional contract summary of the dry run', () => {
+    const base = {
+      columns: { mapping: {}, unmapped_headers: [] },
+      sheet: null,
+      branch_id: null,
+      warnings: [],
+      errors: [],
+      errors_total: 0,
+      errors_truncated: false,
+      actions: { create: 1, update: 0, unchanged: 0 },
+      preview: [],
+      will_create_categories: [],
+      applied: null,
+      failure: null,
+    };
+    expect(ImportReport.safeParse(base).success).toBe(true);
+    expect(
+      ImportReport.safeParse({
+        ...base,
+        summary: {
+          contracts: 1,
+          lines: 3,
+          open_total: '3000.00',
+          overdue_total: '1000.00',
+          overdue_contracts: 1,
+          new_guarantors: 0,
+        },
+        contracts: [
+          {
+            row: 2,
+            contract_ref: 'K-1',
+            customer: 'Amal',
+            lines: 3,
+            open_total: '3000.00',
+            overdue_total: '1000.00',
+            overdue_days: 12,
+            new_guarantors: 0,
+          },
+        ],
+      }).success,
+    ).toBe(true);
   });
 
   it('the new HTTP error codes', () => {
@@ -223,5 +366,8 @@ describe('M01 import contracts', () => {
     expect(errorCodeHttpStatus.IMPORT_NOT_VALIDATED).toBe(409);
     expect(errorCodeHttpStatus.IMPORT_JOB_NOT_FOUND).toBe(404);
     expect(errorCodeHttpStatus.IMPORT_FILE_UNREADABLE).toBe(422);
+    expect(errorCodeHttpStatus.MIGRATION_TOTAL_MISMATCH).toBe(409);
+    expect(errorCodeHttpStatus.MIGRATION_SIGNED_OFF).toBe(409);
+    expect(errorCodeHttpStatus.MIGRATION_NOT_REVERSIBLE).toBe(409);
   });
 });

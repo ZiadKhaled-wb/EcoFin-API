@@ -295,7 +295,15 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/day-closes/:id/reopen',
       ]),
     );
-    expect(keys).toHaveLength(278);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'GET /api/migration/report',
+        'GET /api/migration/sign-offs',
+        'POST /api/migration/sign-offs',
+        'POST /api/migration/batches/:id/reverse',
+      ]),
+    );
+    expect(keys).toHaveLength(282);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

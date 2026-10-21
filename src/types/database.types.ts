@@ -1132,6 +1132,7 @@ export type Database = {
           markup_amount: number;
           markup_pct: number;
           migration_batch_id: string | null;
+          migration_source: Json | null;
           number: string;
           order_id: string | null;
           organization_id: string;
@@ -1163,6 +1164,7 @@ export type Database = {
           markup_amount: number;
           markup_pct: number;
           migration_batch_id?: string | null;
+          migration_source?: Json | null;
           number: string;
           order_id?: string | null;
           organization_id: string;
@@ -1194,6 +1196,7 @@ export type Database = {
           markup_amount?: number;
           markup_pct?: number;
           migration_batch_id?: string | null;
+          migration_source?: Json | null;
           number?: string;
           order_id?: string | null;
           organization_id?: string;
@@ -3445,6 +3448,70 @@ export type Database = {
           user_agent?: string | null;
         };
         Relationships: [];
+      };
+      migration_signoffs: {
+        Row: {
+          batch_ids: string[];
+          expected_cash_total: number | null;
+          expected_open_total: number;
+          id: string;
+          note: string;
+          organization_id: string;
+          signed_at: string;
+          signed_by: string;
+          signed_file_id: string | null;
+          system_cash_total: number;
+          system_open_total: number;
+        };
+        Insert: {
+          batch_ids: string[];
+          expected_cash_total?: number | null;
+          expected_open_total: number;
+          id?: string;
+          note: string;
+          organization_id: string;
+          signed_at?: string;
+          signed_by: string;
+          signed_file_id?: string | null;
+          system_cash_total: number;
+          system_open_total: number;
+        };
+        Update: {
+          batch_ids?: string[];
+          expected_cash_total?: number | null;
+          expected_open_total?: number;
+          id?: string;
+          note?: string;
+          organization_id?: string;
+          signed_at?: string;
+          signed_by?: string;
+          signed_file_id?: string | null;
+          system_cash_total?: number;
+          system_open_total?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'migration_signoffs_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'migration_signoffs_signed_by_organization_id_fkey';
+            columns: ['signed_by', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'migration_signoffs_signed_file_id_organization_id_fkey';
+            columns: ['signed_file_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'files';
+            referencedColumns: ['id', 'organization_id'];
+          },
+        ];
       };
       org_settings: {
         Row: {
@@ -8718,6 +8785,7 @@ export type Database = {
         Returns: Json;
       };
       get_import_job: { Args: { p_id: string }; Returns: Json };
+      get_migration_report: { Args: { p_filters?: Json }; Returns: Json };
       get_my_wallet: { Args: Record<PropertyKey, never>; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
@@ -8916,6 +8984,7 @@ export type Database = {
       list_import_jobs: { Args: { p_filters?: Json }; Returns: Json };
       list_installment_policies: { Args: Record<PropertyKey, never>; Returns: Json };
       list_legal_referrals: { Args: { p_filters?: Json }; Returns: Json };
+      list_migration_signoffs: { Args: Record<PropertyKey, never>; Returns: Json };
       list_open_supplier_invoices: { Args: { p_supplier_id: string }; Returns: Json };
       list_overdue_contracts: { Args: { p_filters?: Json }; Returns: Json };
       list_overdue_warnings: { Args: { p_filters?: Json }; Returns: Json };
@@ -9262,6 +9331,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      reverse_migration_batch: { Args: { p_id: string; p_reason: string }; Returns: Json };
       reverse_supplier_payment: {
         Args: { p_id: string; p_idempotency_key: string; p_reason: string };
         Returns: Json;
@@ -9419,6 +9489,7 @@ export type Database = {
         Args: { p_body: Json; p_contract_id: string; p_idempotency_key: string };
         Returns: Json;
       };
+      sign_off_migration: { Args: { p_body: Json }; Returns: Json };
       submit_field_survey: { Args: { p_body?: Json; p_id: string }; Returns: Json };
       supplier_statement: { Args: { p_from?: string; p_id: string; p_to?: string }; Returns: Json };
       unlink_customer_guarantor: {

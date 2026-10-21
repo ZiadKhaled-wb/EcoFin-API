@@ -3161,6 +3161,52 @@ export const openApiSpec = {
                 responses: { 200: { description: 'DayClose' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/migration/report': {
+            get: {
+                tags: ['Import'],
+                summary: 'Migration reconciliation report (import.data or report.financial)',
+                description: 'M02 (D85). Per customer (national ID masked without customer.view_pii), per branch and overall: original total, paid before, imported total (frozen), open now, overdue now, collected since; the opening cash per account (posted vs now); the batches with sign-off and reversal state. Filters batch_id, branch_id, customer_id. format=csv downloads the same report (migration-report-YYYY-MM-DD.csv). Works in an expired shop. Schema: MigrationReportQuery -> MigrationReport.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'batch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'customer_id', in: 'query', schema: { type: 'string', format: 'uuid' } },
+                    { name: 'format', in: 'query', schema: { type: 'string', enum: ['json', 'csv'], default: 'json' } },
+                ],
+                responses: { 200: { description: 'MigrationReport (or text/csv)' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/migration/sign-offs': {
+            get: {
+                tags: ['Import'],
+                summary: 'Migration sign-offs (import.data or report.financial)',
+                description: 'M02 (D85). The signed reconciliations, newest first. Schema: MigrationSignOffList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'MigrationSignOffList' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Import'],
+                summary: 'Sign off a migration against the old records (import.data)',
+                description: 'M02 (D85). expected_open_total (and optionally expected_cash_total) come from the signed paper; the server compares them with what the batches imported. ANY difference is MIGRATION_TOTAL_MISMATCH (409, details field / expected / system / difference) and nothing is stored. A batch can be in one sign-off only (MIGRATION_SIGNED_OFF). Audit migration.signed_off (warning). Schema: MigrationSignOffBody -> MigrationSignOff.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 201: { description: 'MigrationSignOff' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/migration/batches/{id}/reverse': {
+            post: {
+                tags: ['Import'],
+                summary: 'Reverse a wrong opening-contracts batch (import.data)',
+                description: 'M02 (D85). Before any collection, contract change, legal case or overdue action beyond warnings (MIGRATION_NOT_REVERSIBLE, details name the first blocking contract) and before a sign-off (MIGRATION_SIGNED_OFF). Every contract is closed through the write-off record, flagged reversed and left out of the report; its contract number can be imported again. A repeat answers the same count. Audit migration.batch_reversed (warning). Schema: ReverseMigrationBatchBody -> MigrationBatchReversal.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'MigrationBatchReversal' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/units': {
             get: {
                 tags: ['Inventory'],

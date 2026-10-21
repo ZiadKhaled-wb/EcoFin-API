@@ -5987,3 +5987,99 @@ crossShopCase({
     h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
   },
 });
+
+// M02 (D85). Migration report, sign-offs and batch reversal: a foreign shop header is refused, an
+// organization id in the request is refused (strict schemas), and a batch id of another shop (or
+// an unknown one) is not found.
+const M02_UNKNOWN = '00000000-0000-4000-8000-0000000002c2';
+crossShopCase({
+  method: 'GET',
+  path: '/api/migration/report',
+  name: 'the migration report refuses a foreign header, an org id and an unknown batch',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/migration/report', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/migration/report', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const other = await h.call('GET', '/api/migration/report', {
+      token: a.accessToken,
+      query: 'batch_id=' + M02_UNKNOWN,
+    });
+    h.expect(other.res.status).toBe(404);
+    h.expect(h.code(other.res)).toBe('IMPORT_JOB_NOT_FOUND');
+    const mine = await h.call('GET', '/api/migration/report', { token: a.accessToken });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/migration/sign-offs',
+  name: 'the sign-off list refuses a foreign header and an org id',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/migration/sign-offs', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const mine = await h.call('GET', '/api/migration/sign-offs', { token: a.accessToken });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/migration/sign-offs',
+  name: 'signing off refuses a foreign header, an org id and a batch of another shop',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = {
+      expected_open_total: '1.00',
+      batch_ids: [M02_UNKNOWN],
+      note: 'cross-shop',
+    };
+    const foreign = await h.call('POST', '/api/migration/sign-offs', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/migration/sign-offs', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const other = await h.call('POST', '/api/migration/sign-offs', { token: a.accessToken, body });
+    h.expect(other.res.status).toBe(404);
+    h.expect(h.code(other.res)).toBe('IMPORT_JOB_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, other.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, other.ip)).toBe(0);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/migration/batches/:id/reverse',
+  name: 'reversing refuses a foreign header, an org id and an unknown or other-shop batch',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const path = `/api/migration/batches/${M02_UNKNOWN}/reverse`;
+    const body = { reason: 'cross-shop' };
+    const foreign = await h.call('POST', path, { token: a.accessToken, orgId: SHOP_B, body });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', path, {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('POST', path, { token: a.accessToken, body });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('IMPORT_JOB_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+  },
+});

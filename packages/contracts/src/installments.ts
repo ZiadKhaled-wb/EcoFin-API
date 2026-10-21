@@ -4,6 +4,7 @@ import { BusinessDate, IsoTimestamp, Money, Uuid } from './common.js';
 import { CreditCheck } from './credit.js';
 import { ContractStatus, ScheduleLineStatus } from './customerAccount.js';
 import { GuarantorRequirement, MAX_GUARANTORS_PER_CONTRACT } from './guarantors.js';
+import { ContractMigrationSource } from './migration.js';
 import { Discount, DiscountReason, Sale, SaleLines, SalePayments } from './sales.js';
 import { InstallmentFrequency, type InstallmentPolicy } from './settings.js';
 import { SurveyRequirement } from './surveys.js';
@@ -266,6 +267,8 @@ export const Contract = z.object({
   created_by_name: z.string().nullable(),
   lines: z.array(ContractScheduleLine),
   balance: z.object({ paid: Money, remaining: Money, overdue: Money }),
+  /** M02: set on a contract migrated from the old system, null on every other contract. */
+  migration_source: ContractMigrationSource.nullable().optional(),
 });
 export type Contract = z.infer<typeof Contract>;
 

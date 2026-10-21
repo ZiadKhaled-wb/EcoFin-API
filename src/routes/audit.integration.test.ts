@@ -19,6 +19,13 @@ import { getEnv } from '../utils/env';
 import { AUDIT_REGISTRY } from '../test/audit-registry/registry';
 import { readInviteToken } from '../test/inviteMail';
 import { DEVICE_TOKEN_HEADER, pairTestDevice } from '../test/posDevice';
+import {
+  contractsCsv,
+  ensurePolicy,
+  importFile,
+  newCustomer as newFixtureCustomer,
+  type MigrationFixture,
+} from '../test/migration-fixture';
 
 const RUN = process.env['RUN_INTEGRATION'] === '1';
 const SEED_PASSWORD = 'LocalDev-Only-2026!';
@@ -627,6 +634,29 @@ M01 Audit ${STAMP}-${ipCounter}
       },
     });
   }
+  /** M02: a completed batch with one contract of 2 x 1000 for a fresh customer of shop one. */
+  async function m02Batch(token: string): Promise<string> {
+    const fx: MigrationFixture = { app, nextIp, stamp: STAMP };
+    await ensurePolicy(fx, token);
+    const customer = await newFixtureCustomer(`F07 M02 ${STAMP}-${ipCounter}`);
+    const job = await importFile(
+      fx,
+      token,
+      'opening_contracts',
+      contractsCsv([
+        {
+          ref: `F07-${STAMP}-${ipCounter}`,
+          nid: customer.nid,
+          original: '2000',
+          paid: '0',
+          amounts: ['1000', '1000'],
+        },
+      ]),
+      `f07-${ipCounter}`,
+    );
+    expect(job.status, JSON.stringify(job.report)).toBe('completed');
+    return job.id;
+  }
   const drivers: Record<string, () => Promise<{ sent: Sent; org: string; status?: number }>> = {
     'POST /api/day-closes': async () => {
       const owner = await login('owner.one@ecotech.test');
@@ -639,6 +669,31 @@ M01 Audit ${STAMP}-${ipCounter}
       const id = (closed.res.body as { id: string }).id;
       return {
         sent: await send('post', `/api/day-closes/${id}/reopen`, {
+          token: owner.accessToken,
+          body: { reason: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    // M02: a one-contract opening batch (the import job writes the contract rows); the sign-off
+    // and the reversal each write exactly one row.
+    'POST /api/migration/sign-offs': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const job = await m02Batch(owner.accessToken);
+      return {
+        sent: await send('post', '/api/migration/sign-offs', {
+          token: owner.accessToken,
+          body: { expected_open_total: '2000', batch_ids: [job], note: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'POST /api/migration/batches/:id/reverse': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const job = await m02Batch(owner.accessToken);
+      return {
+        sent: await send('post', `/api/migration/batches/${job}/reverse`, {
           token: owner.accessToken,
           body: { reason: 'F07 audit driver' },
         }),
