@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.57.0
+
+- D01 owner dashboard: new `dashboard.ts` with DashboardQuery, OwnerDashboard (business_date, branch_id, generated_at, one nullable tile per key), DASHBOARD_TILES, DashboardTileKey, DashboardSalesTile, DashboardCollectionsTile, DashboardCashTile, DashboardShiftsTile, DashboardOverdueTile, DashboardLowStockTile, DashboardEtaTile, DashboardUnclosedDaysTile, DashboardApprovalsTile. A tile is `null` when the caller lacks the permission its detail page needs. Existing error codes only (BRANCH_NOT_FOUND, BRANCH_DENIED, VALIDATION_FAILED). No new permission key and no new enum value.
+
 ## 0.56.0
 
 - M03 full export: new `exports.ts` with EXPORT_LIMITS, EXPORT_STATUSES / ExportStatus, EXPORT_PII_MODES / ExportPiiMode, StartExportBody, ExportIdParams, EXPORT_FAILURE_CODES / ExportFailureCode, ExportRequester, ExportJob, ExportListResponse, EXPORT_MANIFEST_FORMAT_VERSION, ExportManifestTable, ExportManifestTotals, ExportManifest, ExportRunningDetail, ExportTooSoonDetail. Error codes EXPORT_RUNNING (409), EXPORT_TOO_SOON (429) and EXPORT_NOT_FOUND (404); EXPORT_TOO_LARGE is reused. No new permission key (`export.data`, `customer.view_pii` exist) and no new enum value.

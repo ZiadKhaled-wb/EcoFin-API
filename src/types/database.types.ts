@@ -8792,6 +8792,7 @@ export type Database = {
       get_import_job: { Args: { p_id: string }; Returns: Json };
       get_migration_report: { Args: { p_filters?: Json }; Returns: Json };
       get_my_wallet: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_owner_dashboard: { Args: { p_branch_id?: string }; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
       get_purchase_order: { Args: { p_id: string }; Returns: Json };

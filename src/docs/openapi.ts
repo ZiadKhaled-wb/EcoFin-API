@@ -3150,6 +3150,16 @@ export const openApiSpec = {
                 responses: { 200: { description: 'DayClose' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/dashboard': {
+            get: {
+                tags: ['Dashboard'],
+                summary: 'The owner dashboard: today\'s tiles for all branches or one (any signed-in employee)',
+                description: 'D01 (D87). Today (the shop\'s date) for all the caller\'s active branches or one branch: sales without the voided ones, collections, cash by place, open shifts, overdue installments, products below their minimum, ETA receipts that need a person, days not closed and approvals waiting. Every tile is computed in SQL by the same definition as the page it links to, so the numbers equal that page\'s total for the same filters; money is a decimal string. A tile is null when the caller lacks the permission its detail page needs (an employee with no tile key gets an answer with every tile null, not a denial). Works in an expired shop. BRANCH_NOT_FOUND (another shop\'s branch too), BRANCH_DENIED. Schema: DashboardQuery -> OwnerDashboard.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'branch_id', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'OwnerDashboard' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/day-closes/{id}/reopen': {
             post: {
                 tags: ['Cash'],

@@ -311,7 +311,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/exports/:id/cancel',
       ]),
     );
-    expect(keys).toHaveLength(286);
+    expect(keys).toHaveLength(287);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {
