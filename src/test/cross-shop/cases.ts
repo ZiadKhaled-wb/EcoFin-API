@@ -5848,6 +5848,37 @@ for (const [method, suffix, body] of [
   });
 }
 
+// D01 (D87). Owner dashboard: a foreign shop header is refused, an organization id in the query is
+// refused (strict schema), and another shop's branch is not found; a shop's answer never carries
+// the other shop's numbers.
+crossShopCase({
+  method: 'GET',
+  path: '/api/dashboard',
+  name: 'the dashboard refuses a foreign header, an org id and a branch of another shop',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/dashboard', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/dashboard', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const other = await h.call('GET', '/api/dashboard', {
+      token: a.accessToken,
+      query: 'branch_id=' + SHOP_B_BR1,
+    });
+    h.expect(other.res.status).toBe(404);
+    h.expect(h.code(other.res)).toBe('BRANCH_NOT_FOUND');
+    const mine = await h.call('GET', '/api/dashboard', { token: a.accessToken });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+    const own = await h.call('GET', '/api/dashboard', {
+      token: a.accessToken,
+      query: 'branch_id=' + SHOP_A_BR1,
+    });
+    h.expect(own.res.status, JSON.stringify(own.res.body)).toBe(200);
+  },
+});
 // K04 (D84). Day close: a foreign shop header is refused, an organization id in the request is
 // refused (strict schemas), and another shop's branch or day close is not found.
 const K04_UNKNOWN = '00000000-0000-4000-8000-0000000004c4';

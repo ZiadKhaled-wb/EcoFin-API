@@ -439,3 +439,7 @@ See [M03 plan](plans/M03.md). Covers the Done when (the export restores into a c
 ## K04 — day close and reconciliation (EC-62)
 
 See [K04 plan](plans/K04.md). Covers the Done when (the day-close numbers equal the sum of the day's documents; a broken balance is flagged by the preview, the stored issues and the nightly check) and the D84 rules (an open shift blocks, the hash, a note with warnings, a closed day refuses entries for its branch only, reopen and close again, drift, access and isolation).
+
+## D01 — owner dashboard (EC-93)
+
+See [D01 plan](plans/D01.md). Covers the Done when (every number on the dashboard equals its detailed report for the same filters, for all branches and for each branch; each tile links to its page already filtered; a caller sees only the tiles they can open; the read answers in under 300 ms on the seed shop) and the D87 rules.
