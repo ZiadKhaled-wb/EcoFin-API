@@ -325,6 +325,7 @@ INSERT INTO t.replay_tested VALUES
    ('public.reschedule_contract','n05_contract_changes_test.sql: same key -> same change; another contract''s or a sale''s key -> IDEMPOTENCY_CONFLICT'),
    ('public.write_off_contract','n05_contract_changes_test.sql: same key -> same change, one row'),
    ('public.post_installment_sale','n02_installment_sale_test.sql: same key -> same sale and contract; nothing written twice; a cash sale''s key -> IDEMPOTENCY_CONFLICT'),
+ ('public.start_full_export','m03_full_export_test.sql: same key -> same export job, one queue entry and one audit row'),
  ('public.post_expense','k03_expenses_test.sql: same key -> same expense, nothing spent twice'),
  ('public.reverse_expense','k03_expenses_test.sql: same key -> same reversal; the key of another expense -> IDEMPOTENCY_CONFLICT'),
  ('public.open_shift','k02_shifts_test.sql: same key -> same shift, nothing moves'),

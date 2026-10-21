@@ -118,4 +118,13 @@ describe('loadEnv', () => {
     });
     expect(env.ETA_PREPROD_API_URL).toBe('http://127.0.0.1:4010');
   });
+  it('M03: DATABASE_URL is optional and must be a postgres connection string', () => {
+    expect(loadEnv(valid).DATABASE_URL).toBeUndefined();
+    const url = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
+    expect(loadEnv({ ...valid, DATABASE_URL: url }).DATABASE_URL).toBe(url);
+    expect(() => loadEnv({ ...valid, DATABASE_URL: 'https://example.com' })).toThrow(
+      /DATABASE_URL \(invalid\)/,
+    );
+    expect(() => loadEnv({ ...valid, DATABASE_URL: 'not a url' })).toThrow(/DATABASE_URL/);
+  });
 });

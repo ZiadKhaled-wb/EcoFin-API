@@ -869,6 +869,27 @@ BEGIN
     END IF;
     RETURN v_id;
 END $f$;
+-- M03: a completed export of the denial shop (finished three hours ago, so a new one may start).
+CREATE FUNCTION t.m03_job() RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $f$
+DECLARE v_id uuid;
+BEGIN
+    SELECT id INTO v_id FROM public.import_jobs WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND report->>'idempotency_key'='denial-m03';
+    IF v_id IS NULL THEN
+        INSERT INTO public.import_jobs(organization_id,kind,status,dry_run,report,finished_at)
+        VALUES ('d1000000-0000-0000-0000-000000000001','full_export','completed',false,
+                jsonb_build_object('pii','masked','idempotency_key','denial-m03'),now()-interval '3 hours')
+        RETURNING id INTO v_id;
+    END IF;
+    RETURN v_id;
+END $f$;
+INSERT INTO t.denial VALUES
+ ('start_full_export','zz_m03_1_start','export.data',$q$SELECT public.start_full_export('{}','denial-m03-start-key')$q$),
+ ('list_exports','zz_m03_2_list','export.data',$q$SELECT public.list_exports()$q$),
+ ('get_export','zz_m03_3_get','export.data',$q$SELECT public.get_export(t.m03_job())$q$),
+ ('cancel_export','zz_m03_4_cancel','export.data',$q$SELECT public.cancel_export(t.m03_job())$q$),
+ ('record_export_download','zz_m03_5_download','export.data',$q$SELECT public.record_export_download(gen_random_uuid())$q$);
+-- The job exists before the cases run: the STABLE get_export would not see a row made inside its own statement.
+SELECT t.m03_job();
 -- K04: an old day of the denial shop's branch, closed (case 1) then reopened (case 2) by the owner.
 INSERT INTO t.denial VALUES
  ('close_day','zz_k04_1_close','day.close',$q$SELECT public.close_day('d2000000-0000-0000-0000-000000000011','2020-01-01',(public.get_day_close_preview('d2000000-0000-0000-0000-000000000011','2020-01-01')->>'hash'),'TEST-1 denial close')$q$),

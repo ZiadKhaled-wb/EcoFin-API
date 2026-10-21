@@ -45,6 +45,8 @@ import {
   MigrationTotalMismatchDetail,
   MigrationSignedOffDetail,
   MigrationNotReversibleDetail,
+  ExportRunningDetail,
+  ExportTooSoonDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 import type { ZodTypeAny } from 'zod';
@@ -149,6 +151,8 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   MIGRATION_TOTAL_MISMATCH: MigrationTotalMismatchDetail,
   MIGRATION_SIGNED_OFF: MigrationSignedOffDetail,
   MIGRATION_NOT_REVERSIBLE: MigrationNotReversibleDetail,
+  EXPORT_RUNNING: ExportRunningDetail,
+  EXPORT_TOO_SOON: ExportTooSoonDetail,
 };
 
 /**

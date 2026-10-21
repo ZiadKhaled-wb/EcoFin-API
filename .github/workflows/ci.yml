@@ -196,12 +196,31 @@ jobs:
           # Application invitations and password resets use local SMTP.
           export SMTP_URL=smtp://127.0.0.1:54325 MAIL_FROM='EcoFin CI <ci@ecotech.test>'
           export MAILPIT_URL="$(field MAILPIT_URL)"
+          # M03: the full export holds one read-only snapshot through a direct Postgres connection.
+          export DATABASE_URL="$(field DB_URL)"
           npm test
 
       # F10: after the integration suites wrote to the database, every cache must still equal its ledger.
       - name: Ledger reconciliation after the integration tests
         if: ${{ !cancelled() && steps.integration.outcome == 'success' }}
         run: node scripts/db-reconcile.mjs
+
+      # M03 (D86): the export of the seed shop restores into a clean database with every row count and
+      # every control total equal. Export as the worker does, wipe the database (no seed, so the shop
+      # is gone), restore the zip, compare (scripts/export-restore-check.mjs exits 1 on any difference).
+      - name: M03 restore check (export, reset, restore, compare)
+        if: ${{ !cancelled() && steps.integration.outcome == 'success' }}
+        run: |
+          status=$(supabase status -o json)
+          field() { node -e 'console.log(JSON.parse(process.argv[1])[process.argv[2]])' "$status" "$1"; }
+          export SUPABASE_URL="$(field API_URL)"
+          export SUPABASE_ANON_KEY="$(field ANON_KEY)"
+          export SUPABASE_SERVICE_ROLE_KEY="$(field SERVICE_ROLE_KEY)"
+          export DATABASE_URL="$(field DB_URL)"
+          export FRONTEND_URL=http://localhost:5173 LOG_LEVEL=error
+          npx tsx scripts/export-seed-shop.ts d1000000-0000-0000-0000-000000000001 "$RUNNER_TEMP/export.zip"
+          supabase db reset --no-seed
+          node scripts/export-restore-check.mjs "$RUNNER_TEMP/export.zip"
 
       - name: Stop database
         if: always()

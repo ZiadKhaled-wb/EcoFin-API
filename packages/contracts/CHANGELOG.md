@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.56.0
+
+- M03 full export: new `exports.ts` with EXPORT_LIMITS, EXPORT_STATUSES / ExportStatus, EXPORT_PII_MODES / ExportPiiMode, StartExportBody, ExportIdParams, EXPORT_FAILURE_CODES / ExportFailureCode, ExportRequester, ExportJob, ExportListResponse, EXPORT_MANIFEST_FORMAT_VERSION, ExportManifestTable, ExportManifestTotals, ExportManifest, ExportRunningDetail, ExportTooSoonDetail. Error codes EXPORT_RUNNING (409), EXPORT_TOO_SOON (429) and EXPORT_NOT_FOUND (404); EXPORT_TOO_LARGE is reused. No new permission key (`export.data`, `customer.view_pii` exist) and no new enum value.
+
 ## 0.55.0
 
 - M02 opening balances: `IMPORT_KINDS` / `IMPORT_KIND_ORDER` gain `opening_contracts` and `opening_cash` (`IMPORT_COLUMNS` for both: one row per remaining installment with the contract columns repeated, guarantors 1 and 2, and one row per safe / bank), 11 new `IMPORT_ROW_ERROR_CODES` (IMPORT_CONTRACT_ROWS_DIFFER, IMPORT_CONTRACT_NOT_BALANCED, IMPORT_CONTRACT_EXISTS, IMPORT_CUSTOMER_NOT_FOUND, IMPORT_GUARANTOR_INCOMPLETE, IMPORT_ACCOUNT_KIND, CASH_ACCOUNT_HAS_MOVEMENTS, CASH_ACCOUNT_INACTIVE, CASH_ACCOUNT_NAME_TAKEN, DAY_CLOSED, POLICY_NOT_SET), `ImportReport.summary` and `.contracts` (ImportContractsSummary, ImportContractPreview). New `migration.ts`: ContractMigrationSource, MigrationReportQuery, MigrationReport (totals, customers, branches, batches, cash), MigrationReportTotals / Customer / Branch / Batch / Cash, MigrationBlocker, MIGRATION_BLOCKER_REASONS, MigrationAmount, MigrationSignOffBody, MigrationSignOff, MigrationSignOffList, MigrationTotalMismatchDetail, MigrationSignedOffDetail, MigrationBatchParams, ReverseMigrationBatchBody, MigrationBatchReversal, MigrationNotReversibleDetail. `Contract.migration_source` and `CustomerContractSummary.migration_source` (nullable, optional). Error codes MIGRATION_TOTAL_MISMATCH, MIGRATION_SIGNED_OFF and MIGRATION_NOT_REVERSIBLE (409). No new permission key and no new enum value.

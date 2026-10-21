@@ -7,6 +7,8 @@
 //   M01 'import.apply' (D83): queued by public.queue_import when the owner runs a validated import.
 //   N04 'installments.overdue' (daily, D79): warnings, bans and legal referrals; never a late fee
 //   (Islamic finance rule 4).
+//   M03 'export.full' (D86): queued by public.start_full_export; 'export.cleanup' (daily 04:00)
+//   removes zips older than 7 days.
 //   K04 'day.check' (daily, D84): yesterday's day-close checks per branch and drift on closed days;
 //   never closes a day. Q03 backups check: added by that slice.
 
@@ -16,12 +18,20 @@ import { etaJobHandlers } from '../eta/jobs';
 import { etaRuntime } from '../eta/runtime';
 import { supabaseEtaStore } from '../eta/store';
 import { dayCheck } from './handlers/dayCheck';
+import { exportCleanup } from './handlers/exportCleanup';
+import { exportFull, pgSnapshot } from './handlers/exportFull';
 import { importApply } from './handlers/importApply';
 import { ledgerReconcile } from './handlers/ledgerReconcile';
 import { overdueCheck } from './handlers/overdueCheck';
 import { supabaseJobStore } from './store';
 import type { DailyJob, JobHandler } from './types';
 import { JobWorker } from './worker';
+
+/** The direct Postgres connection of the full export; null (the export then fails) without DATABASE_URL. */
+function exportSnapshot() {
+  const url = process.env['DATABASE_URL'];
+  return url ? pgSnapshot(url) : null;
+}
 
 export function jobHandlers(db: SupabaseClient, logger: Logger): Record<string, JobHandler> {
   const { client, hosts } = etaRuntime();
@@ -31,6 +41,9 @@ export function jobHandlers(db: SupabaseClient, logger: Logger): Record<string, 
     'day.check': dayCheck(db),
     // M01 (D83): queued by public.queue_import, not daily.
     'import.apply': importApply(db),
+    // M03 (D86): queued by public.start_full_export; export.cleanup is daily.
+    'export.full': exportFull({ db, openSnapshot: exportSnapshot() }),
+    'export.cleanup': exportCleanup(db),
     ...etaJobHandlers({ store: supabaseEtaStore(db), client, hosts, logger }),
   };
 }
@@ -42,6 +55,8 @@ export const DAILY_JOBS: readonly DailyJob[] = [
   { type: 'ledger.reconcile', localTime: '03:00' },
   // After ledger.reconcile, so the night's mismatch log comes first (K04, D84).
   { type: 'day.check', localTime: '03:30' },
+  // M03: zips older than 7 days leave storage.
+  { type: 'export.cleanup', localTime: '04:00' },
 ];
 
 export function createJobWorker(
