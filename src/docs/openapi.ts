@@ -3207,6 +3207,45 @@ export const openApiSpec = {
                 responses: { 200: { description: 'MigrationBatchReversal' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/exports': {
+            get: {
+                tags: ['Export'],
+                summary: 'Full exports of the shop, newest first (export.data)',
+                description: 'M03 (D86). The last 50 exports with status (queued, running, completed, failed, cancelled), who asked, size, rows and, while the zip is kept (7 days), its file id. Works in an expired shop. Schema: ExportListResponse.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'ExportListResponse' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Export'],
+                summary: 'Export all data of the shop as one zip (export.data)',
+                description: 'M03 (D86). Queues the background job export.full (202): every table as CSV (UTF-8 with BOM, no cell can run a formula) and JSON, plus manifest.json with row counts and control totals from ONE read-only snapshot. National IDs are masked unless pii is full, which also needs customer.view_pii and is audited at warning. Idempotency-Key header: the same key answers the same job. One running export per shop (EXPORT_RUNNING, details job_id), one per hour after a completed one (EXPORT_TOO_SOON, details retry_after). Over 500 MB or 2 million rows the job fails with EXPORT_TOO_LARGE. Works in an expired shop; a suspended one is refused. Download: GET /api/files/{id}/url with the file id (audited as export.downloaded). Schema: StartExportBody -> ExportJob.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }],
+                requestBody: { required: false, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 202: { description: 'ExportJob' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 429: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/exports/{id}': {
+            get: {
+                tags: ['Export'],
+                summary: 'One export (export.data)',
+                description: 'M03 (D86). EXPORT_NOT_FOUND for an unknown id or an export of another shop. Schema: ExportJob.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'ExportJob' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/exports/{id}/cancel': {
+            post: {
+                tags: ['Export'],
+                summary: 'Cancel a queued or running export (export.data)',
+                description: 'M03 (D86). The job stops at the next page and ends cancelled; audit export.cancelled. A finished export is returned as it is. Schema: ExportJob.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'ExportJob' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/units': {
             get: {
                 tags: ['Inventory'],

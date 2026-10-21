@@ -72,7 +72,7 @@ sudo -u deploy nano /opt/ecofin/api.env
 ```
 Fill `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` from the
 **EcoFin-Development** project, and `FRONTEND_URL` + `CORS_ALLOWED_ORIGINS` with the Vercel development URL (`CORS_ALLOWED_ORIGINS` is required in production; comma-separate several origins).
-Also `SMTP_URL` + `MAIL_FROM` (required in production since P01/O02 send invites and password resets; development uses a Mailtrap sandbox inbox, see `deploy/vm/api.env.example`), and optionally `SENTRY_DSN` + `SENTRY_ENVIRONMENT` (`docs/05-operations/monitoring.md`). A missing required value stops the new container, and the deploy rolls back to the previous release.
+Also `SMTP_URL` + `MAIL_FROM` (required in production since P01/O02 send invites and password resets; development uses a Mailtrap sandbox inbox, see `deploy/vm/api.env.example`), and optionally `SENTRY_DSN` + `SENTRY_ENVIRONMENT` (`docs/05-operations/monitoring.md`). Also `DATABASE_URL` (M03 full export: a direct Postgres connection string, session mode, so one read-only snapshot can be held; optional, without it only the export job fails). A missing required value stops the new container, and the deploy rolls back to the previous release.
 The file stays on the VM (mode 600) and is never committed.
 
 ### 5. GitHub: environment `development`

@@ -657,6 +657,16 @@ M01 Audit ${STAMP}-${ipCounter}
     expect(job.status, JSON.stringify(job.report)).toBe('completed');
     return job.id;
   }
+  /** M03: cancels every export of shop one that is still queued or running. */
+  async function m03Clear(token: string): Promise<void> {
+    const list = await send('get', '/api/exports', { token });
+    for (const item of (list.res.body as { items?: { id: string; status: string }[] }).items ??
+      []) {
+      if (item.status === 'queued' || item.status === 'running') {
+        await send('post', `/api/exports/${item.id}/cancel`, { token });
+      }
+    }
+  }
   const drivers: Record<string, () => Promise<{ sent: Sent; org: string; status?: number }>> = {
     'POST /api/day-closes': async () => {
       const owner = await login('owner.one@ecotech.test');
@@ -697,6 +707,37 @@ M01 Audit ${STAMP}-${ipCounter}
           token: owner.accessToken,
           body: { reason: 'F07 audit driver' },
         }),
+        org: SHOP_ONE,
+      };
+    },
+    // M03: the request and the cancel each write exactly one row (the build, the download and the
+    // cleanup are written by the job and the file link). Anything still queued from an earlier run is
+    // cancelled first, so a new export may start.
+    'POST /api/exports': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      await m03Clear(owner.accessToken);
+      return {
+        sent: await send('post', '/api/exports', {
+          token: owner.accessToken,
+          body: {},
+          key: `f07-m03-${STAMP}-${ipCounter}`,
+        }),
+        org: SHOP_ONE,
+        status: 202,
+      };
+    },
+    'POST /api/exports/:id/cancel': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      await m03Clear(owner.accessToken);
+      const started = await send('post', '/api/exports', {
+        token: owner.accessToken,
+        body: {},
+        key: `f07-m03c-${STAMP}-${ipCounter}`,
+      });
+      expect(started.res.status, JSON.stringify(started.res.body)).toBe(202);
+      const id = (started.res.body as { id: string }).id;
+      return {
+        sent: await send('post', `/api/exports/${id}/cancel`, { token: owner.accessToken }),
         org: SHOP_ONE,
       };
     },

@@ -6083,3 +6083,94 @@ crossShopCase({
     h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
   },
 });
+
+// M03 (D86). Full export: a foreign shop header is refused, an organization id in the request is
+// refused (strict schemas), another shop's export is not found, and a started export never shows
+// up in the other shop's list.
+const M03_UNKNOWN = '00000000-0000-4000-8000-0000000003c3';
+crossShopCase({
+  method: 'POST',
+  path: '/api/exports',
+  name: 'starting an export refuses a foreign header and an org id; the job is invisible to the other shop',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const b = await h.login(OWNER_B);
+    const foreign = await h.call('POST', '/api/exports', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: {},
+      idempotencyKey: key('exp-f'),
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/exports', {
+      token: a.accessToken,
+      body: { organization_id: SHOP_B },
+      idempotencyKey: key('exp-i'),
+    });
+    h.expect(injected.res.status).toBe(400);
+    const mine = await h.call('POST', '/api/exports', {
+      token: a.accessToken,
+      body: {},
+      idempotencyKey: key('exp-m'),
+    });
+    h.expect([202, 409, 429]).toContain(mine.res.status);
+    if (mine.res.status === 202) {
+      const id = (mine.res.body as { id: string }).id;
+      const seen = await h.call('GET', `/api/exports/${id}`, { token: b.accessToken });
+      h.expect(seen.res.status).toBe(404);
+      h.expect(h.code(seen.res)).toBe('EXPORT_NOT_FOUND');
+      const list = await h.call('GET', '/api/exports', { token: b.accessToken });
+      h.expect(JSON.stringify(list.res.body)).not.toContain(id);
+      const cancelled = await h.call('POST', `/api/exports/${id}/cancel`, {
+        token: a.accessToken,
+      });
+      h.expect(cancelled.res.status).toBe(200);
+    }
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/exports',
+  name: 'the export list refuses a foreign header and an org id',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/exports', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/exports', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const mine = await h.call('GET', '/api/exports', { token: a.accessToken });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/exports/:id',
+  name: 'reading an export refuses a foreign header and finds no unknown or other-shop export',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const path = `/api/exports/${M03_UNKNOWN}`;
+    const foreign = await h.call('GET', path, { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const missing = await h.call('GET', path, { token: a.accessToken });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('EXPORT_NOT_FOUND');
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/exports/:id/cancel',
+  name: 'cancelling an export refuses a foreign header and finds no unknown or other-shop export',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const path = `/api/exports/${M03_UNKNOWN}/cancel`;
+    const foreign = await h.call('POST', path, { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const missing = await h.call('POST', path, { token: a.accessToken });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('EXPORT_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+  },
+});

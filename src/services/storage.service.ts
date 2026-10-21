@@ -7,6 +7,7 @@
 //
 // Errors never carry storage messages out: a failed call is logged and answered generically.
 
+import { createReadStream } from 'node:fs';
 import { ServerError } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { supabaseAdmin } from '../utils/supabase';
@@ -20,6 +21,28 @@ export async function putObject(path: string, body: Buffer, contentType: string)
     .upload(path, body, { contentType, upsert: false });
   if (error) {
     logger.error({ err: error, path }, 'storage.putObject failed');
+    throw ServerError('Request failed.');
+  }
+}
+
+/**
+ * Writes a new object from a file on disk, streamed (a full export can be hundreds of MB). Never
+ * overwrites. The file is read once; the caller removes it.
+ */
+export async function putObjectFile(
+  path: string,
+  filePath: string,
+  contentType: string,
+): Promise<void> {
+  const { error } = await supabaseAdmin.storage
+    .from(FILE_BUCKET)
+    .upload(path, createReadStream(filePath), {
+      contentType,
+      upsert: false,
+      duplex: 'half',
+    });
+  if (error) {
+    logger.error({ err: error, path }, 'storage.putObjectFile failed');
     throw ServerError('Request failed.');
   }
 }

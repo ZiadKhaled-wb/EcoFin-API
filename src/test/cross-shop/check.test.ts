@@ -303,7 +303,15 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/migration/batches/:id/reverse',
       ]),
     );
-    expect(keys).toHaveLength(282);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'POST /api/exports',
+        'GET /api/exports',
+        'GET /api/exports/:id',
+        'POST /api/exports/:id/cancel',
+      ]),
+    );
+    expect(keys).toHaveLength(286);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

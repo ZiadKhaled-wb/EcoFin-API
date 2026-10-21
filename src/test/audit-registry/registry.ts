@@ -111,6 +111,9 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   // M02: the sign-off and the reversal; the contracts themselves are written by the import job.
   'POST /api/migration/sign-offs': { action: 'migration.signed_off' },
   'POST /api/migration/batches/:id/reverse': { action: 'migration.batch_reversed' },
+  // M03: the request; the build, the download and the cleanup are audited by the job and the file link.
+  'POST /api/exports': { action: 'export.requested' },
+  'POST /api/exports/:id/cancel': { action: 'export.cancelled' },
   'POST /api/day-closes': { action: 'day.closed' },
   'POST /api/day-closes/:id/reopen': { action: 'day.reopened' },
   'PUT /api/customers/:id/collector': { action: 'customer.collector_set' },

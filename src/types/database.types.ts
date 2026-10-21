@@ -2548,6 +2548,7 @@ export type Database = {
           bucket: string;
           created_at: string;
           created_by: string | null;
+          deleted_at: string | null;
           entity_id: string | null;
           entity_type: string | null;
           id: string;
@@ -2563,6 +2564,7 @@ export type Database = {
           bucket?: string;
           created_at?: string;
           created_by?: string | null;
+          deleted_at?: string | null;
           entity_id?: string | null;
           entity_type?: string | null;
           id?: string;
@@ -2578,6 +2580,7 @@ export type Database = {
           bucket?: string;
           created_at?: string;
           created_by?: string | null;
+          deleted_at?: string | null;
           entity_id?: string | null;
           entity_type?: string | null;
           id?: string;
@@ -8493,6 +8496,7 @@ export type Database = {
       branch_deactivation_check: { Args: { p_branch_id: string }; Returns: Json };
       cancel_credit_exception: { Args: { p_approval_id: string }; Returns: Json };
       cancel_discount_approval: { Args: { p_approval_id: string }; Returns: Json };
+      cancel_export: { Args: { p_id: string }; Returns: Json };
       cancel_field_survey: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_import_job: { Args: { p_id: string }; Returns: Json };
       cancel_purchase_order: { Args: { p_id: string; p_reason: string }; Returns: Json };
@@ -8778,6 +8782,7 @@ export type Database = {
       get_discount_approval: { Args: { p_approval_id: string }; Returns: Json };
       get_eta_settings: { Args: Record<PropertyKey, never>; Returns: Json };
       get_expense: { Args: { p_id: string }; Returns: Json };
+      get_export: { Args: { p_id: string }; Returns: Json };
       get_field_survey: { Args: { p_id: string }; Returns: Json };
       get_guarantor: { Args: { p_id: string }; Returns: Json };
       get_guarantor_requirement: {
@@ -8855,6 +8860,44 @@ export type Database = {
         Args: { p_job_type: string; p_local_time: string; p_max_attempts?: number; p_now?: string };
         Returns: number;
       };
+      jobs_export_cleanup_done: { Args: { p_file_ids: string[]; p_org: string }; Returns: number };
+      jobs_export_cleanup_list: {
+        Args: { p_keep_days: number; p_org: string };
+        Returns: {
+          file_id: string;
+          path: string;
+        }[];
+      };
+      jobs_export_complete: {
+        Args: {
+          p_file_id: string;
+          p_job_id: string;
+          p_manifest: Json;
+          p_original_name: string;
+          p_path: string;
+          p_rows: number;
+          p_sha256: string;
+          p_size_bytes: number;
+          p_uncompressed_bytes: number;
+        };
+        Returns: Json;
+      };
+      jobs_export_counts: { Args: { p_job_id: string }; Returns: Json };
+      jobs_export_fail: {
+        Args: { p_code: string; p_detail: Json; p_job_id: string };
+        Returns: Json;
+      };
+      jobs_export_page: {
+        Args: { p_after: string[]; p_job_id: string; p_limit: number; p_table: string };
+        Returns: {
+          cells: string[];
+          key_vals: string[];
+          row_json: string;
+        }[];
+      };
+      jobs_export_prepare: { Args: { p_job_id: string }; Returns: Json };
+      jobs_export_state: { Args: { p_job_id: string }; Returns: string };
+      jobs_export_totals: { Args: { p_job_id: string }; Returns: Json };
       jobs_fail: {
         Args: { p_error: string; p_job_id: string; p_retry_in: string; p_worker: string };
         Returns: Database['public']['Enums']['job_status'];
@@ -8966,6 +9009,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      list_exports: { Args: Record<PropertyKey, never>; Returns: Json };
       list_field_surveys: {
         Args: {
           p_assigned_to?: string;
@@ -9268,6 +9312,7 @@ export type Database = {
       receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
       record_collection_receipt_print: { Args: { p_id: string }; Returns: Json };
       record_contract_document_print: { Args: { p_document: string; p_id: string }; Returns: Json };
+      record_export_download: { Args: { p_file_id: string }; Returns: undefined };
       record_sale_receipt_print: { Args: { p_sale_id: string }; Returns: Json };
       register_file: {
         Args: {
@@ -9490,6 +9535,7 @@ export type Database = {
         Returns: Json;
       };
       sign_off_migration: { Args: { p_body: Json }; Returns: Json };
+      start_full_export: { Args: { p_body: Json; p_idempotency_key: string }; Returns: Json };
       submit_field_survey: { Args: { p_body?: Json; p_id: string }; Returns: Json };
       supplier_statement: { Args: { p_from?: string; p_id: string; p_to?: string }; Returns: Json };
       unlink_customer_guarantor: {

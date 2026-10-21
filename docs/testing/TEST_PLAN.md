@@ -432,6 +432,10 @@ See [TEST-5 plan](plans/TEST-5.md): schedules that add up over 108 real sales, t
 
 See [M02 plan](plans/M02.md). Covers the Done when (the system's open debt equals the signed total from the old records; a wrong total is refused; nothing migrated touches the cash or stock ledgers except the opening cash; a bad file saves nothing; a re-import never duplicates; a batch is reversible only before collections and sign-off) and the D85 rules.
 
+## M03 — full export (EC-102)
+
+See [M03 plan](plans/M03.md). Covers the Done when (the export restores into a clean environment with matching totals; every tenant table is in the export or deliberately excluded with a reason; no secret column leaves the database; national IDs masked unless `customer.view_pii`; no cell can run a formula, Arabic opens correctly; a big shop is paged and streamed, not loaded; every export audited; `export.data` works in an expired shop) and the D86 rules.
+
 ## K04 — day close and reconciliation (EC-62)
 
 See [K04 plan](plans/K04.md). Covers the Done when (the day-close numbers equal the sum of the day's documents; a broken balance is flagged by the preview, the stored issues and the nightly check) and the D84 rules (an open shift blocks, the hash, a note with warnings, a closed day refuses entries for its branch only, reopen and close again, drift, access and isolation).

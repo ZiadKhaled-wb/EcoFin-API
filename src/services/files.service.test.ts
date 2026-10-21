@@ -212,6 +212,55 @@ describe('getFileUrl', () => {
     expect(expires).toBeLessThanOrEqual(60_000);
   });
 
+  it('answers not found for the zip of an export that the cleanup already removed (M03)', async () => {
+    perms.keys = ['export.data'];
+    db.queue({
+      data: {
+        id: FILE_ID,
+        purpose: 'export',
+        path: `${ORG}/export/2026/10/a.zip`,
+        deleted_at: '2026-10-29T04:00:00Z',
+      },
+      error: null,
+    });
+    expect(await codeOf(getFileUrl(ctx, FILE_ID, SETTINGS))).toBe('FILE_NOT_FOUND');
+    expect(storageMock.createSignedUrl).not.toHaveBeenCalled();
+    expect(db.rpc).not.toHaveBeenCalled();
+  });
+
+  it('records the download of an export zip before it hands the link out (M03)', async () => {
+    perms.keys = ['export.data'];
+    db.queue({
+      data: {
+        id: FILE_ID,
+        purpose: 'export',
+        path: `${ORG}/export/2026/10/a.zip`,
+        deleted_at: null,
+      },
+      error: null,
+    });
+    db.queue({ data: null, error: null });
+    const out = await getFileUrl(ctx, FILE_ID, SETTINGS);
+    expect(out.url).toContain('signed.example');
+    expect(db.rpc).toHaveBeenCalledWith('record_export_download', { p_file_id: FILE_ID });
+  });
+
+  it('gives no link when the download could not be recorded (M03)', async () => {
+    perms.keys = ['export.data'];
+    db.queue({
+      data: {
+        id: FILE_ID,
+        purpose: 'export',
+        path: `${ORG}/export/2026/10/a.zip`,
+        deleted_at: null,
+      },
+      error: null,
+    });
+    db.queue({ data: null, error: { message: 'PERMISSION_DENIED: export.data' } });
+    expect(await codeOf(getFileUrl(ctx, FILE_ID, SETTINGS))).toBe('PERMISSION_DENIED');
+    expect(storageMock.createSignedUrl).not.toHaveBeenCalled();
+  });
+
   it('refuses a stored path under another shop, as not found, with no link made', async () => {
     db.queue({
       data: { id: FILE_ID, purpose: 'logo', path: `${OTHER_ORG}/logo/2026/10/a.png` },

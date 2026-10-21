@@ -78,6 +78,15 @@ const envSchema = z.object({
     .max(24 * 60)
     .default(15),
 
+  // M03 full export (D86). Direct Postgres connection string (service role / owner) for the export
+  // worker: one REPEATABLE READ snapshot cannot be held through PostgREST. Without it the export job
+  // fails with a clear log line; nothing else needs it.
+  DATABASE_URL: z
+    .string()
+    .url()
+    .refine((v) => /^postgres(ql)?:\/\//.test(v))
+    .optional(),
+
   // F13 background jobs (D34): the worker runs inside the API process. Safe on several instances.
   JOBS_ENABLED: z
     .enum(['true', 'false'])

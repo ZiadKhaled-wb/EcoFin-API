@@ -201,11 +201,14 @@ export async function getFileUrl(
   // RLS limits the row to the caller's shop: another shop's file reads as "not found".
   const { data, error } = await ctx.db
     .from('files')
-    .select('id, purpose, path, entity_type, entity_id')
+    .select('id, purpose, path, entity_type, entity_id, deleted_at')
     .eq('id', fileId)
     .maybeSingle();
   if (error) fail(error, 'files read for url');
-  if (data === null) throw new AppError(safeMessage('FILE_NOT_FOUND'), 'FILE_NOT_FOUND');
+  // M03: the zip of a full export leaves storage after 7 days; its row stays with deleted_at.
+  if (data === null || (data.deleted_at ?? null) !== null) {
+    throw new AppError(safeMessage('FILE_NOT_FOUND'), 'FILE_NOT_FOUND');
+  }
 
   await assertPermission(
     ctx,
@@ -219,6 +222,11 @@ export async function getFileUrl(
   }
 
   const path = assertOwnPath(ctx, data.path);
+  if (data.purpose === 'export') {
+    // M03: F14 does not audit reads; the download of an export zip is recorded (a no-op for other files).
+    const audited = await ctx.db.rpc('record_export_download', { p_file_id: fileId });
+    if (audited.error) fail(audited.error, 'record_export_download');
+  }
   const url = await storage.createSignedUrl(path, settings.urlTtlSeconds);
   return {
     url,
