@@ -5879,6 +5879,51 @@ crossShopCase({
     h.expect(own.res.status, JSON.stringify(own.res.body)).toBe(200);
   },
 });
+// D02 (D89). Sales report: a foreign shop header is refused, an organization id in the query is refused
+// (strict schema), and another shop's branch, employee, category or product is not found; a shop's
+// report never carries the other shop's numbers.
+crossShopCase({
+  method: 'GET',
+  path: '/api/reports/sales',
+  name: 'the sales report refuses a foreign header, an org id and ids of another shop',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const period = 'from=2026-09-01&to=2026-09-30&group_by=month';
+    const foreign = await h.call('GET', '/api/reports/sales', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      query: period,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/reports/sales', {
+      token: a.accessToken,
+      query: `${period}&organization_id=${SHOP_B}`,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const category = await shopBCategory(h, 'report');
+    const product = await shopBProduct(h, 'report');
+    for (const [filter, code] of [
+      [`branch_id=${SHOP_B_BR1}`, 'BRANCH_NOT_FOUND'],
+      [`employee_id=${CASHIER_B}`, 'EMPLOYEE_NOT_FOUND'],
+      [`category_id=${category}`, 'CATEGORY_NOT_FOUND'],
+      [`product_id=${product.id}`, 'PRODUCT_NOT_FOUND'],
+    ] as const) {
+      const other = await h.call('GET', '/api/reports/sales', {
+        token: a.accessToken,
+        query: `${period}&${filter}`,
+      });
+      h.expect(other.res.status, filter).toBe(404);
+      h.expect(h.code(other.res), filter).toBe(code);
+    }
+    const mine = await h.call('GET', '/api/reports/sales', { token: a.accessToken, query: period });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+    const own = await h.call('GET', '/api/reports/sales', {
+      token: a.accessToken,
+      query: `from=2026-09-01&to=2026-09-30&group_by=product&branch_id=${SHOP_A_BR1}`,
+    });
+    h.expect(own.res.status, JSON.stringify(own.res.body)).toBe(200);
+  },
+});
 // K04 (D84). Day close: a foreign shop header is refused, an organization id in the request is
 // refused (strict schemas), and another shop's branch or day close is not found.
 const K04_UNKNOWN = '00000000-0000-4000-8000-0000000004c4';

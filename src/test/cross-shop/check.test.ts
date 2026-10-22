@@ -321,7 +321,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/returns/:id/receipt-prints',
       ]),
     );
-    expect(keys).toHaveLength(293);
+    expect(keys).toHaveLength(294);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {
