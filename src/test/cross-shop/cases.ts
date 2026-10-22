@@ -6205,3 +6205,153 @@ crossShopCase({
     h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
   },
 });
+// S05 (D88). Returns: shop A's owner, with an open shift of its own, can't read, quote, return or
+// print against shop B's sale or return; a foreign header and an organization id are refused.
+async function shopBSaleReturn(h: CrossShopHarness) {
+  const sale = await shopBSale(h);
+  const able = await h.call('GET', '/api/sales/' + sale.id + '/returnable', {
+    token: sale.shift.token,
+  });
+  h.expect(able.res.status, JSON.stringify(able.res.body)).toBe(200);
+  const line = (able.res.body as { lines: { sale_line_id: string; line_total: string }[] })
+    .lines[0]!;
+  const made = await h.call('POST', '/api/returns', {
+    token: sale.shift.token,
+    deviceToken: sale.shift.deviceToken,
+    idempotencyKey: key('s05-return'),
+    body: {
+      sale_id: sale.id,
+      lines: [{ sale_line_id: line.sale_line_id, quantity: 1 }],
+      refunds: [{ method: 'cash', amount: line.line_total }],
+      reason: 'Cross-shop case',
+      expected_total: line.line_total,
+    },
+  });
+  h.expect(made.res.status, JSON.stringify(made.res.body)).toBe(201);
+  return { sale, line, id: (made.res.body as { id: string }).id };
+}
+crossShopCase({
+  method: 'GET',
+  path: '/api/sales/:id/returnable',
+  name: "another shop's sale is 404; a foreign header is refused",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const b = await shopBSale(h);
+    const attempt = await h.call('GET', '/api/sales/' + b.id + '/returnable', {
+      token: a.accessToken,
+    });
+    h.expect(attempt.res.status).toBe(404);
+    h.expect(h.code(attempt.res)).toBe('SALE_NOT_FOUND');
+    const foreign = await h.call('GET', '/api/sales/' + b.id + '/returnable', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    await closeShiftShort(h, b.shift);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/returns/quote',
+  name: "a return quote of shop B's sale is 404; an org id in the body is refused",
+  async run(h) {
+    // Another shop's sale is not found before the caller's shift is looked at (no shift needed).
+    const a = await h.login(OWNER_A);
+    const b = await shopBSale(h);
+    const body = { sale_id: b.id, lines: [{ sale_line_id: b.id, quantity: 1 }] };
+    const attempt = await h.call('POST', '/api/returns/quote', { token: a.accessToken, body });
+    h.expect(attempt.res.status).toBe(404);
+    h.expect(h.code(attempt.res)).toBe('SALE_NOT_FOUND');
+    const injected = await h.call('POST', '/api/returns/quote', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    await closeShiftShort(h, b.shift);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/returns',
+  name: "returning shop B's sale is 404: no return, no money, no audit in shop B",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const b = await shopBSale(h);
+    const able = await h.call('GET', '/api/sales/' + b.id + '/returnable', {
+      token: b.shift.token,
+    });
+    const line = (able.res.body as { lines: { sale_line_id: string; line_total: string }[] })
+      .lines[0]!;
+    const attempt = await h.call('POST', '/api/returns', {
+      token: a.accessToken,
+      idempotencyKey: key('s05-foreign'),
+      body: {
+        sale_id: b.id,
+        lines: [{ sale_line_id: line.sale_line_id, quantity: 1 }],
+        refunds: [{ method: 'cash', amount: line.line_total }],
+        reason: 'Cross-shop case',
+        expected_total: line.line_total,
+      },
+    });
+    h.expect(attempt.res.status).toBe(404);
+    h.expect(h.code(attempt.res)).toBe('SALE_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, attempt.ip)).toBe(0);
+    const still = await h.call('GET', '/api/sales/' + b.id + '/returnable', {
+      token: b.shift.token,
+    });
+    h.expect((still.res.body as { lines: { returned: number }[] }).lines[0]!.returned).toBe(0);
+    await closeShiftShort(h, b.shift);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/returns',
+  name: "the return list shows none of shop B's returns and refuses a foreign header and an org id",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const theirs = await shopBSaleReturn(h);
+    const list = await h.call('GET', '/api/returns', {
+      token: a.accessToken,
+      query: 'sale_id=' + theirs.sale.id,
+    });
+    h.expect(list.res.status, JSON.stringify(list.res.body)).toBe(200);
+    h.expect((list.res.body as { total_count: number }).total_count).toBe(0);
+    const foreign = await h.call('GET', '/api/returns', { token: a.accessToken, orgId: SHOP_B });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/returns', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    await closeShiftShort(h, theirs.sale.shift);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/returns/:id',
+  name: "another shop's return is 404",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const theirs = await shopBSaleReturn(h);
+    const attempt = await h.call('GET', '/api/returns/' + theirs.id, { token: a.accessToken });
+    h.expect(attempt.res.status).toBe(404);
+    h.expect(h.code(attempt.res)).toBe('RETURN_NOT_FOUND');
+    await closeShiftShort(h, theirs.sale.shift);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/returns/:id/receipt-prints',
+  name: "another shop's return is 404 and no print is logged",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const theirs = await shopBSaleReturn(h);
+    const attempt = await h.call('POST', '/api/returns/' + theirs.id + '/receipt-prints', {
+      token: a.accessToken,
+    });
+    h.expect(attempt.res.status).toBe(404);
+    h.expect(h.code(attempt.res)).toBe('RETURN_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, attempt.ip)).toBe(0);
+    await closeShiftShort(h, theirs.sale.shift);
+  },
+});

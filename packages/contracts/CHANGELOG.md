@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.58.0
+
+- S05 returns and exchanges: new `returns.ts` with RETURN_KINDS / ReturnKind, SalesReturnKind, RETURN_CONDITIONS / ReturnCondition, RefundMethod, ReturnReason, ReturnLineInput, ReturnLines, RefundLineInput, RefundLines, ExchangeNewSaleInput, SalesReturnQuoteBody, SalesReturnCreateBody, ReturnIdParams, RefundLine, RefundableByMethod, ReturnContractPlan, SalesReturnQuoteLine, SalesReturnQuote, SaleReturnableLine, SALE_RETURN_BLOCKS / SaleReturnBlock, SaleReturnable, SalesReturnLine, SalesReturnRefund, SalesReturn, SalesReturnListQuery, SalesReturnSummary, SalesReturnListResponse, SalesReturnReceiptPrint, ClaimRefundTarget (S12's refund now answers it), SaleReturnQtyExceededDetail, RefundExceedsPaidDetail, ReturnPeriodExpiredDetail. Error codes RETURN_NOT_FOUND (404), RETURN_UNIT_MISMATCH, RETURN_PERIOD_EXPIRED, RETURN_OTHER_BRANCH, REFUND_EXCEEDS_PAID, RETURN_ETA_WINDOW_PASSED, EXCHANGE_NOT_FOR_CONTRACT (409). No new permission key (`refund.create` exists) and no new enum value.
+
 ## 0.57.0
 
 - D01 owner dashboard: new `dashboard.ts` with DashboardQuery, OwnerDashboard (business_date, branch_id, generated_at, one nullable tile per key), DASHBOARD_TILES, DashboardTileKey, DashboardSalesTile, DashboardCollectionsTile, DashboardCashTile, DashboardShiftsTile, DashboardOverdueTile, DashboardLowStockTile, DashboardEtaTile, DashboardUnclosedDaysTile, DashboardApprovalsTile. A tile is `null` when the caller lacks the permission its detail page needs. Existing error codes only (BRANCH_NOT_FOUND, BRANCH_DENIED, VALIDATION_FAILED). No new permission key and no new enum value.

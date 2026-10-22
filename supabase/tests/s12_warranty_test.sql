@@ -237,7 +237,10 @@ SELECT t.unchanged('replacement note required',format('SELECT public.move_warran
 SELECT t.unchanged('replacement wrong product',format('SELECT public.move_warranty_claim(%L,''replaced'',''Swap unit'',%L)',(t.doc('claimA')->>'claim_id')::uuid,t.unit('S12-TAB-1')),'REPLACEMENT_UNIT_INVALID');
 SELECT t.unchanged('replacement wrong branch',format('SELECT public.move_warranty_claim(%L,''replaced'',''Swap unit'',%L)',(t.doc('claimA')->>'claim_id')::uuid,t.unit('S12-IMEI-9')),'REPLACEMENT_UNIT_INVALID');
 SELECT t.unchanged('replacement unavailable',format('SELECT public.move_warranty_claim(%L,''replaced'',''Swap unit'',%L)',(t.doc('claimA')->>'claim_id')::uuid,t.unit('S12-IMEI-1')),'REPLACEMENT_UNIT_INVALID');
-SELECT t.error('refund waits for returns',format('SELECT public.request_claim_refund(%L)',(t.doc('claimA')->>'claim_id')::uuid),'CLAIM_REFUND_NEEDS_RETURN');
+-- S05 (D88): the refund opens a return of the claim's line (the return closes the claim).
+SELECT t.expect('refund answers the sale, line and unit for the S05 return',
+  (SELECT r->>'sale_line_id'=t.id('line')::text AND r->>'unit_id'=t.unit('S12-IMEI-1')::text AND r->>'sale_id' IS NOT NULL
+   FROM (SELECT public.request_claim_refund((t.doc('claimA')->>'claim_id')::uuid) r) x));
 INSERT INTO t.docs SELECT 'repairA',public.move_warranty_claim((t.doc('claimA')->>'claim_id')::uuid,'in_repair','Sent to supplier');
 SELECT t.expect('customer unit in repair',t.unit_status('S12-IMEI-1')='in_repair');
 SELECT t.expect('repair does not move shop stock',t.level('phone')=2);

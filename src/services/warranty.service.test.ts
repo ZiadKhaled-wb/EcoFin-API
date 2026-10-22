@@ -113,9 +113,12 @@ describe('S12 warranty service', () => {
     db.queue({ data: null, error: { message: 'NOT_FOUND' } });
     await expect(w.get(ctx, ID)).rejects.toMatchObject({ code: 'NOT_FOUND', statusCode: 404 });
   });
-  it('refund placeholder remains 409', async () => {
+  it('S05: refund answers what the return form opens with; a closed claim stays 409', async () => {
     const { ctx, db } = fixture();
-    db.queue({ data: null, error: { message: 'CLAIM_REFUND_NEEDS_RETURN' } });
+    const target = { claim_id: ID, sale_id: ID, sale_line_id: ID, unit_id: null };
+    db.queue({ data: target, error: null });
+    expect(await w.refund(ctx, ID)).toEqual(target);
+    db.queue({ data: null, error: { message: 'CLAIM_REFUND_NEEDS_RETURN: the claim is closed' } });
     await expect(w.refund(ctx, ID)).rejects.toMatchObject({
       code: 'CLAIM_REFUND_NEEDS_RETURN',
       statusCode: 409,

@@ -443,3 +443,7 @@ See [K04 plan](plans/K04.md). Covers the Done when (the day-close numbers equal 
 ## D01 — owner dashboard (EC-93)
 
 See [D01 plan](plans/D01.md). Covers the Done when (every number on the dashboard equals its detailed report for the same filters, for all branches and for each branch; each tile links to its page already filtered; a caller sees only the tiles they can open; the read answers in under 300 ms on the seed shop) and the D87 rules.
+
+## S05 — returns and exchanges (EC-72)
+
+See [S05 plan](plans/S05.md). Covers the Done when (returning one item of an installment sale after two payments gives the right remaining debt; stock, cash and tax each change once) and the D88 rules (amounts from the stored line, the exact serial, refund caps, the period and its owner override, warranty refunds, exchanges, the ETA return receipt, R02's balance, concurrency).

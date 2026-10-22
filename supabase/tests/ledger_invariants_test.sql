@@ -316,6 +316,7 @@ INSERT INTO t.replay_tested VALUES
  ('app.post_sale_core','s01_sale_core_test.sql: only reached through public.post_sale, which answers a repeated key before calling it'),
  ('public.open_warranty_claim','s12_warranty_test.sql: same key returns the same claim; conflict rejected'),
  ('public.void_sale','s07_sales_history_test.sql: same key returns the same reversal'),
+ ('public.post_sales_return','s05_returns_test.sql: same key -> the same return (replayed), nothing written twice; the key on another sale -> IDEMPOTENCY_CONFLICT'),
    ('public.post_sale','s01_sale_core_test.sql: same key -> same sale; no second document, movement, payment or number'),
    ('public.post_collection','n03_collections_test.sql: same key -> same receipt, nothing written twice; a sale''s key -> IDEMPOTENCY_CONFLICT'),
    ('public.reverse_collection','n03_collections_test.sql: same key -> same reversal; another key -> already_reversed'),

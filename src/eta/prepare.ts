@@ -13,11 +13,31 @@
 
 import type { Logger } from 'pino';
 import { captureProblem } from '../utils/monitoring';
-import { buildReceipt, ReceiptBlockedError } from './build-receipt';
+import { buildReceipt, ReceiptBlockedError, type Receipt } from './build-receipt';
+import { buildReturnReceipt, ReturnTooLateError } from './build-return';
 import type { EtaHostMap } from './config';
 import { qrPayload } from './qr';
 import { toJson } from './serialize';
-import type { EtaStore } from './store';
+import type { EtaStore, PendingRow } from './store';
+
+/** S05 (D88): a return receipt references its sale's; a sale receipt is built as before. */
+function buildRow(row: PendingRow, previous: string): Receipt {
+  if (row.kind !== 'return') return buildReceipt(row, previous);
+  if (row.original === undefined) throw new RangeError('A return row needs its sale receipt');
+  const { sale, original, ...context } = row;
+  try {
+    return buildReturnReceipt(original, row.lines, {
+      ...context,
+      return: sale,
+      previous_uuid: previous,
+    });
+  } catch (err) {
+    if (err instanceof ReturnTooLateError) {
+      throw new ReceiptBlockedError('BLOCKED:RETURN_TOO_LATE', err.message);
+    }
+    throw err;
+  }
+}
 
 export interface PrepareDeps {
   store: EtaStore;
@@ -72,7 +92,7 @@ export async function prepareDevice(
       }
       let receipt;
       try {
-        receipt = buildReceipt(row, previous);
+        receipt = buildRow(row, previous);
       } catch (err) {
         if (!(err instanceof ReceiptBlockedError)) throw err;
         if (await deps.store.block(row.fiscal_id, err.code, err.message)) {

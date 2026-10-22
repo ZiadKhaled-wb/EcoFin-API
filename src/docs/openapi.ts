@@ -3150,6 +3150,66 @@ export const openApiSpec = {
                 responses: { 200: { description: 'DayClose' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/sales/{id}/returnable': {
+            get: {
+                tags: ['Sales'],
+                summary: 'What can still come back from a sale (refund.create)',
+                description: 'S05 (D88). Per line: sold, returned, returnable, the line total and VAT, an open warranty claim; paid by method less what earlier returns gave back (the refund caps); the return deadline (sale date + return_policy_days) and whether the caller (the owner) may pass it; an installment sale\'s contract (remaining, installments left); blocked = voided | fully_returned | contract_closed. Another shop\'s sale or another branch: SALE_NOT_FOUND. Works in an expired shop. Schema: SaleReturnable.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'SaleReturnable' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/returns': {
+            get: {
+                tags: ['Sales'],
+                summary: 'List returns, voids and exchanges of the caller\'s branches (refund.create, sale.create, report.view or cash.view)',
+                description: 'S05 (D88). Newest first. Filters from/to (business date), branch_id, sale_id, customer_id, kind (return | void | exchange), page, page_size (1-100). Works in an expired shop. Schema: SalesReturnListQuery -> SalesReturnListResponse.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } }, { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } }, { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } }, { name: 'sale_id', in: 'query', schema: { type: 'string', format: 'uuid' } }, { name: 'customer_id', in: 'query', schema: { type: 'string', format: 'uuid' } }, { name: 'kind', in: 'query', schema: { type: 'string', enum: ['return', 'void', 'exchange'] } }, { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } }, { name: 'page_size', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } }],
+                responses: { 200: { description: 'SalesReturnListResponse' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Sales'],
+                summary: 'Take goods back against a sale, or exchange them (refund.create)',
+                description: 'S05 (D88). In the caller\'s open shift (SHIFT_REQUIRED) on its POS, the sale\'s own branch (RETURN_OTHER_BRANCH). Lines: each sale line once; a serialized line with its own unit (RETURN_UNIT_MISMATCH); never more than sold minus returned (RETURN_QTY_EXCEEDED, details sale_line_id and returnable). Amounts from the stored sale line, cumulative so a line returned in pieces gives back exactly its total and VAT; expected_total must equal the server\'s total (PRICE_CHANGED). Period: sale date + return_policy_days, then the owner only (warning audit) or an open warranty claim on the line (RETURN_PERIOD_EXPIRED, details deadline). Refund lines add up to what goes back (PAYMENT_TOTAL_MISMATCH): cash from the drawer (INSUFFICIENT_FUNDS), a bank transfer from a bank the sale was paid into (VAULT_INVALID), store credit (the customer); the sale\'s own methods up to what each paid (REFUND_EXCEEDS_PAID, details method and available). Installment sale: credit = cash price + profit share; it lowers what is owed through a new schedule version (the same installments, each smaller) and only the overpaid part is refunded; written off: CONTRACT_NOT_OPEN. Exchange (kind exchange, new_sale): a new sale in the same transaction, paid first by the credit; not for an installment sale (EXCHANGE_NOT_FOR_CONTRACT). Voided sale: ALREADY_VOIDED. ETA: a return receipt linked to the sale\'s (RETURN_ETA_WINDOW_PASSED after 540 days). Numbered RT. The same Idempotency-Key answers the first return (200, replayed). Audited as sales_return.created. Schema: SalesReturnCreateBody -> SalesReturn.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'SalesReturn (replayed)' }, 201: { description: 'SalesReturn' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/returns/quote': {
+            post: {
+                tags: ['Sales'],
+                summary: 'Work out a return or an exchange without writing it (refund.create)',
+                description: 'S05 (D88). The same checks as the return, nothing locked or written: lines with amounts, totals, the deadline, the refund caps, refund_due; for an installment sale the contract plan (credit, remaining before and after, the new installment amount, overpaid); for an exchange the new total, the credit used and what is left to pay. Needs the caller\'s open shift. Schema: SalesReturnQuoteBody -> SalesReturnQuote.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'SalesReturnQuote' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/returns/{id}': {
+            get: {
+                tags: ['Sales'],
+                summary: 'Read a return with its lines, refunds, contract change and ETA status',
+                description: 'S05 (D88). Another shop or a branch the caller does not work in: RETURN_NOT_FOUND. Works in an expired shop. Schema: SalesReturn.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'SalesReturn' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/returns/{id}/receipt-prints': {
+            post: {
+                tags: ['Sales'],
+                summary: 'Log a printed return receipt (refund.create, sale.create or report.view)',
+                description: 'S05 (D88), S04 (D68). The first print is the original, every later one a copy. Refused in an expired shop. RETURN_NOT_FOUND. Schema: SalesReturnReceiptPrint.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 201: { description: 'SalesReturnReceiptPrint' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/dashboard': {
             get: {
                 tags: ['Dashboard'],

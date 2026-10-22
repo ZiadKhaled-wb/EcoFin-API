@@ -8800,6 +8800,8 @@ export type Database = {
       get_returnable_invoice: { Args: { p_invoice_id: string }; Returns: Json };
       get_sale: { Args: { p_id: string }; Returns: Json };
       get_sale_details: { Args: { p_sale_id: string }; Returns: Json };
+      get_sale_returnable: { Args: { p_sale_id: string }; Returns: Json };
+      get_sales_return: { Args: { p_id: string }; Returns: Json };
       get_settlement_quote: { Args: { p_contract_id: string }; Returns: Json };
       get_shift: { Args: { p_id: string }; Returns: Json };
       get_shop_profile: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -9087,6 +9089,7 @@ export type Database = {
         Returns: Json;
       };
       list_sale_payment_accounts: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_sales_returns: { Args: { p_filters?: Json }; Returns: Json };
       list_shift_vaults: { Args: { p_branch_id: string }; Returns: Json };
       list_shifts: {
         Args: {
@@ -9271,6 +9274,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      post_sales_return: { Args: { p_body: Json; p_idempotency_key: string }; Returns: Json };
       post_stock_adjustment: {
         Args: {
           p_branch_id: string;
@@ -9309,11 +9313,13 @@ export type Database = {
         Args: { p_customer_id?: string; p_lines: Json; p_payments?: Json; p_sale_discount?: Json };
         Returns: Json;
       };
+      quote_sales_return: { Args: { p_body: Json }; Returns: Json };
       reassign_field_survey: { Args: { p_assigned_to: string; p_id: string }; Returns: Json };
       receive_stock_transfer: { Args: { p_id: string; p_lines: Json }; Returns: Json };
       record_collection_receipt_print: { Args: { p_id: string }; Returns: Json };
       record_contract_document_print: { Args: { p_document: string; p_id: string }; Returns: Json };
       record_export_download: { Args: { p_file_id: string }; Returns: undefined };
+      record_return_receipt_print: { Args: { p_id: string }; Returns: Json };
       record_sale_receipt_print: { Args: { p_sale_id: string }; Returns: Json };
       register_file: {
         Args: {
@@ -9344,7 +9350,7 @@ export type Database = {
       rename_cash_account: { Args: { p_id: string; p_name: string }; Returns: Json };
       rename_expense_category: { Args: { p_id: string; p_name: string }; Returns: Json };
       reopen_day: { Args: { p_id: string; p_reason: string }; Returns: Json };
-      request_claim_refund: { Args: { p_claim_id: string }; Returns: undefined };
+      request_claim_refund: { Args: { p_claim_id: string }; Returns: Json };
       request_credit_exception: {
         Args: { p_customer_id: string; p_financed_amount: string; p_reason: string };
         Returns: Json;

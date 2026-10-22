@@ -21,7 +21,11 @@ import { cleanText, dec, type EtaDecimal } from './serialize';
 import { UUID_PATTERN, withUuid } from './uuid';
 
 export type BlockCode =
-  'BLOCKED:NO_DEVICE' | 'BLOCKED:ITEM_CODE' | 'BLOCKED:SELLER_DATA' | 'BLOCKED:BUYER_ID';
+  | 'BLOCKED:NO_DEVICE'
+  | 'BLOCKED:ITEM_CODE'
+  | 'BLOCKED:SELLER_DATA'
+  | 'BLOCKED:BUYER_ID'
+  | 'BLOCKED:RETURN_TOO_LATE';
 
 export class ReceiptBlockedError extends Error {
   readonly code: BlockCode;
