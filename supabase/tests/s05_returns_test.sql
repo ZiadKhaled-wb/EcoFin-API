@@ -310,6 +310,9 @@ SELECT t.unchanged('an unknown key in the body is refused',format('SELECT public
 -- S12: an open claim on phone 3 (sold 30 days ago) lifts the period; the claim closes.
 INSERT INTO t.ids SELECT 'claim',(public.open_warranty_claim(t.line_of('s6','phone'),t.unit('S5-IMEI-3'),'Screen failed','Fine','s05-key-claim')->>'claim_id')::uuid;
 INSERT INTO t.docs SELECT 'claim-refund',public.request_claim_refund(t.id('claim'));
+SELECT t.unchanged('a warranty claim lifts the period for its own line only, not another line with it',format('SELECT public.post_sales_return(%L,%L)',
+  t.body('s6',jsonb_build_array(t.rl('s6','phone',1,'damaged','S5-IMEI-3'),jsonb_build_object('sale_line_id',t.line_of('s2','chair'),'quantity',1)),
+    jsonb_build_array(t.cashr('5250.00')),'5250.00',jsonb_build_object('warranty_claim_id',t.id('claim'))),'s05-key-claim-extra'),'VALIDATION_FAILED');
 INSERT INTO t.docs SELECT 'r6',t.ret('s6',jsonb_build_array(t.rl('s6','phone',1,'damaged','S5-IMEI-3')),jsonb_build_array(t.cashr('5000.00')),
   '5000.00','s05-key-r6',jsonb_build_object('warranty_claim_id',t.id('claim')));
 RESET ROLE;

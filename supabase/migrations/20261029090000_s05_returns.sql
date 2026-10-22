@@ -393,10 +393,13 @@ BEGIN
         END IF;
         v_claim_id := (p_body ->> 'warranty_claim_id')::uuid;
         SELECT * INTO v_claim FROM public.warranty_claims w WHERE w.id = v_claim_id AND w.organization_id = p_org;
+        -- The claim lifts the period for its own line and unit only: it must be the one line returned.
         IF NOT FOUND OR v_claim.status NOT IN ('open', 'in_repair', 'repaired')
-           OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(p_body -> 'lines') l
-                          WHERE l ->> 'sale_line_id' = v_claim.sale_line_id::text) THEN
-            RAISE EXCEPTION 'VALIDATION_FAILED: the claim is not open on a returned line' USING ERRCODE = 'P0001';
+           OR jsonb_array_length(p_body -> 'lines') <> 1
+           OR p_body -> 'lines' -> 0 ->> 'sale_line_id' IS DISTINCT FROM v_claim.sale_line_id::text
+           OR (v_claim.unit_id IS NOT NULL
+               AND p_body -> 'lines' -> 0 ->> 'unit_id' IS DISTINCT FROM v_claim.unit_id::text) THEN
+            RAISE EXCEPTION 'VALIDATION_FAILED: a warranty refund returns the claim''s line alone' USING ERRCODE = 'P0001';
         END IF;
     END IF;
 
@@ -719,7 +722,9 @@ BEGIN
     END IF;
     SELECT * INTO v_existing FROM public.sales_returns r WHERE r.organization_id = o AND r.idempotency_key = p_idempotency_key;
     IF FOUND THEN
-        IF v_existing.sale_id <> (p_body ->> 'sale_id')::uuid OR v_existing.kind = 'void' THEN
+        -- A replay answers only someone who may read that return (no other branch's document).
+        IF v_existing.sale_id <> (p_body ->> 'sale_id')::uuid OR v_existing.kind = 'void'
+           OR NOT app.can_read_return(v_existing.branch_id) THEN
             RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE = 'P0001';
         END IF;
         RETURN app.return_json(o, v_existing.id) || jsonb_build_object('replayed', true);
