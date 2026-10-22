@@ -13,6 +13,9 @@ import { z } from 'zod';
 const nullableText = z.string().nullable();
 
 const PendingRow = z.object({
+  /** S05 (D88): a sale receipt, or a return receipt (its `sale` is the return, `original` the sale's receipt). */
+  kind: z.enum(['receipt', 'return']).optional(),
+  original: z.object({ uuid: z.string(), issued_at: z.string() }).optional(),
   fiscal_id: z.string().uuid(),
   organization_id: z.string().uuid(),
   environment: EtaEnvironment,

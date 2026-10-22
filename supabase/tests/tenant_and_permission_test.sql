@@ -687,6 +687,14 @@ INSERT INTO t.denial VALUES
  ('get_warranty_claim','zz_s12_4_get','warranty.manage',$$SELECT public.get_warranty_claim((SELECT id FROM public.warranty_claims WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-open'))$$),
  ('move_warranty_claim','zz_s12_5_move','warranty.manage',$$SELECT public.move_warranty_claim((SELECT id FROM public.warranty_claims WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-open'),'in_repair','Manager decision')$$),
  ('request_claim_refund','zz_s12_6_refund','warranty.manage',$$SELECT public.request_claim_refund((SELECT id FROM public.warranty_claims WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-open'))$$);
+-- S05: returns of the S12 sale (cases sort after zz_s12_*; the owner's run posts the return the later cases read).
+INSERT INTO t.denial VALUES
+ ('get_sale_returnable','zz_s13_1_returnable','refund.create',$q$SELECT public.get_sale_returnable((SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale'))$q$),
+ ('quote_sales_return','zz_s13_2_quote','refund.create',$q$SELECT public.quote_sales_return(jsonb_build_object('sale_id',(SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale'),'lines',jsonb_build_array(jsonb_build_object('sale_line_id',(SELECT id FROM public.sale_lines WHERE sale_id=(SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale') LIMIT 1),'unit_id',(SELECT unit_id FROM public.sale_lines WHERE sale_id=(SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale') LIMIT 1),'quantity',1))))$q$),
+ ('post_sales_return','zz_s13_3_post','refund.create',$q$SELECT public.post_sales_return(y.b || jsonb_build_object('expected_total',y.q->>'total','refunds',jsonb_build_array(jsonb_build_object('method','cash','amount',y.q->>'total')),'reason','TEST-1 denial'),'denial-s05-return') FROM (SELECT x.b, public.quote_sales_return(x.b) q FROM (SELECT jsonb_build_object('sale_id',(SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale'),'lines',jsonb_build_array(jsonb_build_object('sale_line_id',(SELECT id FROM public.sale_lines WHERE sale_id=(SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale') LIMIT 1),'unit_id',(SELECT unit_id FROM public.sale_lines WHERE sale_id=(SELECT id FROM public.sales WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s12-sale') LIMIT 1),'quantity',1))) b) x) y$q$),
+ ('list_sales_returns','zz_s13_4_list','refund.create|sale.create|report.view|cash.view',$q$SELECT public.list_sales_returns('{}')$q$),
+ ('get_sales_return','zz_s13_5_get','refund.create|sale.create|report.view|cash.view',$q$SELECT public.get_sales_return((SELECT id FROM public.sales_returns WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s05-return'))$q$),
+ ('record_return_receipt_print','zz_s13_6_print','refund.create|sale.create|report.view',$q$SELECT public.record_return_receipt_print((SELECT id FROM public.sales_returns WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-s05-return'))$q$);
 
 
 -- T02: a POS of shop one, and a blocked receipt of one of its sales, for the device and retry cases
@@ -937,7 +945,7 @@ BEGIN
                              v_owner_err = 'SUPER_ADMIN_REQUIRED', v_owner_err);
         ELSE
             PERFORM t.expect(format('4.2 %s: the same call works for the owner (valid arguments)', d.case_name),
-                             v_owner_err = CASE WHEN d.fn='request_claim_refund' THEN 'CLAIM_REFUND_NEEDS_RETURN' ELSE '' END, v_owner_err);
+                             v_owner_err = '', v_owner_err);
         END IF;
     END LOOP;
     PERFORM t.as_user(NULL);

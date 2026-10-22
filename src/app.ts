@@ -1,4 +1,5 @@
 import salesHistoryRoutes from './routes/salesHistory';
+import returnsRoutes from './routes/returns.js';
 // server/src/app.ts
 import express from 'express';
 import type { Router } from 'express';
@@ -107,6 +108,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/shifts', shiftsRoutes);
   mountRouter(app, '/api/expense-categories', expenseCategoriesRoutes);
   mountRouter(app, '/api/expenses', expensesRoutes);
+  mountRouter(app, '/api/returns', returnsRoutes);
   mountRouter(app, '/api/sales', salesHistoryRoutes);
   mountRouter(app, '/api/sales', salesRoutes);
   mountRouter(app, '/api/approvals', approvalsRoutes);

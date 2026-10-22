@@ -15,6 +15,9 @@ export type AuditExpectation = { action: string; also?: readonly string[] } | { 
 export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/sales/:id/void': { action: 'sale.voided' },
   'POST /api/sales/:id/receipt-prints': { action: 'sale.receipt_printed' },
+  'POST /api/returns': { action: 'sales_return.created' },
+  'POST /api/returns/quote': { none: 'Read-only return quote; nothing is written.' },
+  'POST /api/returns/:id/receipt-prints': { action: 'sales_return.receipt_printed' },
   'POST /api/employees': { action: 'employee.created' },
   'PATCH /api/employees/:employeeId': { action: 'employee.updated' },
   'POST /api/employees/:employeeId/invite': { action: 'invite.resent' },

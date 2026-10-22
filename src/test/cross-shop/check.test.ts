@@ -311,7 +311,17 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/exports/:id/cancel',
       ]),
     );
-    expect(keys).toHaveLength(287);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'GET /api/sales/:id/returnable',
+        'POST /api/returns/quote',
+        'POST /api/returns',
+        'GET /api/returns',
+        'GET /api/returns/:id',
+        'POST /api/returns/:id/receipt-prints',
+      ]),
+    );
+    expect(keys).toHaveLength(293);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

@@ -28,6 +28,8 @@
 //      expected_remaining: one collection, 19 COLLECTION_DUE_CHANGED, completed once. L3. 20 tills
 //      paying 1.00 each on one contract: every one is allocated, no line paid beyond its amount.
 //      L4. 20 tills paying two contracts, half A then B and half B then A: nothing deadlocks.
+//   M. S05 (public.post_sales_return): 20 tills return the last unit of one sale line at once: one
+//      return, 19 RETURN_QTY_EXCEEDED, the stock and the store credit move once.
 // (The sale race on the bare ledger is db:ledger, F10.)
 import { pgbench, processed, psql, removeProofShop, report, writeFile } from './db-proof-lib.mjs';
 
@@ -745,6 +747,69 @@ try {
     ],
   ]);
 
+  // ---------------------------------------------------------------- M. S05: the last unit back
+  // A sale of one chair to the buyer, then 20 tills return that line at once (store credit back):
+  // one return, 19 RETURN_QTY_EXCEEDED, the chair back once, the credit given once.
+  psql(`
+    INSERT INTO public.employee_permission_overrides (organization_id, employee_id, permission_key, granted)
+    SELECT e.organization_id, e.id, 'refund.create', true FROM public.employees e
+    WHERE e.organization_id = ${SCHEMA}.id('org') AND e.role = 'CASHIER';
+    BEGIN; SELECT ${SCHEMA}.sign_in();
+    SELECT public.post_stock_adjustment(${SCHEMA}.id('main'), 'found', NULL,
+      jsonb_build_array(jsonb_build_object('product_id', ${SCHEMA}.id('chair'), 'quantity', 1)), 'test3-proof-chair-ret');
+    COMMIT;
+    BEGIN; SELECT ${SCHEMA}.sign_in_as(1);
+    INSERT INTO ${SCHEMA}.ids SELECT 'ret_sale', (public.post_sale(
+      jsonb_build_array(jsonb_build_object('product_id', ${SCHEMA}.id('chair'), 'quantity', 1)), '250.00',
+      'test3-proof-ret-sale', ${SCHEMA}.id('buyer'), NULL)->>'id')::uuid;
+    COMMIT;
+    INSERT INTO ${SCHEMA}.ids SELECT 'ret_line', id FROM public.sale_lines WHERE sale_id = ${SCHEMA}.id('ret_sale');
+    CREATE TABLE ${SCHEMA}.before AS SELECT COALESCE((SELECT balance FROM public.store_credit_balances
+      WHERE customer_id = ${SCHEMA}.id('buyer')), 0) AS credit;
+    CREATE FUNCTION ${SCHEMA}.give_back(p_cashier integer) RETURNS void LANGUAGE plpgsql AS $$
+    BEGIN
+      PERFORM ${SCHEMA}.sign_in_as(p_cashier);
+      BEGIN
+        PERFORM public.post_sales_return(jsonb_build_object('sale_id', ${SCHEMA}.id('ret_sale'),
+          'lines', jsonb_build_array(jsonb_build_object('sale_line_id', ${SCHEMA}.id('ret_line'), 'quantity', 1)),
+          'refunds', jsonb_build_array(jsonb_build_object('method', 'store_credit', 'amount', '250.00')),
+          'reason', 'Proof return', 'expected_total', '250.00'), 'test3-proof-' || gen_random_uuid());
+        INSERT INTO ${SCHEMA}.outcomes (kind, result) VALUES ('return_last', 'done');
+      EXCEPTION WHEN others THEN
+        INSERT INTO ${SCHEMA}.outcomes (kind, result, error) VALUES ('return_last', 'refused', SQLERRM);
+      END;
+    END $$;`);
+  const chairBefore = Number(level('chair'));
+  await round(
+    'M.',
+    '/tmp/test3_return_last.sql',
+    `\\set c random(1, ${CASHIERS})\nSELECT ${SCHEMA}.give_back(:c);\n`,
+  );
+  [done, refused, other, firstOther] = outcomes('return_last', 'RETURN_QTY_EXCEEDED');
+  const [returns, creditGiven] = psql(`
+    SELECT concat_ws('|',
+      (SELECT count(*) FROM public.sales_returns WHERE sale_id = ${SCHEMA}.id('ret_sale')),
+      (SELECT COALESCE((SELECT balance FROM public.store_credit_balances WHERE customer_id = ${SCHEMA}.id('buyer')), 0)
+              - (SELECT credit FROM ${SCHEMA}.before)));`).split('|');
+  const partM = report([
+    [
+      'M. exactly one return of the last unit',
+      done === '1' && returns === '1',
+      `${done} / ${returns}`,
+    ],
+    [
+      `M. the other ${CLIENTS - 1} got RETURN_QTY_EXCEEDED`,
+      Number(refused) === CLIENTS - 1,
+      refused,
+    ],
+    ['M. no other errors (no deadlocks)', other === '0', `${other} ${firstOther}`],
+    [
+      'M. the chair came back once and the credit was given once',
+      Number(level('chair')) === chairBefore + 1 && Number(creditGiven) === 250,
+      `${level('chair')} (was ${chairBefore}), credit +${creditGiven}`,
+    ],
+  ]);
+
   // ---------------------------------------------------------------- E. reconciliation
   const [shopMismatches, allMismatches] = psql(`
     SELECT concat_ws('|', (SELECT count(*) FROM app.ledger_mismatches(${SCHEMA}.id('org'))),
@@ -776,6 +841,7 @@ try {
     partL2 &&
     partL3 &&
     partL4 &&
+    partM &&
     partE
   );
 } catch (error) {

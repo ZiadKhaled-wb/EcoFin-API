@@ -95,7 +95,7 @@ describe.skipIf(!RUN)('F07 audit against local Supabase', () => {
     if (opts.key) r = r.set('Idempotency-Key', opts.key);
     const shiftWrite =
       method === 'post' &&
-      /^\/api\/(?:sales(?:$|\/[^/]+\/void$)|shifts\/[^/]+\/(?:cash|close)$)/.test(path);
+      /^\/api\/(?:sales(?:$|\/[^/]+\/void$)|returns$|shifts\/[^/]+\/(?:cash|close)$)/.test(path);
     const deviceToken = opts.pos ?? (shiftWrite ? pos : undefined);
     if (deviceToken) r = r.set(DEVICE_TOKEN_HEADER, deviceToken);
     const res = opts.body ? await r.send(opts.body) : await r;
@@ -1039,6 +1039,44 @@ M01 Audit ${STAMP}-${ipCounter}
         sent: await send(
           'post',
           '/api/sales/' + (created.sent.res.body as { id: string }).id + '/receipt-prints',
+          { token: owner.accessToken },
+        ),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'POST /api/returns': async () => {
+      const created = await drivers['POST /api/sales']!();
+      expect(created.sent.res.status).toBe(201);
+      const sale = created.sent.res.body as {
+        id: string;
+        lines: { id: string; line_total: string }[];
+      };
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', '/api/returns', {
+          token: owner.accessToken,
+          key: 'f07-s05-' + STAMP + '-' + ipCounter,
+          body: {
+            sale_id: sale.id,
+            lines: [{ sale_line_id: sale.lines[0]!.id, quantity: 1 }],
+            refunds: [{ method: 'cash', amount: sale.lines[0]!.line_total }],
+            reason: 'Audit return',
+            expected_total: sale.lines[0]!.line_total,
+          },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'POST /api/returns/:id/receipt-prints': async () => {
+      const made = await drivers['POST /api/returns']!();
+      expect(made.sent.res.status, JSON.stringify(made.sent.res.body)).toBe(201);
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send(
+          'post',
+          '/api/returns/' + (made.sent.res.body as { id: string }).id + '/receipt-prints',
           { token: owner.accessToken },
         ),
         org: SHOP_ONE,

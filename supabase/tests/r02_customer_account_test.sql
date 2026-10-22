@@ -182,9 +182,10 @@ SELECT t.expect('open balance without returns = the views'' remaining (12 000 + 
   t.bal('ob','open_balance')=16200 AND t.bal('ob','open_balance')=t.remaining('ob'),app.customer_open_balance(t.org('a'),t.id('ob'))::text);
 SELECT t.expect('open balance: a completed contract adds 0 and a reversed collection does not count',
   t.bal('ob','contract_totals')=19200 AND t.bal('ob','payments')=3000);
-SELECT t.ret('adj','s2','return','contract_adjustment',1200,1);
-SELECT t.expect('Done when: open balance = contract totals 19 200 - payments 3 000 - returns 1 200 = 15 000',
-  t.bal('ob','contract_totals')=19200 AND t.bal('ob','payments')=3000 AND t.bal('ob','returns')=1200 AND t.bal('ob','open_balance')=15000);
+-- S05 (D88): a contract return writes the contract's new schedule version, so the open balance is
+-- contract totals - payments; 'returns' only shows what returns took off (s05_returns_test.sql).
+SELECT t.expect('Done when: open balance = contract totals 19 200 - payments 3 000 = 16 200 (no return took anything off)',
+  t.bal('ob','contract_totals')=19200 AND t.bal('ob','payments')=3000 AND t.bal('ob','returns')=0 AND t.bal('ob','open_balance')=16200);
 SELECT t.expect('open balance: a return refunded another way is not a contract return',
   t.bal('st','returns')=0 AND t.bal('st','open_balance')=3600);
 SELECT t.expect('rescheduled: contract total = current lines 4 200 + 1 000 paid on superseded lines = 5 200; open 4 200 = the views',
@@ -195,7 +196,7 @@ SELECT t.expect('open balance: another shop sees nothing',(app.customer_open_bal
 -- fees
 SELECT t.fee('f2','k1b',150,3); SELECT t.waive('f2',50);
 SELECT t.expect('fees: 150 charged, 50 waived = 100 due; total due = open balance + 100; not in the open balance',
-  t.bal('ob','fees_due')=100 AND t.bal('ob','total_due')=15100 AND t.bal('ob','open_balance')=15000);
+  t.bal('ob','fees_due')=100 AND t.bal('ob','total_due')=16300 AND t.bal('ob','open_balance')=16200);
 
 -- ================================================================ overdue
 SELECT t.expect('overdue: 100, 45 and 10 days late land in their buckets, one line not yet due',
@@ -217,7 +218,7 @@ SELECT t.expect('overdue: a customer without contracts has zeros and nulls',
 SELECT t.as_user('a0740000-0000-0000-8000-000000000001',t.org('a'));
 SET LOCAL ROLE authenticated;
 SELECT t.expect('account: the balance block carries the open balance, fees, store credit and the R03 numbers',
-  (SELECT b->>'open_balance'='15000.00' AND b->>'fees_due'='100.00' AND b->>'total_due'='15100.00' AND b->>'store_credit'='0.00'
+  (SELECT b->>'open_balance'='16200.00' AND b->>'fees_due'='100.00' AND b->>'total_due'='16300.00' AND b->>'store_credit'='0.00'
           AND b->>'credit_limit'='0.00' AND b->>'available'='0.00'
    FROM (SELECT public.get_customer_account(t.id('ob'))->'balance' b) x),public.get_customer_account(t.id('ob'))->>'balance');
 SELECT t.expect('account: the customer head has no national ID',

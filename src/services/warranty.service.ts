@@ -1,4 +1,5 @@
 import {
+  ClaimRefundTarget,
   WarrantyClaim,
   WarrantyClaimOpened,
   WarrantyClaimsResponse,
@@ -59,8 +60,9 @@ export async function move(ctx: RequestContext, id: string, b: MoveWarrantyClaim
   if (error) fail(error);
   return WarrantyClaim.parse(data);
 }
+/** S05 (D88): an open claim's refund is a return of its line; this answers what the return form opens with. */
 export async function refund(ctx: RequestContext, id: string) {
-  const { error } = await ctx.db.rpc('request_claim_refund', { p_claim_id: id });
+  const { data, error } = await ctx.db.rpc('request_claim_refund', { p_claim_id: id });
   if (error) fail(error);
-  throw ServerError('Refund placeholder unexpectedly succeeded.');
+  return ClaimRefundTarget.parse(data);
 }

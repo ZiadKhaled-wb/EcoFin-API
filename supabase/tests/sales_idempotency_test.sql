@@ -32,6 +32,7 @@ INSERT INTO t.key_functions VALUES ('public.post_purchase_return(uuid,text,text,
 ('public.reschedule_contract(uuid,jsonb,text)'),
 ('public.write_off_contract(uuid,jsonb,text)'),
 ('public.void_sale(uuid,text,text)'),
+('public.post_sales_return(jsonb,text)'),
 ('public.open_warranty_claim(uuid,uuid,text,text,text)');
 SELECT t.expect('generic completeness: every authenticated public definer with an idempotency argument is explicitly registered',
  NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace

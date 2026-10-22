@@ -448,6 +448,35 @@ describe('eta.prepare', () => {
     expect(t.store.jobs.filter((j) => j.type === 'eta.submit')).toHaveLength(3);
   });
 
+  it('S05: a return receipt joins the chain with the sale receipt as its referenceUUID', async () => {
+    const t = setup();
+    const sale = t.store.sale(1);
+    await t.prepare();
+    const ret = t.store.sale(
+      2,
+      { number: 'RT-0001' },
+      { kind: 'return', original: { uuid: sale.uuid!, issued_at: '2026-10-12T09:01:00Z' } },
+    );
+    await t.prepare();
+    expect(ret.previousUuid).toBe(sale.uuid);
+    expect(JSON.parse(ret.receiptJson ?? '{}')).toMatchObject({
+      header: { receiptNumber: 'RT-0001', previousUUID: sale.uuid, referenceUUID: sale.uuid },
+      documentType: { receiptType: 'r' },
+    });
+  });
+
+  it('S05: a return more than 540 days after its sale receipt is blocked, not sent', async () => {
+    const t = setup();
+    const ret = t.store.sale(
+      1,
+      { number: 'RT-0002' },
+      { kind: 'return', original: { uuid: 'd'.repeat(64), issued_at: '2024-01-01T09:00:00Z' } },
+    );
+    await t.prepare();
+    expect(ret.status).toBe('failed');
+    expect(ret.lastError).toMatch(/^BLOCKED:RETURN_TOO_LATE/);
+  });
+
   it('goes on from the last UUID of the POS', async () => {
     const t = setup();
     t.store.lastUuid = 'c'.repeat(64);
