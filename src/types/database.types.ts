@@ -9350,6 +9350,23 @@ export type Database = {
       rename_cash_account: { Args: { p_id: string; p_name: string }; Returns: Json };
       rename_expense_category: { Args: { p_id: string; p_name: string }; Returns: Json };
       reopen_day: { Args: { p_id: string; p_reason: string }; Returns: Json };
+      report_sales: {
+        Args: {
+          p_branch_id?: string;
+          p_category_id?: string;
+          p_category_level?: string;
+          p_employee_id?: string;
+          p_from: string;
+          p_group_by: string;
+          p_page?: number;
+          p_page_size?: number;
+          p_product_id?: string;
+          p_sale_type?: string;
+          p_sort?: string;
+          p_to: string;
+        };
+        Returns: Json;
+      };
       request_claim_refund: { Args: { p_claim_id: string }; Returns: Json };
       request_credit_exception: {
         Args: { p_customer_id: string; p_financed_amount: string; p_reason: string };

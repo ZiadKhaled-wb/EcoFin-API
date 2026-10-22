@@ -80,6 +80,7 @@ INSERT INTO t.no_permission_ok VALUES
   ('get_day_close', 'K04: read-only stored day close with drift; app.has_permission(day.close or cash.view) and branch access'),
   ('list_day_closes', 'K04: read-only list of days of the caller''s branches; app.has_permission(day.close or cash.view)'),
   ('day_close_alerts', 'K04: read-only dashboard counts of the caller''s branches; app.has_permission(day.close or cash.view)'),
+  ('report_sales', 'D02: read-only sales and margin report; app.has_permission(report.view) in the body (report.financial for the cost columns), so an expired shop can still read'),
   ('get_owner_dashboard', 'D01: read-only owner dashboard; any signed-in employee, and every tile is checked tile by tile with app.has_permission (null without its key, so an employee with no tile key gets an answer, not a denial); works in an expired shop'),
   ('get_migration_report', 'M02: read-only reconciliation report of the caller''s branches; app.has_permission(import.data or report.financial) (app.migration_read_guard), so an expired shop can still read'),
   ('list_migration_signoffs', 'M02: read-only list of the signed reconciliations; app.has_permission(import.data or report.financial) (app.migration_read_guard)'),

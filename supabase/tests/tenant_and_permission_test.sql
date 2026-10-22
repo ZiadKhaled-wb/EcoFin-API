@@ -909,7 +909,9 @@ INSERT INTO t.denial VALUES
  ('get_migration_report','zz_m02_1_report','import.data|report.financial',$q$SELECT public.get_migration_report('{}')$q$),
  ('list_migration_signoffs','zz_m02_2_list','import.data|report.financial',$q$SELECT public.list_migration_signoffs()$q$),
  ('sign_off_migration','zz_m02_3_sign','import.data',$q$SELECT public.sign_off_migration(jsonb_build_object('expected_open_total','0','batch_ids',jsonb_build_array(t.m02_job('opening_cash','sign')),'note','TEST-1 denial'))$q$),
- ('reverse_migration_batch','zz_m02_4_reverse','import.data',$q$SELECT public.reverse_migration_batch(t.m02_job('opening_contracts','rev'),'TEST-1 denial')$q$);
+ ('reverse_migration_batch','zz_m02_4_reverse','import.data',$q$SELECT public.reverse_migration_batch(t.m02_job('opening_contracts','rev'),'TEST-1 denial')$q$),
+ -- D02: the sales report needs report.view (a cashier has no such key).
+ ('report_sales','zz_d02_1_report','report.view',$q$SELECT public.report_sales(DATE '2026-09-01',DATE '2026-09-30','month')$q$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

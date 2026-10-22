@@ -3220,6 +3220,30 @@ export const openApiSpec = {
                 responses: { 200: { description: 'OwnerDashboard' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/reports/sales': {
+            get: {
+                tags: ['Reports'],
+                summary: 'Sales and margin report: what sold in a period and what it earned (report.view; cost columns need report.financial)',
+                description: 'D02 (D89). A period of at most 366 business days grouped by day, month, branch, employee, category (leaf or top level), product, sale type or payment type; filters by branch, employee, category (with its sub-categories), product and cash / installment. Each row has quantity, revenue (after discounts, without VAT), cost, margin, returns in their own columns (by the return\'s own date), net, and an installment contract\'s profit apart from the margin. Every number is a SQL aggregate sent as a string. Totals come from the sales and returns headers; check is the rows of all pages minus the totals (null with a row filter). Voided sales are left out. Cost, margin and contract profit are null without report.financial. Works in an expired shop.',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'from', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
+                    { name: 'to', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
+                    { name: 'group_by', in: 'query', required: true, schema: { type: 'string', enum: ['day', 'month', 'branch', 'employee', 'category', 'product', 'sale_type', 'payment_type'] } },
+                    { name: 'branch_id', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'employee_id', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'category_id', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'category_level', in: 'query', required: false, schema: { type: 'string', enum: ['leaf', 'top'], default: 'leaf' } },
+                    { name: 'product_id', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'sale_type', in: 'query', required: false, schema: { type: 'string', enum: ['cash', 'installment'] } },
+                    { name: 'sort', in: 'query', required: false, schema: { type: 'string', enum: ['revenue_desc', 'revenue_asc', 'margin_desc', 'margin_asc', 'quantity_desc', 'net_revenue_desc', 'key_asc'] } },
+                    { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'page_size', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 1000, default: 50 } },
+                ],
+                responses: { 200: { description: 'SalesReport' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/day-closes/{id}/reopen': {
             post: {
                 tags: ['Cash'],

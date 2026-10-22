@@ -44,6 +44,7 @@ import walletsRoutes from './routes/wallets.js';
 import importsRoutes from './routes/imports.js';
 import dayClosesRoutes from './routes/dayCloses.js';
 import dashboardRoutes from './routes/dashboard.js';
+import reportsRoutes from './routes/reports.js';
 import migrationRoutes from './routes/migration.js';
 import exportsRoutes from './routes/exports.js';
 import collectorsRoutes from './routes/collectors.js';
@@ -134,6 +135,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/imports', importsRoutes);
   mountRouter(app, '/api/day-closes', dayClosesRoutes);
   mountRouter(app, '/api/dashboard', dashboardRoutes);
+  mountRouter(app, '/api/reports', reportsRoutes);
   mountRouter(app, '/api/migration', migrationRoutes);
   mountRouter(app, '/api/exports', exportsRoutes);
   mountRouter(app, '/api/files', filesRoutes);

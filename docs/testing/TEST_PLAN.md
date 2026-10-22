@@ -447,3 +447,7 @@ See [D01 plan](plans/D01.md). Covers the Done when (every number on the dashboar
 ## S05 — returns and exchanges (EC-72)
 
 See [S05 plan](plans/S05.md). Covers the Done when (returning one item of an installment sale after two payments gives the right remaining debt; stock, cash and tax each change once) and the D88 rules (amounts from the stored line, the exact serial, refund caps, the period and its owner override, warranty refunds, exchanges, the ETA return receipt, R02's balance, concurrency).
+
+## D02 — sales and margin report (EC-94)
+
+See [D02 plan](plans/D02.md). Covers the Done when (the report's totals match the sales and returns documents of the period for every grouping; every grouping and filter works; cost and margin only with `report.financial`; another shop's data is never reachable) and the D89 rules.

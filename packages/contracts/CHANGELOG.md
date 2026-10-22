@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.59.0
+
+- D02 sales and margin report: new `reports.ts` with SALES_REPORT_GROUP_BY / SalesReportGroupBy (day, month, branch, employee, category, product, sale_type, payment_type), SALES_REPORT_SORTS / SalesReportSort, SALES_REPORT_COST_SORTS, SalesReportSaleType, SALES_REPORT_MAX_DAYS, SALES_REPORT_MAX_PAGE_SIZE, SALES_REPORT_DEFAULT_PAGE_SIZE, salesReportDays, SalesReportQuery (dates `YYYY-MM-DD`, at most 366 days, `category_level` leaf | top, page_size 1-1000; strict; product / category filters refused for `payment_type`), SalesReportMeasures, SalesReportRow, SalesReportTotals, SalesReportCheck, SalesReport. Money and percentages are strings; every cost-derived value is `null` without `report.financial` (`can_see_cost` false). No new error code.
+
 ## 0.58.0
 
 - S05 returns and exchanges: new `returns.ts` with RETURN_KINDS / ReturnKind, SalesReturnKind, RETURN_CONDITIONS / ReturnCondition, RefundMethod, ReturnReason, ReturnLineInput, ReturnLines, RefundLineInput, RefundLines, ExchangeNewSaleInput, SalesReturnQuoteBody, SalesReturnCreateBody, ReturnIdParams, RefundLine, RefundableByMethod, ReturnContractPlan, SalesReturnQuoteLine, SalesReturnQuote, SaleReturnableLine, SALE_RETURN_BLOCKS / SaleReturnBlock, SaleReturnable, SalesReturnLine, SalesReturnRefund, SalesReturn, SalesReturnListQuery, SalesReturnSummary, SalesReturnListResponse, SalesReturnReceiptPrint, ClaimRefundTarget (S12's refund now answers it), SaleReturnQtyExceededDetail, RefundExceedsPaidDetail, ReturnPeriodExpiredDetail. Error codes RETURN_NOT_FOUND (404), RETURN_UNIT_MISMATCH, RETURN_PERIOD_EXPIRED, RETURN_OTHER_BRANCH, REFUND_EXCEEDS_PAID, RETURN_ETA_WINDOW_PASSED, EXCHANGE_NOT_FOR_CONTRACT (409). No new permission key (`refund.create` exists) and no new enum value.
