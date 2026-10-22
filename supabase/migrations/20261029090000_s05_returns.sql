@@ -547,6 +547,23 @@ BEGIN
 END;
 $$;
 
+-- Another shop's sale, or one of a branch the caller can't see, is not found before anything about
+-- the caller's shift is checked (no lock: the post locks it again later).
+CREATE FUNCTION app.return_sale_visible(p_org uuid, p_body jsonb)
+RETURNS void LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = ''
+AS $$
+BEGIN
+    IF p_body IS NULL OR jsonb_typeof(p_body) <> 'object' OR (p_body ->> 'sale_id') !~ '^[0-9a-fA-F-]{36}$' THEN
+        RAISE EXCEPTION 'VALIDATION_FAILED: body' USING ERRCODE = 'P0001';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.sales x
+                   WHERE x.id = (p_body ->> 'sale_id')::uuid AND x.organization_id = p_org
+                     AND app.has_branch_access(x.branch_id)) THEN
+        RAISE EXCEPTION 'SALE_NOT_FOUND' USING ERRCODE = 'P0001';
+    END IF;
+END;
+$$;
+
 -- A return as the API shows it.
 CREATE FUNCTION app.return_json(p_org uuid, p_id uuid)
 RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
@@ -693,6 +710,7 @@ BEGIN
         RAISE EXCEPTION 'PERMISSION_DENIED: refund.create' USING ERRCODE = '42501';
     END IF;
     PERFORM app.require_module('pos');
+    PERFORM app.return_sale_visible(o, p_body);
     v_shift := app.require_open_shift(o, v_emp);
     RETURN app.return_compute(o, v_shift, p_body, false);
 END;
@@ -735,6 +753,7 @@ BEGIN
         RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE = 'P0001';
     END IF;
 
+    PERFORM app.return_sale_visible(o, p_body);
     -- The caller's open shift, locked, on its own POS.
     v_shift := app.require_open_shift(o, v_emp);
     SELECT * INTO v_shift FROM public.shifts x WHERE x.id = v_shift.id FOR UPDATE;
@@ -1363,7 +1382,7 @@ $$;
 
 -- 9. Grants -----------------------------------------------------------------------------------------------
 
-REVOKE ALL ON FUNCTION app.can_read_return(uuid), app.return_read_guard(), app.sale_refundable(uuid, uuid),
+REVOKE ALL ON FUNCTION app.can_read_return(uuid), app.return_read_guard(), app.return_sale_visible(uuid, jsonb), app.sale_refundable(uuid, uuid),
     app.return_profit_share(numeric, numeric, numeric, numeric), app.stored_return_profit_share(uuid, uuid),
     app.contract_return_reduction(uuid, uuid),
     app.return_contract_plan(uuid, public.contracts, public.sales, numeric, boolean),

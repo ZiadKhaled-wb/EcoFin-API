@@ -6255,24 +6255,19 @@ crossShopCase({
   path: '/api/returns/quote',
   name: "a return quote of shop B's sale is 404; an org id in the body is refused",
   async run(h) {
+    // Another shop's sale is not found before the caller's shift is looked at (no shift needed).
+    const a = await h.login(OWNER_A);
     const b = await shopBSale(h);
-    const mine = await openShiftOf(h, OWNER_A, SHOP_A_BR1);
     const body = { sale_id: b.id, lines: [{ sale_line_id: b.id, quantity: 1 }] };
-    const attempt = await h.call('POST', '/api/returns/quote', {
-      token: mine.token,
-      deviceToken: mine.deviceToken,
-      body,
-    });
+    const attempt = await h.call('POST', '/api/returns/quote', { token: a.accessToken, body });
     h.expect(attempt.res.status).toBe(404);
     h.expect(h.code(attempt.res)).toBe('SALE_NOT_FOUND');
     const injected = await h.call('POST', '/api/returns/quote', {
-      token: mine.token,
-      deviceToken: mine.deviceToken,
+      token: a.accessToken,
       body: { ...body, organization_id: SHOP_B },
     });
     h.expect(injected.res.status).toBe(400);
     await closeShiftShort(h, b.shift);
-    await closeShiftOf(h, mine);
   },
 });
 crossShopCase({
@@ -6280,16 +6275,15 @@ crossShopCase({
   path: '/api/returns',
   name: "returning shop B's sale is 404: no return, no money, no audit in shop B",
   async run(h) {
+    const a = await h.login(OWNER_A);
     const b = await shopBSale(h);
-    const mine = await openShiftOf(h, OWNER_A, SHOP_A_BR1);
     const able = await h.call('GET', '/api/sales/' + b.id + '/returnable', {
       token: b.shift.token,
     });
     const line = (able.res.body as { lines: { sale_line_id: string; line_total: string }[] })
       .lines[0]!;
     const attempt = await h.call('POST', '/api/returns', {
-      token: mine.token,
-      deviceToken: mine.deviceToken,
+      token: a.accessToken,
       idempotencyKey: key('s05-foreign'),
       body: {
         sale_id: b.id,
@@ -6307,7 +6301,6 @@ crossShopCase({
     });
     h.expect((still.res.body as { lines: { returned: number }[] }).lines[0]!.returned).toBe(0);
     await closeShiftShort(h, b.shift);
-    await closeShiftOf(h, mine);
   },
 });
 crossShopCase({
