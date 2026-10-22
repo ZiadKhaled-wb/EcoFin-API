@@ -5919,7 +5919,7 @@ crossShopCase({
     h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
     const own = await h.call('GET', '/api/reports/sales', {
       token: a.accessToken,
-      query: `${period}&branch_id=${SHOP_A_BR1}&group_by=product`,
+      query: `from=2026-09-01&to=2026-09-30&group_by=product&branch_id=${SHOP_A_BR1}`,
     });
     h.expect(own.res.status, JSON.stringify(own.res.body)).toBe(200);
   },
