@@ -6641,6 +6641,8 @@ crossShopCase({
     });
     h.expect(injected.res.status).toBe(400);
     h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
 
 // D03 (D91). Receivables aging: a foreign shop header is refused, an organization id in the query is refused
 // (strict schema), and another shop's branch, collector (an employee) or customer is not found; a shop's report
