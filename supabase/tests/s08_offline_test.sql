@@ -822,6 +822,32 @@ SELECT t.expect('S15 a receipt accepted before the decision: the posted sale is 
   (t.fs('sr')).sale_id=(t.sale('sr')).id AND (t.fs('sr')).status='accepted' AND (t.fs('sr')).offline_sale_id=(t.os('sr')).id);
 SELECT t.error('S15 an accepted receipt stays final otherwise',
   format('UPDATE public.fiscal_submissions SET last_error=''x'' WHERE id=%L',(t.fs('sr')).id),'DOCUMENT_FINAL');
+-- D12.10: the freeze lets exactly one update through: an accepted offline receipt without a sale
+-- gets the sale of that same offline sale, once, and nothing else changes.
+SELECT t.error('D12.10 an accepted receipt: changing any other column (updated_at alone) is refused',
+  format('UPDATE public.fiscal_submissions SET updated_at=updated_at+interval ''1 minute'' WHERE id=%L',(t.fs('sr')).id),'DOCUMENT_FINAL');
+SELECT t.error('D12.10 an accepted receipt: setting sale_id a second time is refused',
+  format('UPDATE public.fiscal_submissions SET sale_id=%L WHERE id=%L',(t.sale('sr')).id,(t.fs('sr')).id),'DOCUMENT_FINAL');
+-- The receipt is unlinked again for the next cases (test only: the trigger is off for this statement).
+ALTER TABLE public.fiscal_submissions DISABLE TRIGGER trg_fiscal_submissions_final;
+UPDATE public.fiscal_submissions SET sale_id=NULL WHERE id=(t.fs('sr')).id;
+ALTER TABLE public.fiscal_submissions ENABLE TRIGGER trg_fiscal_submissions_final;
+SELECT t.error('D12.10 sale_id pointing to a sale that is not its offline sale''s is refused',
+  format('UPDATE public.fiscal_submissions SET sale_id=%L WHERE id=%L',t.id('online_du'),(t.fs('sr')).id),'DOCUMENT_FINAL');
+SELECT t.error('D12.10 its own sale together with another column is refused',
+  format('UPDATE public.fiscal_submissions SET sale_id=%L, last_error=''x'' WHERE id=%L',(t.sale('sr')).id,(t.fs('sr')).id),'DOCUMENT_FINAL');
+UPDATE public.fiscal_submissions SET sale_id=(t.sale('sr')).id WHERE id=(t.fs('sr')).id;
+SELECT t.expect('D12.10 its own sale alone is accepted, and the row is otherwise unchanged',
+  (t.fs('sr')).sale_id=(t.sale('sr')).id AND (t.fs('sr')).status='accepted' AND (t.fs('sr')).last_error IS NULL);
+-- A receipt of an online sale (no offline sale), accepted: frozen exactly as before S08.
+SELECT t.expect('D12.10 the online sale has its own fiscal row',
+  EXISTS (SELECT 1 FROM public.fiscal_submissions WHERE sale_id=t.id('online_du') AND offline_sale_id IS NULL));
+UPDATE public.fiscal_submissions SET status='accepted', accepted_at=now(), eta_uuid=COALESCE(eta_uuid,md5('du-a')||md5('du-b'))
+ WHERE sale_id=t.id('online_du');
+SELECT t.error('D12.10 an accepted receipt of an online sale: sale_id can''t change',
+  format('UPDATE public.fiscal_submissions SET sale_id=%L WHERE sale_id=%L',(t.sale('sr')).id,t.id('online_du')),'DOCUMENT_FINAL');
+SELECT t.error('D12.10 an accepted receipt of an online sale: no other column either',
+  format('UPDATE public.fiscal_submissions SET last_error=''x'' WHERE sale_id=%L',t.id('online_du')),'DOCUMENT_FINAL');
 SELECT t.expect('S15 use_serial with a valid unit: posted with that unit; accept: posted',
   t.st('sr')='posted' AND (SELECT unit_id=t.unit('S8-P-3') FROM public.sale_lines WHERE sale_id=(t.sale('sr')).id)
   AND t.st('lx')='posted' AND (t.sale('lx')).total=22800);
@@ -1012,6 +1038,62 @@ INSERT INTO t.docs SELECT 'rv',public.sync_offline_sales(jsonb_build_array(jsonb
 RESET ROLE;
 SELECT t.expect('D15 a newer content version waits on the device: retry_later, nothing stored',
   t.result(t.doc('rv'),0)='retry_later:UNSUPPORTED_VERSION');
+
+-- ---------------------------------------------------------------- RLS by branch (direct reads)
+-- One row of each kind in the second branch (POS S, manager 2's shift), as the API would store them.
+WITH k AS (INSERT INTO public.device_offline_keys(organization_id,device_id,public_key)
+           VALUES(t.org('a'),t.id('poss'),t.pubkey('S')) RETURNING id)
+INSERT INTO t.ids SELECT 'key_s',id FROM k;
+WITH sn AS (INSERT INTO public.offline_snapshots(organization_id,branch_id,content_hash,data)
+            VALUES(t.org('a'),t.id('second'),md5('s08-second-a')||md5('s08-second-b'),'{}') RETURNING id)
+INSERT INTO t.ids SELECT 'snap_s',id FROM sn;
+WITH l AS (INSERT INTO public.offline_leases(organization_id,device_id,shift_id,branch_id,cashier_id,expires_at,
+             max_sale_total,max_hours,max_sales,max_lease_total,snapshot_id,next_seq,key_id)
+           VALUES(t.org('a'),t.id('poss'),t.id('ss'),t.id('second'),t.id('mgr2'),now()+interval '1 hour',
+             20000,12,100,200000,t.id('snap_s'),1,t.id('key_s')) RETURNING id)
+INSERT INTO t.ids SELECT 'lease_s',id FROM l;
+INSERT INTO public.offline_sales(organization_id,branch_id,device_id,lease_id,shift_id,cashier_id,seq,number,
+    idempotency_key,issued_at,content,content_hash,signature,total,source)
+VALUES(t.org('a'),t.id('second'),t.id('poss'),t.id('lease_s'),t.id('ss'),t.id('mgr2'),1,'OFF-DS-000001',
+    's08-rls-second',now(),'{}',md5('s08-c-a')||md5('s08-c-b'),t.sig(),0,'sync');
+CREATE FUNCTION t.visible() RETURNS jsonb LANGUAGE sql AS $$
+  SELECT jsonb_build_object(
+    'leases_main',(SELECT count(id) FROM public.offline_leases WHERE branch_id=t.id('main')),
+    'leases_second',(SELECT count(id) FROM public.offline_leases WHERE branch_id=t.id('second')),
+    'snapshots_main',(SELECT count(id) FROM public.offline_snapshots WHERE branch_id=t.id('main')),
+    'snapshots_second',(SELECT count(id) FROM public.offline_snapshots WHERE branch_id=t.id('second')),
+    'keys_main',(SELECT count(id) FROM public.device_offline_keys WHERE device_id=t.id('pos1')),
+    'keys_second',(SELECT count(id) FROM public.device_offline_keys WHERE device_id=t.id('poss')),
+    'sales_main',(SELECT count(id) FROM public.offline_sales WHERE branch_id=t.id('main')),
+    'sales_second',(SELECT count(id) FROM public.offline_sales WHERE branch_id=t.id('second'))) $$;
+GRANT EXECUTE ON FUNCTION t.visible() TO authenticated;
+SELECT t.cashier(); SET ROLE authenticated;
+INSERT INTO t.docs SELECT 'rls_cashier',t.visible();
+RESET ROLE;
+SELECT t.mgr2(); SET ROLE authenticated;
+INSERT INTO t.docs SELECT 'rls_mgr2',t.visible();
+RESET ROLE;
+SELECT t.manager(); SET ROLE authenticated;
+INSERT INTO t.docs SELECT 'rls_manager',t.visible();
+RESET ROLE;
+SELECT t.expect('RLS a main-branch cashier reads none of the second branch''s leases, snapshots or device keys directly; its own branch''s yes',
+  (t.doc('rls_cashier')->>'leases_second')::int=0 AND (t.doc('rls_cashier')->>'snapshots_second')::int=0
+  AND (t.doc('rls_cashier')->>'keys_second')::int=0 AND (t.doc('rls_cashier')->>'leases_main')::int>0
+  AND (t.doc('rls_cashier')->>'snapshots_main')::int>0 AND (t.doc('rls_cashier')->>'keys_main')::int>0
+  AND (t.doc('rls_cashier')->>'sales_main')::int=0,
+  t.doc('rls_cashier')::text);
+SELECT t.expect('RLS a second-branch manager reads none of the main branch''s offline sales, leases, snapshots or keys directly; its own branch''s yes',
+  (t.doc('rls_mgr2')->>'sales_main')::int=0 AND (t.doc('rls_mgr2')->>'leases_main')::int=0
+  AND (t.doc('rls_mgr2')->>'snapshots_main')::int=0 AND (t.doc('rls_mgr2')->>'keys_main')::int=0
+  AND (t.doc('rls_mgr2')->>'sales_second')::int=1 AND (t.doc('rls_mgr2')->>'leases_second')::int=1,
+  t.doc('rls_mgr2')::text);
+SELECT t.expect('RLS a manager of both branches reads both',
+  (t.doc('rls_manager')->>'sales_main')::int>0 AND (t.doc('rls_manager')->>'sales_second')::int=1
+  AND (t.doc('rls_manager')->>'leases_second')::int=1,
+  t.doc('rls_manager')::text);
+SELECT t.expect('S5 app.post_sale_core_full is executable by neither authenticated nor anon',
+  NOT has_function_privilege('authenticated','app.post_sale_core_full(uuid, uuid, public.shifts, jsonb, uuid, numeric, text, jsonb, jsonb, text, uuid, numeric, jsonb)','EXECUTE')
+  AND NOT has_function_privilege('anon','app.post_sale_core_full(uuid, uuid, public.shifts, jsonb, uuid, numeric, text, jsonb, jsonb, text, uuid, numeric, jsonb)','EXECUTE'));
 
 SELECT name,ok,detail FROM t.results WHERE NOT COALESCE(ok,false);
 SELECT count(*) FILTER(WHERE ok) passed,count(*) FILTER(WHERE NOT COALESCE(ok,false)) failed FROM t.results;

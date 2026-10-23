@@ -138,3 +138,21 @@ cd ../EcoFin-Web && VITE_API_URL= VITE_DEV_API_TARGET=http://localhost:3001 \
 RUN_E2E=1 E2E_BASE_URL=http://localhost:5173 npx playwright test e2e/int4-cash-sale.spec.ts
 ```
 `JOBS_POLL_SECONDS=5` (the minimum) keeps the ETA checks within the spec's timeouts. The spec writes screenshots and `run.json` (ids only) to `EcoFin-Web/test-results/int-4/` (git-ignored) and runs `scripts/int4-verify.mjs` and `scripts/db-reconcile.mjs` at the end.
+
+## S08 update (23 Oct 2026): two env points for the integration and e2e runs
+
+1. **`DATABASE_URL` must point at the local Postgres** (`supabase status -o json` → `DB_URL`,
+   `postgresql://postgres:postgres@127.0.0.1:54322/postgres`) for the integration suites and for the API the e2e
+   suite talks to: M03's full export opens one read-only snapshot through a direct Postgres connection, and fails
+   with `EXPORT_FAILED` (`DATABASE_URL`) without it. `.env.local` does not set it; CI sets it in the `db` job's
+   integration step and in the Web `e2e` job (`$GITHUB_ENV`, then the API step).
+2. **The preview build must not get `NODE_ENV=development`.** The Web `offline` Playwright project runs against
+   `vite build && vite preview`; with `NODE_ENV=development` in the environment (for example after loading the API's
+   `.env.local` into the shell that runs Playwright), Vite makes a development build where `import.meta.env.PROD`
+   is false, so the service worker is never registered and the offline tests fail. `playwright.config.ts` now pins
+   `NODE_ENV=production` for the preview server; in CI only the API step sets `NODE_ENV=development`.
+
+Also for S08's e2e: the Web `e2e` job checks out the API at the branch with the same name as the PR's branch when
+that branch exists (else `main`), so the API, its job worker (`JOBS_ENABLED` defaults to true;
+`JOBS_POLL_SECONDS=5`) and the fake ETA (`npm run fake-eta`, which knows the `S08-POS-1` device) are the ones the
+`offline` project needs.

@@ -41,3 +41,6 @@ supabase/.env
 
 # Personal AI tool config (not shared)
 opencode.jsonc
+
+# Local reproduction of the CI jobs (fresh clones of the branch; never committed)
+.ci-local/

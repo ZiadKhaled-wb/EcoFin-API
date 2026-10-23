@@ -162,14 +162,21 @@ ALTER TABLE public.device_offline_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.offline_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.offline_leases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.offline_sales ENABLE ROW LEVEL SECURITY;
+-- Read directly only within the caller's shop AND branches (app.has_branch_access, the rule every
+-- S08 function applies), so a direct table read shows no more than the API does.
 CREATE POLICY device_offline_keys_tenant_read ON public.device_offline_keys FOR SELECT TO authenticated
-    USING (organization_id = (SELECT app.current_org_id()));
+    USING (organization_id = (SELECT app.current_org_id())
+           AND app.has_branch_access((SELECT d.branch_id FROM public.devices d WHERE d.id = device_id)));
 CREATE POLICY offline_snapshots_tenant_read ON public.offline_snapshots FOR SELECT TO authenticated
-    USING (organization_id = (SELECT app.current_org_id()));
+    USING (organization_id = (SELECT app.current_org_id()) AND app.has_branch_access(branch_id));
 CREATE POLICY offline_leases_tenant_read ON public.offline_leases FOR SELECT TO authenticated
-    USING (organization_id = (SELECT app.current_org_id()));
+    USING (organization_id = (SELECT app.current_org_id()) AND app.has_branch_access(branch_id));
 CREATE POLICY offline_sales_tenant_read ON public.offline_sales FOR SELECT TO authenticated
-    USING (organization_id = (SELECT app.current_org_id()) AND (SELECT app.has_permission('offline.resolve')));
+    USING (organization_id = (SELECT app.current_org_id()) AND (SELECT app.has_permission('offline.resolve'))
+           AND app.has_branch_access(branch_id));
+-- The policies above call it as the caller (like app.has_permission): it answers only about the
+-- caller's own branches.
+GRANT EXECUTE ON FUNCTION app.has_branch_access(uuid) TO authenticated;
 REVOKE ALL ON public.device_offline_keys, public.offline_snapshots, public.offline_leases, public.offline_sales
     FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.device_offline_keys, public.offline_snapshots, public.offline_leases TO authenticated;
@@ -1046,7 +1053,10 @@ BEGIN
                SET status = 'posted', sale_id = v_sale, conflict_code = NULL, flags = v_flags
              WHERE x.id = o.id;
             IF v_f.id IS NOT NULL THEN
-                UPDATE public.fiscal_submissions f SET sale_id = v_sale, updated_at = now() WHERE f.id = v_f.id;
+                -- An accepted receipt only gets its sale (D12.10); any other one is touched as before.
+                UPDATE public.fiscal_submissions f
+                   SET sale_id = v_sale, updated_at = CASE WHEN f.status = 'accepted' THEN f.updated_at ELSE now() END
+                 WHERE f.id = v_f.id;
             END IF;
         EXCEPTION WHEN others THEN
             v_reason := SQLERRM;
@@ -1500,9 +1510,12 @@ RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $$
 BEGIN
     IF OLD.status IN ('accepted', 'cancelled') THEN
+        -- The one update allowed: an accepted offline receipt without a sale gets the sale its
+        -- offline sale was posted as, once; every other column stays as it was.
         IF OLD.status = 'accepted' AND OLD.offline_sale_id IS NOT NULL
            AND OLD.sale_id IS NULL AND NEW.sale_id IS NOT NULL
-           AND (to_jsonb(NEW) - 'sale_id' - 'updated_at') = (to_jsonb(OLD) - 'sale_id' - 'updated_at') THEN
+           AND NEW.sale_id = (SELECT o.sale_id FROM public.offline_sales o WHERE o.id = OLD.offline_sale_id)
+           AND (to_jsonb(NEW) - 'sale_id') = (to_jsonb(OLD) - 'sale_id') THEN
             RETURN NEW;
         END IF;
         RAISE EXCEPTION 'DOCUMENT_FINAL: %.% is % and can no longer change',
@@ -1526,11 +1539,7 @@ AS $$
     ('*', 'password%', 'password material'),
     ('*', 'pairing\_code%', 'device pairing code (hash)'),
     ('devices', 'eta\_preshared\_key\_vault\_id', 'ETA signing material (vault id)'),
-    ('offline_sales', 'signature', 'S08: the device''s signature of an offline sale'),
-    ('offline_sales', 'content\_hash', 'S08: a hash of the stored content (derived; the content is exported)'),
-    ('offline_snapshots', 'content\_hash', 'S08: a hash of the snapshot (derived; the data is exported)'),
-    ('device_offline_keys', 'public\_key', 'S08: a POS''s signing key (of no use outside this system)'),
-    ('offline_leases', 'key\_id', 'S08: which signing key a lease was issued to')
+    ('offline_sales', 'signature', 'S08: the device''s signature of an offline sale')
 $$;
 
 -- D12.7 The S01 core. Its body (N02's, 20261018090000_n02_installment_sale.sql) moves to
