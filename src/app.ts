@@ -54,6 +54,8 @@ import cashTransfersRoutes from './routes/cashTransfers.js';
 import etaRoutes from './routes/eta.js';
 import fiscalRoutes from './routes/fiscal.js';
 import devicesRoutes from './routes/devices.js';
+import offlineRoutes, { OFFLINE_IMPORT_PATH } from './routes/offline.js';
+import apiHealthRoutes from './routes/apiHealth.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { noClientOrg } from './middleware/noClientOrg.js';
 import { requestId } from './middleware/requestId.js';
@@ -79,7 +81,11 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use(requestId());
   app.use(securityHeaders());
   app.use(corsAllowList(env.CORS_ALLOWED_ORIGINS));
-  app.use(express.json({ limit: '1mb' }));
+  // S08: an offline import (up to 500 sales) has its own 5 MB limit on its route.
+  const jsonBody = express.json({ limit: '1mb' });
+  app.use((req, res, next) =>
+    req.path === OFFLINE_IMPORT_PATH ? next() : jsonBody(req, res, next),
+  );
   // F05: the shop comes from the session, never from the body or query.
   app.use(noClientOrg);
 
@@ -129,6 +135,8 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/eta', etaRoutes);
   mountRouter(app, '/api/fiscal', fiscalRoutes);
   mountRouter(app, '/api/devices', devicesRoutes);
+  mountRouter(app, '/api/offline', offlineRoutes);
+  mountRouter(app, '/api/health', apiHealthRoutes);
   mountRouter(app, '/api/me', meRoutes);
   mountRouter(app, '/api/employees', employeesRoutes);
   mountRouter(app, '/api/warranty', warrantyRoutes);

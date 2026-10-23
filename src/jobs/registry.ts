@@ -11,12 +11,15 @@
 //   removes zips older than 7 days.
 //   K04 'day.check' (daily, D84): yesterday's day-close checks per branch and drift on closed days;
 //   never closes a day. Q03 backups check: added by that slice.
+//   S08 'offline.process' (D10): queued by the database when a device's offline sales are received
+//   or one is resolved; verifies each and posts it (src/offline/process.ts).
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Logger } from 'pino';
 import { etaJobHandlers } from '../eta/jobs';
 import { etaRuntime } from '../eta/runtime';
 import { supabaseEtaStore } from '../eta/store';
+import { offlineJobHandlers, supabaseOfflineStore } from '../offline/process';
 import { dayCheck } from './handlers/dayCheck';
 import { exportCleanup } from './handlers/exportCleanup';
 import { exportFull, pgSnapshot } from './handlers/exportFull';
@@ -45,6 +48,7 @@ export function jobHandlers(db: SupabaseClient, logger: Logger): Record<string, 
     'export.full': exportFull({ db, openSnapshot: exportSnapshot() }),
     'export.cleanup': exportCleanup(db),
     ...etaJobHandlers({ store: supabaseEtaStore(db), client, hosts, logger }),
+    ...offlineJobHandlers({ store: supabaseOfflineStore(db), hosts }),
   };
 }
 

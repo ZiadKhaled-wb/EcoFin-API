@@ -4,7 +4,7 @@
 // is not 10.5), so a document can be serialized and hashed from the bytes that were sent. Used by
 // the serialization golden test and by the fake ETA. Production code never parses a receipt.
 
-import { dec, type EtaValue } from '../eta/serialize';
+import { dec, type EtaValue } from '@ziadkhaled-wb/contracts';
 
 export function parseExactJson(json: string): EtaValue {
   const tagged = json.replace(/(:\s*)(-?\d+(?:\.\d+)?)(?=\s*[,}\]])/g, '$1{"$dec":"$2"}');

@@ -26,8 +26,8 @@ import { EtaError, type EtaApi, type EtaSession } from './client';
 import { ReceiptBlockedError } from './build-receipt';
 import { buildCorrection, correctionNote, sameReceiptIgnoringChain } from './correct';
 import { prepareDevice, type PrepareDeps } from './prepare';
-import { qrPayload } from './qr';
-import { toJson } from './serialize';
+import { qrPayload } from '@ziadkhaled-wb/contracts';
+import { toJson } from '@ziadkhaled-wb/contracts';
 import { noSignature, type ReceiptSigner } from './signer';
 import type { CredentialsRow, SubmitRow } from './store';
 

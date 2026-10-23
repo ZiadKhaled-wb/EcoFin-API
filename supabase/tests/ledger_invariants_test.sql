@@ -314,6 +314,7 @@ INSERT INTO t.replay_tested VALUES
  ('public.create_stock_transfer','i03_transfers_test.sql: same key -> same transfer'),
  ('public.create_purchase_invoice','u02_purchase_invoices_test.sql: same key -> same invoice, no second row or audit'),
  ('app.post_sale_core','s01_sale_core_test.sql: only reached through public.post_sale, which answers a repeated key before calling it'),
+ ('app.post_sale_core_full','s08_offline_test.sql: the body of app.post_sale_core (above); app.offline_process posts a received sale once (a second run skips) and a key a sale already has makes it a duplicate'),
  ('public.open_warranty_claim','s12_warranty_test.sql: same key returns the same claim; conflict rejected'),
  ('public.void_sale','s07_sales_history_test.sql: same key returns the same reversal'),
  ('public.post_sales_return','s05_returns_test.sql: same key -> the same return (replayed), nothing written twice; the key on another sale -> IDEMPOTENCY_CONFLICT'),

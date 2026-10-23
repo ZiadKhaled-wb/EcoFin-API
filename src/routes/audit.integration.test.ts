@@ -19,6 +19,7 @@ import { getEnv } from '../utils/env';
 import { AUDIT_REGISTRY } from '../test/audit-registry/registry';
 import { readInviteToken } from '../test/inviteMail';
 import { DEVICE_TOKEN_HEADER, pairTestDevice } from '../test/posDevice';
+import { newDeviceKeys, publicKeyBase64 } from '../test/offline';
 import {
   contractsCsv,
   ensurePolicy,
@@ -554,6 +555,19 @@ M01 Audit ${STAMP}-${ipCounter}
       .in('email', [`f07.target.${STAMP}@ecotech.test`, pwEmail]);
   });
 
+  /** S08: a device of shop one (service-role read). */
+  async function shopOneDevice(): Promise<string> {
+    const device = await service
+      .from('devices')
+      .select('id')
+      .eq('organization_id', SHOP_ONE)
+      .order('created_at')
+      .limit(1)
+      .single();
+    if (device.error) throw new Error(device.error.message);
+    return device.data.id;
+  }
+
   // One driver per registry entry that has an action: performs the call, returns what was sent,
   // the shop the row must land in and the success status (200 unless the route creates: 201).
   /** S03: shop one's cashier asks for an over-cap discount (the shop sets no cap: 0 %). */
@@ -1067,6 +1081,95 @@ M01 Audit ${STAMP}-${ipCounter}
         }),
         org: SHOP_ONE,
         status: 201,
+      };
+    },
+    'PUT /api/offline/settings': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('put', '/api/offline/settings', {
+          token: owner.accessToken,
+          body: {
+            offline_enabled: true,
+            offline_max_sale_total: '20000.00',
+            offline_max_hours: 12,
+            offline_max_sales: 100,
+            offline_max_lease_total: '200000.00',
+          },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    // S08: the owner's open shift on the paired POS, offline on, a new device key each time.
+    'POST /api/offline/lease': async () => {
+      await drivers['PUT /api/offline/settings']!();
+      const owner = await login('owner.one@ecotech.test');
+      await openShift(owner.accessToken);
+      return {
+        sent: await send('post', '/api/offline/lease', {
+          token: owner.accessToken,
+          pos,
+          body: { public_key: await publicKeyBase64(await newDeviceKeys()), snapshot_hash: null },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    // An unreadable item is answered (rejected) and the sync is audited.
+    'POST /api/offline/sync': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      await openShift(owner.accessToken);
+      return {
+        sent: await send('post', '/api/offline/sync', {
+          token: owner.accessToken,
+          pos,
+          body: { items: [{ content: '{}', signature: 'A'.repeat(86) + '==' }] },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/offline/import': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      return {
+        sent: await send('post', '/api/offline/import', {
+          token: owner.accessToken,
+          body: {
+            device_id: await shopOneDevice(),
+            items: [{ content: '{}', signature: 'A'.repeat(86) + '==' }],
+          },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    // A stored conflict of shop one (written with the service role), accepted by the owner.
+    'POST /api/offline/sales/:id/resolve': async () => {
+      const owner = await login('owner.one@ecotech.test');
+      const content = JSON.stringify({ f07: STAMP, n: ipCounter });
+      const made = await service
+        .from('offline_sales')
+        .insert({
+          organization_id: SHOP_ONE,
+          branch_id: BR1,
+          device_id: await shopOneDevice(),
+          seq: 900000 + ipCounter,
+          number: `OFF-D9-${900000 + ipCounter}`,
+          idempotency_key: `f07-offline-${STAMP}-${ipCounter}`,
+          issued_at: new Date().toISOString(),
+          content,
+          content_hash: createHash('sha256').update(content).digest('hex'),
+          signature: 'A'.repeat(86) + '==',
+          total: '1.00',
+          source: 'sync',
+          status: 'conflict',
+          conflict_code: 'PRICE_MISMATCH',
+        })
+        .select('id')
+        .single();
+      if (made.error) throw new Error(made.error.message);
+      return {
+        sent: await send('post', '/api/offline/sales/' + made.data.id + '/resolve', {
+          token: owner.accessToken,
+          body: { action: 'accept', reason: 'F07 audit driver' },
+        }),
+        org: SHOP_ONE,
       };
     },
     'POST /api/returns/:id/receipt-prints': async () => {

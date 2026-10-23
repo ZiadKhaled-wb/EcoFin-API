@@ -1,4 +1,5 @@
-// server/src/eta/serialize.ts
+// contracts/src/eta/serialize.ts (moved from server/src/eta by S08, D7: the server and the POS
+// build the same receipt text; no Node API here).
 //
 // T02 (D67). The ETA's "document serialization approach" (docs/eta/ERECEIPT_SPEC.md, section 8):
 // the text a receipt's UUID is the SHA-256 of. The ETA serializes every value exactly as it is

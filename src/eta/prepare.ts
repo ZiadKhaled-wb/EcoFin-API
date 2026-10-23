@@ -16,8 +16,8 @@ import { captureProblem } from '../utils/monitoring';
 import { buildReceipt, ReceiptBlockedError, type Receipt } from './build-receipt';
 import { buildReturnReceipt, ReturnTooLateError } from './build-return';
 import type { EtaHostMap } from './config';
-import { qrPayload } from './qr';
-import { toJson } from './serialize';
+import { qrPayload } from '@ziadkhaled-wb/contracts';
+import { toJson } from '@ziadkhaled-wb/contracts';
 import type { EtaStore, PendingRow } from './store';
 
 /** S05 (D88): a return receipt references its sale's; a sale receipt is built as before. */

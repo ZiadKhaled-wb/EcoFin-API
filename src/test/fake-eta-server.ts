@@ -25,6 +25,8 @@ export const INT4_FAKE_ETA: FakeEtaCredentials = {
     { posSerial: 'INT4-POS-2', presharedKey: 'int4-fake-psk-2' },
     { posSerial: 'TEST4-POS-AR', presharedKey: 'test4-fake-psk-ar' },
     { posSerial: 'TEST4-POS-EN', presharedKey: 'test4-fake-psk-en' },
+    // S08's offline e2e (EcoFin-Web e2e/s08-offline.spec.ts).
+    { posSerial: 'S08-POS-1', presharedKey: 's08-fake-psk-1' },
   ],
 };
 

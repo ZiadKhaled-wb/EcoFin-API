@@ -13,7 +13,7 @@ import {
 } from './correct';
 import { fixForProperty } from '../services/fiscal.service';
 import { etaJobHandlers } from './jobs';
-import { toJson } from './serialize';
+import { toJson } from '@ziadkhaled-wb/contracts';
 import type { CorrectionSource, EtaStore, PendingRow } from './store';
 
 const ORG = '11111111-1111-4111-8111-111111111111';

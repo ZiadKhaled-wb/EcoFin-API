@@ -8,7 +8,7 @@ import {
   type ReceiptSource,
   type SourceLine,
 } from './build-receipt';
-import { serialize, toJson } from './serialize';
+import { serialize, toJson } from '@ziadkhaled-wb/contracts';
 import { receiptUuid } from './uuid';
 
 const NATIONAL_ID = '29901011234567';

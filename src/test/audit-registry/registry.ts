@@ -18,6 +18,12 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/returns': { action: 'sales_return.created' },
   'POST /api/returns/quote': { none: 'Read-only return quote; nothing is written.' },
   'POST /api/returns/:id/receipt-prints': { action: 'sales_return.receipt_printed' },
+  // S08: a device's first lease with a new key also records the key.
+  'POST /api/offline/lease': { action: 'offline_lease.issued', also: ['device.offline_key_added'] },
+  'POST /api/offline/sync': { action: 'offline_sales.synced' },
+  'POST /api/offline/import': { action: 'offline_sales.imported' },
+  'POST /api/offline/sales/:id/resolve': { action: 'offline_sale.resolved' },
+  'PUT /api/offline/settings': { action: 'offline.settings_updated' },
   'POST /api/employees': { action: 'employee.created' },
   'PATCH /api/employees/:employeeId': { action: 'employee.updated' },
   'POST /api/employees/:employeeId/invite': { action: 'invite.resent' },

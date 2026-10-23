@@ -475,3 +475,41 @@ seconds and shows three decimals; it gives no fixed format for either **(unverif
 
 Neither stop condition applies: the SDK does not require a working signature today (its
 validation is not deployed), and the UUID can be computed as described once row 1 is applied.
+
+## 16. Offline receipts (S08)
+
+When the POS is offline (S08, EC-75), the **device** builds the receipt, with the same code as the
+server: T02's serializer, receipt builder and QR text live in the contracts package and are used by
+both.
+
+| Step | Who | What |
+|---|---|---|
+| Build | device | the Receipt v1.2 body of the offline sale (sections 6–11), `previousUUID` = the device's last receipt UUID (the chain head of its lease, then its own last offline receipt) |
+| UUID, QR | device | the UUID of section 9 (WebCrypto SHA-256) and the QR text of section 14; both printed on the paper receipt |
+| Sign and store | device | the receipt JSON text is part of the signed sale content (ECDSA P-256), saved before printing |
+| Receive | server | the receipt text is kept exactly as the device wrote it (Postgres `json`, number text kept); the fiscal row's `payload.receipt_json` is that text |
+| Verify | worker | the signature, then the UUID recomputed from the receipt; the receipt must match the sale it belongs to (number, time, totals, lines) |
+| Release and send | worker, then T02 | a verified receipt is released and T02's submit job sends it **unchanged**; the server never rebuilds or re-chains it |
+
+**Chain (fork rule).** Receiving offline receipts moves the device's chain head to the last offline
+UUID, so the next online receipt chains to it. If an offline batch did not start at the head (another
+receipt took the head meanwhile), the fork is logged as a `chain_fork` event and the head still moves:
+the ETA checks only the format of `previousUUID`.
+
+**Release is independent of business conflicts.** A sale that waits for a manager (closed shift, a
+serial sold meanwhile, a limit, a price) is still released and submitted: the paper receipt exists and
+the 24-hour deadline runs. Only two **holds** stop a release:
+
+| Hold | When | Ends with |
+|---|---|---|
+| `RECEIPT_MISMATCH` | the receipt does not match its sale (a bug) | an alert; never sent |
+| `LEASE_REVOKED` | the sale was made after the device was unpaired or deactivated | the manager accepts it (released) or rejects it (lost or stolen device: the fiscal row is cancelled, never sent) |
+
+A verification failure (signature or UUID) rejects the sale and cancels its fiscal row: it is never
+sent. An offline sale whose online attempt reached the server after all is a duplicate: the online
+receipt stands, the offline fiscal row is cancelled.
+
+**Margins.** An offline lease lasts at most 20 hours (`offline_max_hours`, 1–20), which leaves at
+least 4 hours to sync and submit before the ETA's 24-hour limit. The POS turns its banner red when an
+unsynced sale is 18 hours old, and T02's deadline alert (section 13) fires when a released receipt is
+still pending 20 hours after issue.

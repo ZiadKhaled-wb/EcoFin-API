@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { dec } from './serialize';
+import { dec } from '@ziadkhaled-wb/contracts';
 import { receiptUuid, UUID_PATTERN, withUuid } from './uuid';
 
 const receipt = (previousUUID = '', uuid = '') => ({
