@@ -198,6 +198,12 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'PUT /api/employees/:employeeId/permissions': { action: 'employee.permission_set' },
   'PUT /api/employees/:employeeId/branches': { action: 'employee.branches_set' },
   'PUT /api/employees/:employeeId/active': { action: 'employee.active_set' },
+  'POST /api/quotations': { action: 'quotation.created' },
+  'PUT /api/quotations/:id': { action: 'quotation.updated' },
+  'POST /api/quotations/:id/send': { action: 'quotation.sent' },
+  'POST /api/quotations/:id/accept': { action: 'quotation.accepted' },
+  'POST /api/quotations/:id/reject': { action: 'quotation.rejected' },
+  'POST /api/quotations/:id/cancel': { action: 'quotation.cancelled' },
   'POST /api/warranty/claims': { action: 'warranty_claim.opened' },
   'POST /api/warranty/claims/:id/move': { action: 'warranty_claim.moved' },
   'POST /api/warranty/claims/:id/refund': {

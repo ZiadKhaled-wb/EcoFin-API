@@ -936,6 +936,24 @@ INSERT INTO t.denial VALUES
  ('get_offline_sale','zz_s08_6_get','offline.resolve',$q$SELECT public.get_offline_sale((SELECT id FROM public.offline_sales WHERE idempotency_key='denial-s08-offline'))$q$),
  ('resolve_offline_sale','zz_s08_7_resolve','offline.resolve',$q$SELECT public.resolve_offline_sale((SELECT id FROM public.offline_sales WHERE idempotency_key='denial-s08-offline'),'accept','TEST-1 denial')$q$),
  ('import_offline_sales','zz_s08_8_import','offline.resolve',$q$SELECT public.import_offline_sales((SELECT device_id FROM public.offline_sales WHERE idempotency_key='denial-s08-offline'),jsonb_build_array(jsonb_build_object('content','{}','signature',repeat('A',86)||'==')))$q$);
+-- S09: valid fixtures for the generic denial/owner-success matrix.
+CREATE TABLE t.s09_docs(tag text PRIMARY KEY,id uuid);
+GRANT SELECT ON t.s09_docs TO authenticated;
+SELECT t.as_user('d0000000-0000-0000-0000-000000000011','d1000000-0000-0000-0000-000000000001');
+INSERT INTO t.s09_docs SELECT tag,(public.create_quotation('d2000000-0000-0000-0000-000000000011',
+  (SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' LIMIT 1),NULL,NULL,
+  '[{"description":"Custom quotation item","quantity":1,"unit_price":"114"}]','denial-s09-'||tag)->>'id')::uuid
+  FROM (VALUES('main'),('reject'),('cancel')) tags(tag);
+SELECT public.send_quotation(id) FROM t.s09_docs WHERE tag='reject';
+INSERT INTO t.denial VALUES
+ ('create_quotation','zz_s09_01_create','quotation.manage',$q$SELECT public.create_quotation('d2000000-0000-0000-0000-000000000011',NULL,NULL,NULL,'[{"description":"Item","quantity":1,"unit_price":"114"}]','denial-s09-main')$q$),
+ ('list_quotations','zz_s09_02_list','quotation.manage',$q$SELECT public.list_quotations()$q$),
+ ('get_quotation','zz_s09_03_get','quotation.manage',$q$SELECT public.get_quotation((SELECT id FROM t.s09_docs WHERE tag='main'))$q$),
+ ('update_quotation_draft','zz_s09_04_update','quotation.manage',$q$SELECT public.update_quotation_draft((SELECT id FROM t.s09_docs WHERE tag='main'),(public.get_quotation((SELECT id FROM t.s09_docs WHERE tag='main'))->>'customer_id')::uuid,NULL,NULL,'[{"description":"Updated","quantity":1,"unit_price":"114"}]',(public.get_quotation((SELECT id FROM t.s09_docs WHERE tag='main'))->>'updated_at')::timestamptz)$q$),
+ ('send_quotation','zz_s09_05_send','quotation.manage',$q$SELECT public.send_quotation((SELECT id FROM t.s09_docs WHERE tag='main'))$q$),
+ ('accept_quotation','zz_s09_06_accept','quotation.manage',$q$SELECT public.accept_quotation((SELECT id FROM t.s09_docs WHERE tag='main'))$q$),
+ ('reject_quotation','zz_s09_07_reject','quotation.manage',$q$SELECT public.reject_quotation((SELECT id FROM t.s09_docs WHERE tag='reject'),'Customer declined')$q$),
+ ('cancel_quotation','zz_s09_08_cancel','quotation.manage',$q$SELECT public.cancel_quotation((SELECT id FROM t.s09_docs WHERE tag='cancel'),'Customer cancelled')$q$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

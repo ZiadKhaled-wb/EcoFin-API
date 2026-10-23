@@ -332,9 +332,17 @@ describe('cross-shop route check (D19)', () => {
         'GET /api/offline/settings',
         'PUT /api/offline/settings',
         'GET /api/health',
+        'GET /api/quotations',
+        'GET /api/quotations/:id',
+        'POST /api/quotations',
+        'PUT /api/quotations/:id',
+        'POST /api/quotations/:id/send',
+        'POST /api/quotations/:id/accept',
+        'POST /api/quotations/:id/reject',
+        'POST /api/quotations/:id/cancel',
       ]),
     );
-    expect(keys).toHaveLength(303);
+    expect(keys).toHaveLength(311);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

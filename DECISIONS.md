@@ -737,3 +737,6 @@ EC-147: POS writes recheck the shift device on every call; only force_close_shif
 - **D10 (fiscal release apart from business conflicts):** a verified offline receipt is released to T02 even while its sale waits for a manager; only `RECEIPT_MISMATCH` and `LEASE_REVOKED` hold it. Hence the baseline freeze of an accepted fiscal row lets the posted sale's `sale_id` be written once (`app.fiscal_submissions_freeze`).
 - **D11 (no edit of printed values):** manager actions (`accept`, `use_serial`, `post_to_shift`, `reject` for a revoked lease) never change a price, quantity, payment or total; every posted offline sale equals its printed receipt.
 - **Numbers:** contracts **0.60.0**, migration `20261031090000_s08_offline_sales.sql`, 9 new routes (`/api/offline/*` and `GET /api/health`), permission `offline.resolve` (65 keys). Plan and deviations: `docs/testing/plans/S08.md`. Next free: 0.61.0 / D91.
+### S09. Quotations (EC-76)
+
+Quotations are server-priced with T01; only drafts are editable (duplicate a sent quote to change it); expiry is computed on read and persisted by the F13 daily quotation.expire job; accepted quote conversion to an order belongs to S10.

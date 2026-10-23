@@ -15,6 +15,33 @@ import { buildOfflineSale, newDeviceKeys, publicKeyBase64, signContent } from '.
 const OWNER_A = 'owner.one@ecotech.test';
 const OWNER_B = 'owner.two@ecotech.test';
 const SEED_PASSWORD = 'LocalDev-Only-2026!';
+// S09: each route rejects another shop context before processing its payload.
+for (const [method, path] of [
+  ['GET', '/api/quotations'],
+  ['GET', '/api/quotations/:id'],
+  ['POST', '/api/quotations'],
+  ['PUT', '/api/quotations/:id'],
+  ['POST', '/api/quotations/:id/send'],
+  ['POST', '/api/quotations/:id/accept'],
+  ['POST', '/api/quotations/:id/reject'],
+  ['POST', '/api/quotations/:id/cancel'],
+]) {
+  crossShopCase({
+    method: method!,
+    path: path!,
+    name: 'S09 A2 foreign shop context ' + method + ' ' + path,
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const result = await h.call(method!, path!.replace(':id', randomUUID()), {
+        token: a.accessToken,
+        orgId: SHOP_B,
+      });
+      h.expect(result.res.status).toBe(403);
+      h.expect(h.code(result.res)).toBe('SHOP_NOT_ALLOWED');
+      h.expect(await h.auditRowsFrom(SHOP_B, result.ip)).toBe(0);
+    },
+  });
+}
 crossShopCase({
   method: 'GET',
   path: '/api/subscription',
