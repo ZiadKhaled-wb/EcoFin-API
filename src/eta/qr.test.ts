@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { qrPayload } from './qr';
+import { qrPayload } from '@ziadkhaled-wb/contracts';
 
 const UUID = '68e656b251e67e8358bef8483ab0d51c6619f3e7a1a9f0e75838d41ff368f320';
 

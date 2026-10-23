@@ -184,7 +184,7 @@ describe('D02 sales report service', () => {
   });
 });
 
-// D03 (D90). Receivables aging.
+// D03 (D91). Receivables aging.
 const aging = {
   outstanding: '24000.00',
   principal: '20000.00',

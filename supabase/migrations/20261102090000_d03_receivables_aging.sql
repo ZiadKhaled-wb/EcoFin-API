@@ -1,5 +1,5 @@
 -- =============================================================================
--- D03 · Receivables aging (EC-95, D90)
+-- D03 · Receivables aging (EC-95, D91)
 --
 -- One read, public.report_receivables(...), answers who owes the shop money today and how late they are,
 -- grouped by customer, branch, collector or contract (docs/tasks/D03.md decisions 1-10). Every number is a
@@ -23,11 +23,11 @@
 -- paid amounts of every allocation of every shop are added up first (the function runs as its owner, so RLS
 -- doesn't narrow it): the time would grow with the whole database, not with the shop. So the totals don't read
 -- those views at run time either; the SQL test proves, contract by contract, that the report equals
--- v_contract_balances and v_receivables_aging (D90).
+-- v_contract_balances and v_receivables_aging (D91).
 -- The read needs a signed-in employee with report.financial (owner answer 3) and also works in an expired
 -- shop (app.has_permission, as D01 and D02). As of the shop's today (owner answer 2). The branch of a balance
 -- is the contract's selling branch (owner answer 6); the collector is the customer's current one (answer 4).
--- No table, no view change, no enum value, no permission key. Contracts 0.60.0, 1 route.
+-- No table, no view change, no enum value, no permission key. Contracts 0.62.0, 1 route.
 -- =============================================================================
 
 -- 1. The measures of one row or of the totals, in the contract's shape (schema app, nothing granted) ---------
@@ -262,7 +262,7 @@ BEGIN
         SELECT cb.bucket, sum(cb.remaining) AS amount, sum(cb.principal) AS principal, sum(cb.profit) AS profit
         FROM cb GROUP BY cb.bucket
     ), tot AS (
-        -- Totals per contract (decision 8, see D90 for why not from the balance views at run time): every open
+        -- Totals per contract (decision 8, see D91 for why not from the balance views at run time): every open
         -- contract in scope counted once, whatever row it lands in.
         SELECT COALESCE(sum(cc.outstanding), 0) AS outstanding, COALESCE(sum(cc.principal), 0) AS principal,
                COALESCE(sum(cc.profit), 0) AS profit,

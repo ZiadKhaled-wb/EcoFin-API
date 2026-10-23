@@ -11,13 +11,17 @@
 //   removes zips older than 7 days.
 //   K04 'day.check' (daily, D84): yesterday's day-close checks per branch and drift on closed days;
 //   never closes a day. Q03 backups check: added by that slice.
+//   S08 'offline.process' (D10): queued by the database when a device's offline sales are received
+//   or one is resolved; verifies each and posts it (src/offline/process.ts).
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Logger } from 'pino';
 import { etaJobHandlers } from '../eta/jobs';
 import { etaRuntime } from '../eta/runtime';
 import { supabaseEtaStore } from '../eta/store';
+import { offlineJobHandlers, supabaseOfflineStore } from '../offline/process';
 import { dayCheck } from './handlers/dayCheck';
+import { quotationExpire } from './handlers/quotationExpire';
 import { exportCleanup } from './handlers/exportCleanup';
 import { exportFull, pgSnapshot } from './handlers/exportFull';
 import { importApply } from './handlers/importApply';
@@ -39,17 +43,20 @@ export function jobHandlers(db: SupabaseClient, logger: Logger): Record<string, 
     'ledger.reconcile': ledgerReconcile(db),
     'installments.overdue': overdueCheck(db),
     'day.check': dayCheck(db),
+    'quotation.expire': quotationExpire(db),
     // M01 (D83): queued by public.queue_import, not daily.
     'import.apply': importApply(db),
     // M03 (D86): queued by public.start_full_export; export.cleanup is daily.
     'export.full': exportFull({ db, openSnapshot: exportSnapshot() }),
     'export.cleanup': exportCleanup(db),
     ...etaJobHandlers({ store: supabaseEtaStore(db), client, hosts, logger }),
+    ...offlineJobHandlers({ store: supabaseOfflineStore(db), hosts }),
   };
 }
 
 /** Local time in each shop's own time zone (organizations.timezone, Africa/Cairo by default). */
 export const DAILY_JOBS: readonly DailyJob[] = [
+  { type: 'quotation.expire', localTime: '00:15' },
   // Before the shop's day starts, so the morning's overdue list is ready.
   { type: 'installments.overdue', localTime: '00:30' },
   { type: 'ledger.reconcile', localTime: '03:00' },

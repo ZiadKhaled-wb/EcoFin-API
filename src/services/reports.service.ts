@@ -42,7 +42,7 @@ export async function getSalesReport(
   return SalesReport.parse(data);
 }
 
-// D03 (D90). Receivables aging: public.report_receivables (20261031090000_d03_receivables_aging.sql).
+// D03 (D91). Receivables aging: public.report_receivables (20261102090000_d03_receivables_aging.sql).
 
 /** GET /api/reports/receivables: today's open balances, grouped, bucketed and filtered as the query says. */
 export async function getReceivablesReport(

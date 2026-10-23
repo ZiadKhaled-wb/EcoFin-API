@@ -8,11 +8,40 @@
 // session still works, A's password unchanged...).
 
 import { randomUUID } from 'node:crypto';
+import { OfflineLeaseResponse } from '@ziadkhaled-wb/contracts';
 import { crossShopCase, SHOP_A, SHOP_B, type CrossShopHarness } from './harness';
+import { buildOfflineSale, newDeviceKeys, publicKeyBase64, signContent } from '../offline';
 
 const OWNER_A = 'owner.one@ecotech.test';
 const OWNER_B = 'owner.two@ecotech.test';
 const SEED_PASSWORD = 'LocalDev-Only-2026!';
+// S09: each route rejects another shop context before processing its payload.
+for (const [method, path] of [
+  ['GET', '/api/quotations'],
+  ['GET', '/api/quotations/:id'],
+  ['POST', '/api/quotations'],
+  ['PUT', '/api/quotations/:id'],
+  ['POST', '/api/quotations/:id/send'],
+  ['POST', '/api/quotations/:id/accept'],
+  ['POST', '/api/quotations/:id/reject'],
+  ['POST', '/api/quotations/:id/cancel'],
+]) {
+  crossShopCase({
+    method: method!,
+    path: path!,
+    name: 'S09 A2 foreign shop context ' + method + ' ' + path,
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const result = await h.call(method!, path!.replace(':id', randomUUID()), {
+        token: a.accessToken,
+        orgId: SHOP_B,
+      });
+      h.expect(result.res.status).toBe(403);
+      h.expect(h.code(result.res)).toBe('SHOP_NOT_ALLOWED');
+      h.expect(await h.auditRowsFrom(SHOP_B, result.ip)).toBe(0);
+    },
+  });
+}
 crossShopCase({
   method: 'GET',
   path: '/api/subscription',
@@ -6401,7 +6430,219 @@ crossShopCase({
   },
 });
 
-// D03 (D90). Receivables aging: a foreign shop header is refused, an organization id in the query is refused
+// S08 offline sales. A shop B offline sale is made the POS's way: shop B's owner opens a shift on its
+// paired POS, turns offline on, takes a lease and syncs one signed sale.
+const offlineSettings = {
+  offline_enabled: true,
+  offline_max_sale_total: '20000.00',
+  offline_max_hours: 12,
+  offline_max_sales: 100,
+  offline_max_lease_total: '200000.00',
+};
+async function shopBOfflineSale(h: CrossShopHarness) {
+  const product = await shopBProduct(h, 'offline');
+  const stocked = await h.call('POST', '/api/stock/adjustments', {
+    token: product.token,
+    idempotencyKey: key('offline-stock'),
+    body: {
+      branch_id: SHOP_B_BR1,
+      reason: 'found',
+      lines: [{ product_id: product.id, quantity: 1 }],
+    },
+  });
+  h.expect(stocked.res.status, JSON.stringify(stocked.res.body)).toBe(201);
+  const shift = await openShiftOf(h, OWNER_B, SHOP_B_BR1);
+  const settings = await h.call('PUT', '/api/offline/settings', {
+    token: shift.token,
+    body: offlineSettings,
+  });
+  h.expect(settings.res.status, JSON.stringify(settings.res.body)).toBe(200);
+  const keys = await newDeviceKeys();
+  const leased = await h.call('POST', '/api/offline/lease', {
+    token: shift.token,
+    deviceToken: shift.deviceToken,
+    body: { public_key: await publicKeyBase64(keys), snapshot_hash: null },
+  });
+  h.expect(leased.res.status, JSON.stringify(leased.res.body)).toBe(200);
+  const lease = OfflineLeaseResponse.parse(leased.res.body);
+  const sale = buildOfflineSale({
+    lease,
+    snapshot: lease.snapshot!,
+    seq: lease.lease.next_seq,
+    previousUuid: lease.lease.chain_head,
+    lines: [{ product_id: product.id, quantity: 1 }],
+  });
+  const item = { content: sale.content, signature: await signContent(keys, sale.content) };
+  const synced = await h.call('POST', '/api/offline/sync', {
+    token: shift.token,
+    deviceToken: shift.deviceToken,
+    body: { items: [item] },
+  });
+  h.expect(synced.res.status, JSON.stringify(synced.res.body)).toBe(200);
+  const listed = await h.call('GET', '/api/offline/sales', { token: shift.token });
+  const row = (listed.res.body as { id: string; number: string }[]).find(
+    (r) => r.number === sale.number,
+  );
+  h.expect(row, JSON.stringify(listed.res.body)).toBeDefined();
+  return { id: row!.id, deviceId: lease.lease.device_id, item, shift };
+}
+crossShopCase({
+  method: 'POST',
+  path: '/api/offline/lease',
+  name: 'a lease refuses a foreign shop header and an org id in the body',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = { public_key: 'MFkw' + 'M'.repeat(120), snapshot_hash: null };
+    const foreign = await h.call('POST', '/api/offline/lease', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/offline/lease', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/offline/sync',
+  name: "shop B's offline sale sent by shop A is stored nowhere; a foreign header is refused",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const theirs = await shopBOfflineSale(h);
+    const foreign = await h.call('POST', '/api/offline/sync', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: { items: [theirs.item] },
+    });
+    h.expect(foreign.res.status).toBe(403);
+    // Shop A's owner from a computer that is no device of theirs: nothing is received.
+    const replayed = await h.call('POST', '/api/offline/sync', {
+      token: a.accessToken,
+      body: { items: [theirs.item] },
+    });
+    h.expect(replayed.res.status).toBe(403);
+    h.expect(h.code(replayed.res)).toBe('DEVICE_REVOKED');
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+    await h.processOffline(theirs.deviceId);
+    await closeShiftShort(h, theirs.shift);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/offline/sales',
+  name: "the offline list shows none of shop B's sales and refuses a foreign header and an org id",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const theirs = await shopBOfflineSale(h);
+    const list = await h.call('GET', '/api/offline/sales', { token: a.accessToken });
+    h.expect(list.res.status, JSON.stringify(list.res.body)).toBe(200);
+    h.expect((list.res.body as { id: string }[]).some((r) => r.id === theirs.id)).toBe(false);
+    const foreign = await h.call('GET', '/api/offline/sales', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/offline/sales', {
+      token: a.accessToken,
+      query: 'organization_id=' + SHOP_B,
+    });
+    h.expect(injected.res.status).toBe(400);
+    await h.processOffline(theirs.deviceId);
+    await closeShiftShort(h, theirs.shift);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/offline/sales/:id',
+  name: "another shop's offline sale is 404",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const theirs = await shopBOfflineSale(h);
+    const attempt = await h.call('GET', '/api/offline/sales/' + theirs.id, {
+      token: a.accessToken,
+    });
+    h.expect(attempt.res.status).toBe(404);
+    h.expect(h.code(attempt.res)).toBe('OFFLINE_SALE_NOT_FOUND');
+    await h.processOffline(theirs.deviceId);
+    await closeShiftShort(h, theirs.shift);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/offline/sales/:id/resolve',
+  name: "resolving another shop's offline sale is 404 and changes nothing there",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const theirs = await shopBOfflineSale(h);
+    const attempt = await h.call('POST', '/api/offline/sales/' + theirs.id + '/resolve', {
+      token: a.accessToken,
+      body: { action: 'accept', reason: 'Cross-shop case' },
+    });
+    h.expect(attempt.res.status).toBe(404);
+    h.expect(h.code(attempt.res)).toBe('OFFLINE_SALE_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, attempt.ip)).toBe(0);
+    await h.processOffline(theirs.deviceId);
+    await closeShiftShort(h, theirs.shift);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/offline/import',
+  name: "importing into another shop's device is 404 (DEVICE_NOT_FOUND); nothing lands there",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const theirs = await shopBOfflineSale(h);
+    const attempt = await h.call('POST', '/api/offline/import', {
+      token: a.accessToken,
+      body: { device_id: theirs.deviceId, items: [theirs.item] },
+    });
+    h.expect(attempt.res.status).toBe(404);
+    h.expect(h.code(attempt.res)).toBe('DEVICE_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, attempt.ip)).toBe(0);
+    await h.processOffline(theirs.deviceId);
+    await closeShiftShort(h, theirs.shift);
+  },
+});
+crossShopCase({
+  method: 'GET',
+  path: '/api/offline/settings',
+  name: 'offline settings refuse a foreign shop header',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/offline/settings', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const own = await h.call('GET', '/api/offline/settings', { token: a.accessToken });
+    h.expect(own.res.status).toBe(200);
+  },
+});
+crossShopCase({
+  method: 'PUT',
+  path: '/api/offline/settings',
+  name: "offline settings can't be written for another shop (header or body)",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('PUT', '/api/offline/settings', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body: offlineSettings,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('PUT', '/api/offline/settings', {
+      token: a.accessToken,
+      body: { ...offlineSettings, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
+
+// D03 (D91). Receivables aging: a foreign shop header is refused, an organization id in the query is refused
 // (strict schema), and another shop's branch, collector (an employee) or customer is not found; a shop's report
 // never carries the other shop's balances.
 crossShopCase({

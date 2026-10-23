@@ -1,0 +1,284 @@
+{
+    "note": "S08 offline totals (D7). Generated once by supabase/tests/s08_offline_test.sql (S1) from T01's app.compute_document_tax; read by packages/contracts/src/offline.test.ts (U2). Both must give exactly these results.",
+    "cases": [
+        {
+            "id": "O01",
+            "lines": [
+                {
+                    "quantity": 1,
+                    "tax_rate": "14.00",
+                    "unit_price": "1140.00"
+                }
+            ],
+            "title": "Prices include VAT: 1140.00 at 14%",
+            "expected": {
+                "lines": [
+                    {
+                        "line_total": "1140.00",
+                        "tax_amount": "140.00"
+                    }
+                ],
+                "total": "1140.00",
+                "subtotal": "1140.00",
+                "tax_total": "140.00"
+            },
+            "prices_include_vat": true
+        },
+        {
+            "id": "O02",
+            "lines": [
+                {
+                    "quantity": 1,
+                    "tax_rate": "14.00",
+                    "unit_price": "1000.00"
+                }
+            ],
+            "title": "Prices exclude VAT: 1000.00 at 14%",
+            "expected": {
+                "lines": [
+                    {
+                        "line_total": "1140.00",
+                        "tax_amount": "140.00"
+                    }
+                ],
+                "total": "1140.00",
+                "subtotal": "1000.00",
+                "tax_total": "140.00"
+            },
+            "prices_include_vat": false
+        },
+        {
+            "id": "O03",
+            "lines": [
+                {
+                    "quantity": 1,
+                    "tax_rate": "0.00",
+                    "unit_price": "500.00"
+                }
+            ],
+            "title": "Zero-rated, prices include VAT",
+            "expected": {
+                "lines": [
+                    {
+                        "line_total": "500.00",
+                        "tax_amount": "0.00"
+                    }
+                ],
+                "total": "500.00",
+                "subtotal": "500.00",
+                "tax_total": "0.00"
+            },
+            "prices_include_vat": true
+        },
+        {
+            "id": "O04",
+            "lines": [
+                {
+                    "quantity": 2,
+                    "tax_rate": "0.00",
+                    "unit_price": "250.00"
+                }
+            ],
+            "title": "Exempt, prices exclude VAT, quantity 2",
+            "expected": {
+                "lines": [
+                    {
+                        "line_total": "500.00",
+                        "tax_amount": "0.00"
+                    }
+                ],
+                "total": "500.00",
+                "subtotal": "500.00",
+                "tax_total": "0.00"
+            },
+            "prices_include_vat": false
+        },
+        {
+            "id": "O05",
+            "lines": [
+                {
+                    "quantity": 3,
+                    "tax_rate": "14.00",
+                    "unit_price": "99.99"
+                }
+            ],
+            "title": "Quantity 3 at 99.99, prices include VAT",
+            "expected": {
+                "lines": [
+                    {
+                        "line_total": "299.97",
+                        "tax_amount": "36.84"
+                    }
+                ],
+                "total": "299.97",
+                "subtotal": "299.97",
+                "tax_total": "36.84"
+            },
+            "prices_include_vat": true
+        },
+        {
+            "id": "O06",
+            "lines": [
+                {
+                    "quantity": 1,
+                    "tax_rate": "14.00",
+                    "unit_price": "0.57"
+                },
+                {
+                    "quantity": 1,
+                    "tax_rate": "14.00",
+                    "unit_price": "1.71"
+                },
+                {
+                    "quantity": 1,
+                    "tax_rate": "14.00",
+                    "unit_price": "10.83"
+                }
+            ],
+            "title": "Three lines rounding at the half, prices include VAT",
+            "expected": {
+                "lines": [
+                    {
+                        "line_total": "0.57",
+                        "tax_amount": "0.07"
+                    },
+                    {
+                        "line_total": "1.71",
+                        "tax_amount": "0.21"
+                    },
+                    {
+                        "line_total": "10.83",
+                        "tax_amount": "1.33"
+                    }
+                ],
+                "total": "13.11",
+                "subtotal": "13.11",
+                "tax_total": "1.61"
+            },
+            "prices_include_vat": true
+        },
+        {
+            "id": "O07",
+            "lines": [
+                {
+                    "quantity": 1,
+                    "tax_rate": "14.00",
+                    "unit_price": "0.25"
+                },
+                {
+                    "quantity": 1,
+                    "tax_rate": "14.00",
+                    "unit_price": "0.75"
+                },
+                {
+                    "quantity": 1,
+                    "tax_rate": "14.00",
+                    "unit_price": "1.25"
+                }
+            ],
+            "title": "Three lines rounding at the half, prices exclude VAT",
+            "expected": {
+                "lines": [
+                    {
+                        "line_total": "0.29",
+                        "tax_amount": "0.04"
+                    },
+                    {
+                        "line_total": "0.86",
+                        "tax_amount": "0.11"
+                    },
+                    {
+                        "line_total": "1.43",
+                        "tax_amount": "0.18"
+                    }
+                ],
+                "total": "2.58",
+                "subtotal": "2.25",
+                "tax_total": "0.33"
+            },
+            "prices_include_vat": false
+        },
+        {
+            "id": "O08",
+            "lines": [
+                {
+                    "quantity": 2,
+                    "tax_rate": "14.00",
+                    "unit_price": "1140.00"
+                },
+                {
+                    "quantity": 1,
+                    "tax_rate": "0.00",
+                    "unit_price": "300.00"
+                },
+                {
+                    "quantity": 3,
+                    "tax_rate": "14.00",
+                    "unit_price": "49.99"
+                }
+            ],
+            "title": "Mixed rates and quantities, prices include VAT",
+            "expected": {
+                "lines": [
+                    {
+                        "line_total": "2280.00",
+                        "tax_amount": "280.00"
+                    },
+                    {
+                        "line_total": "300.00",
+                        "tax_amount": "0.00"
+                    },
+                    {
+                        "line_total": "149.97",
+                        "tax_amount": "18.42"
+                    }
+                ],
+                "total": "2729.97",
+                "subtotal": "2729.97",
+                "tax_total": "298.42"
+            },
+            "prices_include_vat": true
+        },
+        {
+            "id": "O09",
+            "lines": [
+                {
+                    "quantity": 3,
+                    "tax_rate": "14.00",
+                    "unit_price": "333.33"
+                },
+                {
+                    "quantity": 7,
+                    "tax_rate": "5.00",
+                    "unit_price": "12.35"
+                },
+                {
+                    "quantity": 1,
+                    "tax_rate": "14.00",
+                    "unit_price": "0.01"
+                }
+            ],
+            "title": "Mixed rates and quantities, prices exclude VAT",
+            "expected": {
+                "lines": [
+                    {
+                        "line_total": "1139.99",
+                        "tax_amount": "140.00"
+                    },
+                    {
+                        "line_total": "90.77",
+                        "tax_amount": "4.32"
+                    },
+                    {
+                        "line_total": "0.01",
+                        "tax_amount": "0.00"
+                    }
+                ],
+                "total": "1230.77",
+                "subtotal": "1086.45",
+                "tax_total": "144.32"
+            },
+            "prices_include_vat": false
+        }
+    ]
+}

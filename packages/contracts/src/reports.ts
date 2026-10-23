@@ -191,7 +191,7 @@ export const SalesReport = z.object({
 export type SalesReport = z.infer<typeof SalesReport>;
 
 /**
- * D03 receivables aging (D90). One read answers who owes the shop money today and how late they are:
+ * D03 receivables aging (D91). One read answers who owes the shop money today and how late they are:
  * the open installment balances (current schedule lines of active or rescheduled contracts) grouped by
  * customer, the contract's selling branch, the customer's current collector or contract, split into age
  * buckets and into principal and profit. A line is late only after its due date plus the grace days of the

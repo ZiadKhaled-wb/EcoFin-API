@@ -1,4 +1,4 @@
-// server/src/eta/qr.ts
+// contracts/src/eta/qr.ts (moved from server/src/eta by S08, D7: the POS prints the same QR text).
 //
 // T02 (D67). The text of the receipt's QR code (docs/eta/ERECEIPT_SPEC.md, section 14): a link to
 // the receipt on the ETA portal of the shop's environment. S04 prints it as a QR image.

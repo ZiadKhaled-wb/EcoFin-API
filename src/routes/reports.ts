@@ -18,7 +18,7 @@ router.get(
   validate({ query: SalesReportQuery }),
   asyncHandler(controller.sales),
 );
-// D03 (D90). Receivables aging: the function checks report.financial in SQL the same way.
+// D03 (D91). Receivables aging: the function checks report.financial in SQL the same way.
 router.get(
   '/receivables',
   authenticate,

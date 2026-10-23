@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildReceipt, type ReceiptSource, type SourceLine } from './build-receipt';
 import { buildReturnReceipt, ReturnTooLateError, type ReturnContext } from './build-return';
-import { serialize } from './serialize';
+import { serialize } from '@ziadkhaled-wb/contracts';
 import { receiptUuid } from './uuid';
 
 const line: SourceLine = {

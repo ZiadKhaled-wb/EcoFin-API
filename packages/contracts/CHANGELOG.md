@@ -1,8 +1,12 @@
 # Changelog
 
-## 0.60.0
+## 0.62.0
 
 - D03 receivables aging: in `reports.ts`, RECEIVABLES_GROUP_BY / ReceivablesGroupBy (customer, branch, collector, contract), RECEIVABLES_SORTS / ReceivablesSort, RECEIVABLES_BUCKETS / ReceivablesBucket (not_due, late_1_30, late_31_60, late_61_90, late_90_plus), RECEIVABLES_NO_COLLECTOR (`none`), RECEIVABLES_MAX_MIN_DAYS, RECEIVABLES_MAX_Q, ReceivablesQuery (strict; `collector_id` a uuid or `none`; `q` only with the customer or contract grouping, at most 100 characters; `min_days` 1-100000; page_size 1-1000), ReceivablesMeasures, ReceivablesRow (customer / collector / branch / contract references by grouping), ReceivablesBucketSplit, ReceivablesTotals (each bucket split into principal and profit), ReceivablesCheck, ReceivablesReport. Money and percentages are strings; no fee member (rule 4). No new error code.
+## 0.61.0
+
+- S08 offline cash sales (EC-75): T02's receipt builder, serializer, QR text and JSON helpers now live in contracts (`eta/serialize`, `eta/receipt`, `eta/qr`, `eta/json`) so the POS builds the same receipt offline, and the offline sales protocol (`offline.ts`). Published alone as 0.60.0.
+- S09 quotations (EC-76): quotation request/response schemas, decimal line prices, frozen tax snapshots and quotation error codes.
 
 ## 0.59.0
 

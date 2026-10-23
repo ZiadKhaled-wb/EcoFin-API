@@ -1,4 +1,4 @@
--- D03 receivables aging (EC-95, D90).
+-- D03 receivables aging (EC-95, D91).
 -- Run by: node scripts/db-smoke.mjs supabase/tests/d03_receivables_aging_test.sql (inside BEGIN ... ROLLBACK).
 -- Shop a sells six TVs on installments (12 000 = 2 000 down + 10 000 financed + 2 000 profit, 12 monthly lines
 -- of 1 000) to five customers with two collectors (two customers have none), in two branches, with a policy of

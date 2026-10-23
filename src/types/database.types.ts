@@ -1822,6 +1822,38 @@ export type Database = {
           },
         ];
       };
+      device_offline_keys: {
+        Row: {
+          device_id: string;
+          first_seen_at: string;
+          id: string;
+          organization_id: string;
+          public_key: string;
+        };
+        Insert: {
+          device_id: string;
+          first_seen_at?: string;
+          id?: string;
+          organization_id: string;
+          public_key: string;
+        };
+        Update: {
+          device_id?: string;
+          first_seen_at?: string;
+          id?: string;
+          organization_id?: string;
+          public_key?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'device_offline_keys_device_id_organization_id_fkey';
+            columns: ['device_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'devices';
+            referencedColumns: ['id', 'organization_id'];
+          },
+        ];
+      };
       device_pairing_attempts: {
         Row: {
           created_at: string;
@@ -1856,6 +1888,8 @@ export type Database = {
           is_active: boolean;
           last_seen_at: string | null;
           name: string;
+          offline_code: string | null;
+          offline_seq_last: number;
           organization_id: string;
           paired_at: string | null;
           paired_by: string | null;
@@ -1880,6 +1914,8 @@ export type Database = {
           is_active?: boolean;
           last_seen_at?: string | null;
           name: string;
+          offline_code?: string | null;
+          offline_seq_last?: number;
           organization_id: string;
           paired_at?: string | null;
           paired_by?: string | null;
@@ -1904,6 +1940,8 @@ export type Database = {
           is_active?: boolean;
           last_seen_at?: string | null;
           name?: string;
+          offline_code?: string | null;
+          offline_seq_last?: number;
           organization_id?: string;
           paired_at?: string | null;
           paired_by?: string | null;
@@ -2616,6 +2654,7 @@ export type Database = {
           eta_uuid: string | null;
           fiscal_id: string;
           id: number;
+          kind: string | null;
           message: string | null;
           new_status: Database['public']['Enums']['fiscal_status'];
           old_status: Database['public']['Enums']['fiscal_status'] | null;
@@ -2627,6 +2666,7 @@ export type Database = {
           eta_uuid?: string | null;
           fiscal_id: string;
           id?: never;
+          kind?: string | null;
           message?: string | null;
           new_status: Database['public']['Enums']['fiscal_status'];
           old_status?: Database['public']['Enums']['fiscal_status'] | null;
@@ -2638,6 +2678,7 @@ export type Database = {
           eta_uuid?: string | null;
           fiscal_id?: string;
           id?: never;
+          kind?: string | null;
           message?: string | null;
           new_status?: Database['public']['Enums']['fiscal_status'];
           old_status?: Database['public']['Enums']['fiscal_status'] | null;
@@ -2670,6 +2711,8 @@ export type Database = {
           internal_id: string;
           last_error: string | null;
           next_retry_at: string | null;
+          offline_released_at: string | null;
+          offline_sale_id: string | null;
           organization_id: string;
           payload: Json | null;
           previous_uuid: string | null;
@@ -2697,6 +2740,8 @@ export type Database = {
           internal_id: string;
           last_error?: string | null;
           next_retry_at?: string | null;
+          offline_released_at?: string | null;
+          offline_sale_id?: string | null;
           organization_id: string;
           payload?: Json | null;
           previous_uuid?: string | null;
@@ -2724,6 +2769,8 @@ export type Database = {
           internal_id?: string;
           last_error?: string | null;
           next_retry_at?: string | null;
+          offline_released_at?: string | null;
+          offline_sale_id?: string | null;
           organization_id?: string;
           payload?: Json | null;
           previous_uuid?: string | null;
@@ -2755,6 +2802,13 @@ export type Database = {
             columns: ['device_id', 'organization_id'];
             isOneToOne: false;
             referencedRelation: 'devices';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'fiscal_submissions_offline_sale_id_organization_id_fkey';
+            columns: ['offline_sale_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'offline_sales';
             referencedColumns: ['id', 'organization_id'];
           },
           {
@@ -3516,6 +3570,304 @@ export type Database = {
           },
         ];
       };
+      offline_leases: {
+        Row: {
+          branch_id: string;
+          cashier_id: string;
+          chain_head: string;
+          device_id: string;
+          expires_at: string;
+          id: string;
+          issued_at: string;
+          key_id: string;
+          max_hours: number;
+          max_lease_total: number;
+          max_sale_total: number;
+          max_sales: number;
+          next_seq: number;
+          organization_id: string;
+          revoked_at: string | null;
+          shift_id: string;
+          snapshot_id: string;
+        };
+        Insert: {
+          branch_id: string;
+          cashier_id: string;
+          chain_head?: string;
+          device_id: string;
+          expires_at: string;
+          id?: string;
+          issued_at?: string;
+          key_id: string;
+          max_hours: number;
+          max_lease_total: number;
+          max_sale_total: number;
+          max_sales: number;
+          next_seq: number;
+          organization_id: string;
+          revoked_at?: string | null;
+          shift_id: string;
+          snapshot_id: string;
+        };
+        Update: {
+          branch_id?: string;
+          cashier_id?: string;
+          chain_head?: string;
+          device_id?: string;
+          expires_at?: string;
+          id?: string;
+          issued_at?: string;
+          key_id?: string;
+          max_hours?: number;
+          max_lease_total?: number;
+          max_sale_total?: number;
+          max_sales?: number;
+          next_seq?: number;
+          organization_id?: string;
+          revoked_at?: string | null;
+          shift_id?: string;
+          snapshot_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'offline_leases_branch_id_organization_id_fkey';
+            columns: ['branch_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'branches';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'offline_leases_cashier_id_organization_id_fkey';
+            columns: ['cashier_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'offline_leases_device_id_organization_id_fkey';
+            columns: ['device_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'devices';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'offline_leases_key_id_organization_id_fkey';
+            columns: ['key_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'device_offline_keys';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'offline_leases_shift_id_organization_id_fkey';
+            columns: ['shift_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'shifts';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'offline_leases_shift_id_organization_id_fkey';
+            columns: ['shift_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_shift_expected_cash';
+            referencedColumns: ['shift_id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'offline_leases_snapshot_id_organization_id_fkey';
+            columns: ['snapshot_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'offline_snapshots';
+            referencedColumns: ['id', 'organization_id'];
+          },
+        ];
+      };
+      offline_sales: {
+        Row: {
+          branch_id: string;
+          cashier_id: string | null;
+          conflict_code: string | null;
+          content: string;
+          content_hash: string;
+          device_id: string;
+          eta_uuid: string | null;
+          fiscal_hold: string | null;
+          flags: string[];
+          id: string;
+          idempotency_key: string;
+          issued_at: string;
+          lease_id: string | null;
+          number: string;
+          organization_id: string;
+          overrides: NonNullable<Json>;
+          previous_uuid: string | null;
+          received_at: string;
+          received_by: string | null;
+          resolution_reason: string | null;
+          resolved_at: string | null;
+          resolved_by: string | null;
+          sale_id: string | null;
+          seq: number;
+          shift_id: string | null;
+          signature: string;
+          source: string;
+          status: string;
+          total: number;
+        };
+        Insert: {
+          branch_id: string;
+          cashier_id?: string | null;
+          conflict_code?: string | null;
+          content: string;
+          content_hash: string;
+          device_id: string;
+          eta_uuid?: string | null;
+          fiscal_hold?: string | null;
+          flags?: string[];
+          id?: string;
+          idempotency_key: string;
+          issued_at: string;
+          lease_id?: string | null;
+          number: string;
+          organization_id: string;
+          overrides?: NonNullable<Json>;
+          previous_uuid?: string | null;
+          received_at?: string;
+          received_by?: string | null;
+          resolution_reason?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          sale_id?: string | null;
+          seq: number;
+          shift_id?: string | null;
+          signature: string;
+          source: string;
+          status?: string;
+          total: number;
+        };
+        Update: {
+          branch_id?: string;
+          cashier_id?: string | null;
+          conflict_code?: string | null;
+          content?: string;
+          content_hash?: string;
+          device_id?: string;
+          eta_uuid?: string | null;
+          fiscal_hold?: string | null;
+          flags?: string[];
+          id?: string;
+          idempotency_key?: string;
+          issued_at?: string;
+          lease_id?: string | null;
+          number?: string;
+          organization_id?: string;
+          overrides?: NonNullable<Json>;
+          previous_uuid?: string | null;
+          received_at?: string;
+          received_by?: string | null;
+          resolution_reason?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          sale_id?: string | null;
+          seq?: number;
+          shift_id?: string | null;
+          signature?: string;
+          source?: string;
+          status?: string;
+          total?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'offline_sales_branch_id_organization_id_fkey';
+            columns: ['branch_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'branches';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'offline_sales_cashier_id_organization_id_fkey';
+            columns: ['cashier_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'employees';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'offline_sales_device_id_organization_id_fkey';
+            columns: ['device_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'devices';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'offline_sales_lease_id_organization_id_fkey';
+            columns: ['lease_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'offline_leases';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'offline_sales_sale_id_organization_id_fkey';
+            columns: ['sale_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'sales';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'offline_sales_sale_id_organization_id_fkey';
+            columns: ['sale_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_sale_balances';
+            referencedColumns: ['sale_id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'offline_sales_shift_id_organization_id_fkey';
+            columns: ['shift_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'shifts';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'offline_sales_shift_id_organization_id_fkey';
+            columns: ['shift_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'v_shift_expected_cash';
+            referencedColumns: ['shift_id', 'organization_id'];
+          },
+        ];
+      };
+      offline_snapshots: {
+        Row: {
+          branch_id: string;
+          content_hash: string;
+          created_at: string;
+          data: NonNullable<Json>;
+          id: string;
+          organization_id: string;
+        };
+        Insert: {
+          branch_id: string;
+          content_hash: string;
+          created_at?: string;
+          data: NonNullable<Json>;
+          id?: string;
+          organization_id: string;
+        };
+        Update: {
+          branch_id?: string;
+          content_hash?: string;
+          created_at?: string;
+          data?: NonNullable<Json>;
+          id?: string;
+          organization_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'offline_snapshots_branch_id_organization_id_fkey';
+            columns: ['branch_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'branches';
+            referencedColumns: ['id', 'organization_id'];
+          },
+        ];
+      };
       org_settings: {
         Row: {
           allow_negative_bank: boolean;
@@ -3533,6 +3885,11 @@ export type Database = {
           global_min_stock: number;
           installment_markup_vat: string;
           legal_referral_days: NonNullable<Json>;
+          offline_enabled: boolean;
+          offline_max_hours: number;
+          offline_max_lease_total: number;
+          offline_max_sale_total: number;
+          offline_max_sales: number;
           organization_id: string;
           overdue_warning_interval_days: number;
           prices_include_vat: boolean;
@@ -3563,6 +3920,11 @@ export type Database = {
           global_min_stock?: number;
           installment_markup_vat?: string;
           legal_referral_days?: NonNullable<Json>;
+          offline_enabled?: boolean;
+          offline_max_hours?: number;
+          offline_max_lease_total?: number;
+          offline_max_sale_total?: number;
+          offline_max_sales?: number;
           organization_id: string;
           overdue_warning_interval_days?: number;
           prices_include_vat?: boolean;
@@ -3593,6 +3955,11 @@ export type Database = {
           global_min_stock?: number;
           installment_markup_vat?: string;
           legal_referral_days?: NonNullable<Json>;
+          offline_enabled?: boolean;
+          offline_max_hours?: number;
+          offline_max_lease_total?: number;
+          offline_max_sale_total?: number;
+          offline_max_sales?: number;
           organization_id?: string;
           overdue_warning_interval_days?: number;
           prices_include_vat?: boolean;
@@ -5048,6 +5415,8 @@ export type Database = {
           quantity: number;
           quotation_id: string;
           tax_amount: number;
+          tax_class_id: string;
+          tax_rate: number;
           unit_price: number;
         };
         Insert: {
@@ -5064,6 +5433,8 @@ export type Database = {
           quantity: number;
           quotation_id: string;
           tax_amount?: number;
+          tax_class_id: string;
+          tax_rate: number;
           unit_price: number;
         };
         Update: {
@@ -5080,6 +5451,8 @@ export type Database = {
           quantity?: number;
           quotation_id?: string;
           tax_amount?: number;
+          tax_class_id?: string;
+          tax_rate?: number;
           unit_price?: number;
         };
         Relationships: [
@@ -5111,10 +5484,18 @@ export type Database = {
             referencedRelation: 'quotations';
             referencedColumns: ['id', 'organization_id'];
           },
+          {
+            foreignKeyName: 'quotation_lines_tax_class_id_organization_id_fkey';
+            columns: ['tax_class_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'tax_classes';
+            referencedColumns: ['id', 'organization_id'];
+          },
         ];
       };
       quotations: {
         Row: {
+          accepted_at: string | null;
           branch_id: string;
           created_at: string;
           created_by: string | null;
@@ -5125,7 +5506,10 @@ export type Database = {
           notes: string | null;
           number: string;
           organization_id: string;
+          prices_include_vat: boolean;
+          sent_at: string | null;
           status: Database['public']['Enums']['quotation_status'];
+          status_reason: string | null;
           subtotal: number;
           tax_total: number;
           total: number;
@@ -5134,6 +5518,7 @@ export type Database = {
           valid_until: string | null;
         };
         Insert: {
+          accepted_at?: string | null;
           branch_id: string;
           created_at?: string;
           created_by?: string | null;
@@ -5144,7 +5529,10 @@ export type Database = {
           notes?: string | null;
           number: string;
           organization_id: string;
+          prices_include_vat?: boolean;
+          sent_at?: string | null;
           status?: Database['public']['Enums']['quotation_status'];
+          status_reason?: string | null;
           subtotal?: number;
           tax_total?: number;
           total?: number;
@@ -5153,6 +5541,7 @@ export type Database = {
           valid_until?: string | null;
         };
         Update: {
+          accepted_at?: string | null;
           branch_id?: string;
           created_at?: string;
           created_by?: string | null;
@@ -5163,7 +5552,10 @@ export type Database = {
           notes?: string | null;
           number?: string;
           organization_id?: string;
+          prices_include_vat?: boolean;
+          sent_at?: string | null;
           status?: Database['public']['Enums']['quotation_status'];
+          status_reason?: string | null;
           subtotal?: number;
           tax_total?: number;
           total?: number;
@@ -8401,6 +8793,7 @@ export type Database = {
     };
     Functions: {
       accept_invite: { Args: { p_auth_user_id: string; p_token_hash: string }; Returns: Json };
+      accept_quotation: { Args: { p_id: string }; Returns: Json };
       admin_change_plan: {
         Args: { p_organization_id: string; p_plan_key: string; p_reason: string };
         Returns: undefined;
@@ -8500,6 +8893,7 @@ export type Database = {
       cancel_field_survey: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_import_job: { Args: { p_id: string }; Returns: Json };
       cancel_purchase_order: { Args: { p_id: string; p_reason: string }; Returns: Json };
+      cancel_quotation: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_stock_count: { Args: { p_count_id: string }; Returns: Json };
       cancel_stock_transfer: { Args: { p_id: string }; Returns: Json };
       close_day: {
@@ -8607,6 +9001,17 @@ export type Database = {
           p_lines: Json;
           p_notes?: string;
           p_supplier_id: string;
+        };
+        Returns: Json;
+      };
+      create_quotation: {
+        Args: {
+          p_branch_id: string;
+          p_customer_id: string;
+          p_idempotency_key: string;
+          p_lines: Json;
+          p_notes: string;
+          p_valid_until: string;
         };
         Returns: Json;
       };
@@ -8719,6 +9124,7 @@ export type Database = {
         Args: { p_branch_id?: string; p_from: string; p_to: string };
         Returns: Json;
       };
+      expire_quotations: { Args: Record<PropertyKey, never>; Returns: number };
       export_stock_movements: {
         Args: {
           p_branch_id?: string;
@@ -8792,11 +9198,14 @@ export type Database = {
       get_import_job: { Args: { p_id: string }; Returns: Json };
       get_migration_report: { Args: { p_filters?: Json }; Returns: Json };
       get_my_wallet: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_offline_sale: { Args: { p_id: string }; Returns: Json };
+      get_offline_settings: { Args: Record<PropertyKey, never>; Returns: Json };
       get_owner_dashboard: { Args: { p_branch_id?: string }; Returns: Json };
       get_product: { Args: { p_id: string }; Returns: Json };
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
       get_purchase_order: { Args: { p_id: string }; Returns: Json };
       get_purchase_return: { Args: { p_id: string }; Returns: Json };
+      get_quotation: { Args: { p_id: string }; Returns: Json };
       get_returnable_invoice: { Args: { p_invoice_id: string }; Returns: Json };
       get_sale: { Args: { p_id: string }; Returns: Json };
       get_sale_details: { Args: { p_sale_id: string }; Returns: Json };
@@ -8832,7 +9241,12 @@ export type Database = {
         Args: { p_id: string; p_note?: string; p_outcome: string };
         Returns: Json;
       };
+      import_offline_sales: { Args: { p_device_id: string; p_items: Json }; Returns: Json };
       invite_lookup: { Args: { p_token_hash: string }; Returns: Json };
+      issue_offline_lease: {
+        Args: { p_public_key: string; p_snapshot_hash?: string };
+        Returns: Json;
+      };
       jobs_claim: {
         Args: { p_limit?: number; p_types: string[]; p_worker: string };
         Returns: {
@@ -9032,6 +9446,7 @@ export type Database = {
       list_installment_policies: { Args: Record<PropertyKey, never>; Returns: Json };
       list_legal_referrals: { Args: { p_filters?: Json }; Returns: Json };
       list_migration_signoffs: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_offline_sales: { Args: { p_branch_id?: string; p_status?: string }; Returns: Json };
       list_open_supplier_invoices: { Args: { p_supplier_id: string }; Returns: Json };
       list_overdue_contracts: { Args: { p_filters?: Json }; Returns: Json };
       list_overdue_warnings: { Args: { p_filters?: Json }; Returns: Json };
@@ -9084,6 +9499,19 @@ export type Database = {
           p_offset?: number;
           p_purchase_invoice_id?: string;
           p_supplier_id?: string;
+          p_to?: string;
+        };
+        Returns: Json;
+      };
+      list_quotations: {
+        Args: {
+          p_branch_id?: string;
+          p_customer_id?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_search?: string;
+          p_status?: string;
           p_to?: string;
         };
         Returns: Json;
@@ -9207,6 +9635,11 @@ export type Database = {
           role: Database['public']['Enums']['employee_role'];
           tenant_slug: string;
         }[];
+      };
+      offline_worker_load: { Args: { p_device_id: string; p_limit?: number }; Returns: Json };
+      offline_worker_process: {
+        Args: { p_id: string; p_qr?: string; p_signature_ok: boolean; p_uuid_ok: boolean };
+        Returns: Json;
       };
       open_shift: {
         Args: {
@@ -9347,6 +9780,7 @@ export type Database = {
         Returns: Json;
       };
       reject_purchase_invoice: { Args: { p_id: string; p_reason: string }; Returns: Json };
+      reject_quotation: { Args: { p_id: string; p_reason: string }; Returns: Json };
       rename_cash_account: { Args: { p_id: string; p_name: string }; Returns: Json };
       rename_expense_category: { Args: { p_id: string; p_name: string }; Returns: Json };
       reopen_day: { Args: { p_id: string; p_reason: string }; Returns: Json };
@@ -9400,6 +9834,16 @@ export type Database = {
         Returns: Json;
       };
       resolve_device: { Args: { p_token_hash: string }; Returns: Json };
+      resolve_offline_sale: {
+        Args: {
+          p_action: string;
+          p_id: string;
+          p_reason: string;
+          p_shift_id?: string;
+          p_unit_ids?: Json;
+        };
+        Returns: Json;
+      };
       retry_fiscal_submission: { Args: { p_id: string }; Returns: Json };
       reverse_collection: {
         Args: { p_body: Json; p_id: string; p_idempotency_key: string };
@@ -9460,6 +9904,7 @@ export type Database = {
         Returns: Json;
       };
       send_purchase_order: { Args: { p_id: string }; Returns: Json };
+      send_quotation: { Args: { p_id: string }; Returns: Json };
       send_stock_transfer: { Args: { p_id: string }; Returns: Json };
       session_context: {
         Args: Record<PropertyKey, never>;
@@ -9561,6 +10006,16 @@ export type Database = {
       };
       set_expense_category_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
       set_guarantor_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
+      set_offline_settings: {
+        Args: {
+          p_enabled: boolean;
+          p_max_hours: number;
+          p_max_lease_total: string;
+          p_max_sale_total: string;
+          p_max_sales: number;
+        };
+        Returns: Json;
+      };
       set_product_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
       set_supplier_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
       set_tax_class_archived: { Args: { p_archived: boolean; p_id: string }; Returns: undefined };
@@ -9576,6 +10031,7 @@ export type Database = {
       start_full_export: { Args: { p_body: Json; p_idempotency_key: string }; Returns: Json };
       submit_field_survey: { Args: { p_body?: Json; p_id: string }; Returns: Json };
       supplier_statement: { Args: { p_from?: string; p_id: string; p_to?: string }; Returns: Json };
+      sync_offline_sales: { Args: { p_items: Json }; Returns: Json };
       unlink_customer_guarantor: {
         Args: { p_customer_id: string; p_guarantor_id: string };
         Returns: Json;
@@ -9621,6 +10077,17 @@ export type Database = {
       update_product: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
       update_purchase_invoice: { Args: { p_changes: Json; p_id: string }; Returns: Json };
       update_purchase_order: { Args: { p_changes: Json; p_id: string }; Returns: Json };
+      update_quotation_draft: {
+        Args: {
+          p_customer_id: string;
+          p_expected_updated_at: string;
+          p_id: string;
+          p_lines: Json;
+          p_notes: string;
+          p_valid_until: string;
+        };
+        Returns: Json;
+      };
       update_stock_transfer: {
         Args: { p_id: string; p_lines: Json; p_notes: string | null };
         Returns: Json;
@@ -9761,7 +10228,7 @@ export type Database = {
       po_status: 'draft' | 'sent' | 'partially_received' | 'received' | 'cancelled';
       purchase_invoice_status: 'draft' | 'pending_approval' | 'approved' | 'rejected';
       purchase_refund_mode: 'supplier_credit' | 'cash';
-      quotation_status: 'draft' | 'sent' | 'accepted' | 'expired' | 'cancelled';
+      quotation_status: 'draft' | 'sent' | 'accepted' | 'expired' | 'cancelled' | 'rejected';
       refund_method: 'cash' | 'bank_transfer' | 'store_credit' | 'contract_adjustment';
       reservation_status: 'active' | 'released' | 'fulfilled';
       return_condition: 'resellable' | 'damaged';
@@ -10030,7 +10497,7 @@ export const Constants = {
       po_status: ['draft', 'sent', 'partially_received', 'received', 'cancelled'],
       purchase_invoice_status: ['draft', 'pending_approval', 'approved', 'rejected'],
       purchase_refund_mode: ['supplier_credit', 'cash'],
-      quotation_status: ['draft', 'sent', 'accepted', 'expired', 'cancelled'],
+      quotation_status: ['draft', 'sent', 'accepted', 'expired', 'cancelled', 'rejected'],
       refund_method: ['cash', 'bank_transfer', 'store_credit', 'contract_adjustment'],
       reservation_status: ['active', 'released', 'fulfilled'],
       return_condition: ['resellable', 'damaged'],

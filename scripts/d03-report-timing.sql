@@ -1,4 +1,4 @@
--- D03 timing proof (D90, decision 10): how long public.report_receivables(...) takes (a) on the dev seed shop as
+-- D03 timing proof (D91, decision 10): how long public.report_receivables(...) takes (a) on the dev seed shop as
 -- it is and (b) after a generated data set of 20 000 open contracts (12 monthly lines of 1 000 each, so 240 000
 -- schedule lines, the first lines spread from 360 days ago to 30 days ahead) for 5 000 customers in two branches,
 -- with 150 000 paid lines (one cash payment each, profit then principal), in every grouping and the drill-down.
