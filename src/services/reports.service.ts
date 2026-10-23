@@ -1,4 +1,9 @@
-import { SalesReport, type SalesReportQuery } from '@ziadkhaled-wb/contracts';
+import {
+  ReceivablesReport,
+  SalesReport,
+  type ReceivablesQuery,
+  type SalesReportQuery,
+} from '@ziadkhaled-wb/contracts';
 import type { RequestContext } from '../middleware/requestContext';
 import { mapDbError, ServerError } from '../utils/errors';
 import { logger } from '../utils/logger';
@@ -35,4 +40,26 @@ export async function getSalesReport(
   });
   if (error) fail(error);
   return SalesReport.parse(data);
+}
+
+// D03 (D90). Receivables aging: public.report_receivables (20261031090000_d03_receivables_aging.sql).
+
+/** GET /api/reports/receivables: today's open balances, grouped, bucketed and filtered as the query says. */
+export async function getReceivablesReport(
+  ctx: RequestContext,
+  query: ReceivablesQuery,
+): Promise<ReceivablesReport> {
+  const { data, error } = await ctx.db.rpc('report_receivables', {
+    p_group_by: query.group_by,
+    p_page: query.page,
+    p_page_size: query.page_size,
+    ...(query.branch_id ? { p_branch_id: query.branch_id } : {}),
+    ...(query.collector_id ? { p_collector_id: query.collector_id } : {}),
+    ...(query.customer_id ? { p_customer_id: query.customer_id } : {}),
+    ...(query.q ? { p_q: query.q } : {}),
+    ...(query.min_days ? { p_min_days: query.min_days } : {}),
+    ...(query.sort ? { p_sort: query.sort } : {}),
+  });
+  if (error) fail(error);
+  return ReceivablesReport.parse(data);
 }

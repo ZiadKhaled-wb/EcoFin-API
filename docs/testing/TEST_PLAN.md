@@ -451,3 +451,7 @@ See [S05 plan](plans/S05.md). Covers the Done when (returning one item of an ins
 ## D02 — sales and margin report (EC-94)
 
 See [D02 plan](plans/D02.md). Covers the Done when (the report's totals match the sales and returns documents of the period for every grouping; every grouping and filter works; cost and margin only with `report.financial`; another shop's data is never reachable) and the D89 rules.
+
+## D03 — receivables aging (EC-95)
+
+See [D03 plan](plans/D03.md). Covers the Done when (the total equals the sum of the open contract balances; by customer, branch and collector, the five buckets, principal and profit, drill-down to contracts; only `report.financial`; another shop's data is never reachable) and the D90 rules.

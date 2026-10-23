@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.60.0
+
+- D03 receivables aging: in `reports.ts`, RECEIVABLES_GROUP_BY / ReceivablesGroupBy (customer, branch, collector, contract), RECEIVABLES_SORTS / ReceivablesSort, RECEIVABLES_BUCKETS / ReceivablesBucket (not_due, late_1_30, late_31_60, late_61_90, late_90_plus), RECEIVABLES_NO_COLLECTOR (`none`), RECEIVABLES_MAX_MIN_DAYS, RECEIVABLES_MAX_Q, ReceivablesQuery (strict; `collector_id` a uuid or `none`; `q` only with the customer or contract grouping, at most 100 characters; `min_days` 1-100000; page_size 1-1000), ReceivablesMeasures, ReceivablesRow (customer / collector / branch / contract references by grouping), ReceivablesBucketSplit, ReceivablesTotals (each bucket split into principal and profit), ReceivablesCheck, ReceivablesReport. Money and percentages are strings; no fee member (rule 4). No new error code.
+
 ## 0.59.0
 
 - D02 sales and margin report: new `reports.ts` with SALES_REPORT_GROUP_BY / SalesReportGroupBy (day, month, branch, employee, category, product, sale_type, payment_type), SALES_REPORT_SORTS / SalesReportSort, SALES_REPORT_COST_SORTS, SalesReportSaleType, SALES_REPORT_MAX_DAYS, SALES_REPORT_MAX_PAGE_SIZE, SALES_REPORT_DEFAULT_PAGE_SIZE, salesReportDays, SalesReportQuery (dates `YYYY-MM-DD`, at most 366 days, `category_level` leaf | top, page_size 1-1000; strict; product / category filters refused for `payment_type`), SalesReportMeasures, SalesReportRow, SalesReportTotals, SalesReportCheck, SalesReport. Money and percentages are strings; every cost-derived value is `null` without `report.financial` (`can_see_cost` false). No new error code.
