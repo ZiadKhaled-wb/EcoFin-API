@@ -451,3 +451,7 @@ See [S05 plan](plans/S05.md). Covers the Done when (returning one item of an ins
 ## D02 — sales and margin report (EC-94)
 
 See [D02 plan](plans/D02.md). Covers the Done when (the report's totals match the sales and returns documents of the period for every grouping; every grouping and filter works; cost and margin only with `report.financial`; another shop's data is never reachable) and the D89 rules.
+
+## S09 - quotations (EC-76)
+
+See [S09 plan](plans/S09.md): server pricing, draft concurrency, transitions, expiry, isolation and AR/EN print. Order conversion belongs to S10.

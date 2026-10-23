@@ -5048,6 +5048,8 @@ export type Database = {
           quantity: number;
           quotation_id: string;
           tax_amount: number;
+          tax_class_id: string;
+          tax_rate: number;
           unit_price: number;
         };
         Insert: {
@@ -5064,6 +5066,8 @@ export type Database = {
           quantity: number;
           quotation_id: string;
           tax_amount?: number;
+          tax_class_id: string;
+          tax_rate: number;
           unit_price: number;
         };
         Update: {
@@ -5080,6 +5084,8 @@ export type Database = {
           quantity?: number;
           quotation_id?: string;
           tax_amount?: number;
+          tax_class_id?: string;
+          tax_rate?: number;
           unit_price?: number;
         };
         Relationships: [
@@ -5111,10 +5117,18 @@ export type Database = {
             referencedRelation: 'quotations';
             referencedColumns: ['id', 'organization_id'];
           },
+          {
+            foreignKeyName: 'quotation_lines_tax_class_id_organization_id_fkey';
+            columns: ['tax_class_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'tax_classes';
+            referencedColumns: ['id', 'organization_id'];
+          },
         ];
       };
       quotations: {
         Row: {
+          accepted_at: string | null;
           branch_id: string;
           created_at: string;
           created_by: string | null;
@@ -5125,7 +5139,10 @@ export type Database = {
           notes: string | null;
           number: string;
           organization_id: string;
+          prices_include_vat: boolean;
+          sent_at: string | null;
           status: Database['public']['Enums']['quotation_status'];
+          status_reason: string | null;
           subtotal: number;
           tax_total: number;
           total: number;
@@ -5134,6 +5151,7 @@ export type Database = {
           valid_until: string | null;
         };
         Insert: {
+          accepted_at?: string | null;
           branch_id: string;
           created_at?: string;
           created_by?: string | null;
@@ -5144,7 +5162,10 @@ export type Database = {
           notes?: string | null;
           number: string;
           organization_id: string;
+          prices_include_vat?: boolean;
+          sent_at?: string | null;
           status?: Database['public']['Enums']['quotation_status'];
+          status_reason?: string | null;
           subtotal?: number;
           tax_total?: number;
           total?: number;
@@ -5153,6 +5174,7 @@ export type Database = {
           valid_until?: string | null;
         };
         Update: {
+          accepted_at?: string | null;
           branch_id?: string;
           created_at?: string;
           created_by?: string | null;
@@ -5163,7 +5185,10 @@ export type Database = {
           notes?: string | null;
           number?: string;
           organization_id?: string;
+          prices_include_vat?: boolean;
+          sent_at?: string | null;
           status?: Database['public']['Enums']['quotation_status'];
+          status_reason?: string | null;
           subtotal?: number;
           tax_total?: number;
           total?: number;
@@ -8401,6 +8426,7 @@ export type Database = {
     };
     Functions: {
       accept_invite: { Args: { p_auth_user_id: string; p_token_hash: string }; Returns: Json };
+      accept_quotation: { Args: { p_id: string }; Returns: Json };
       admin_change_plan: {
         Args: { p_organization_id: string; p_plan_key: string; p_reason: string };
         Returns: undefined;
@@ -8500,6 +8526,7 @@ export type Database = {
       cancel_field_survey: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_import_job: { Args: { p_id: string }; Returns: Json };
       cancel_purchase_order: { Args: { p_id: string; p_reason: string }; Returns: Json };
+      cancel_quotation: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_stock_count: { Args: { p_count_id: string }; Returns: Json };
       cancel_stock_transfer: { Args: { p_id: string }; Returns: Json };
       close_day: {
@@ -8607,6 +8634,17 @@ export type Database = {
           p_lines: Json;
           p_notes?: string;
           p_supplier_id: string;
+        };
+        Returns: Json;
+      };
+      create_quotation: {
+        Args: {
+          p_branch_id: string;
+          p_customer_id: string;
+          p_idempotency_key: string;
+          p_lines: Json;
+          p_notes: string;
+          p_valid_until: string;
         };
         Returns: Json;
       };
@@ -8719,6 +8757,7 @@ export type Database = {
         Args: { p_branch_id?: string; p_from: string; p_to: string };
         Returns: Json;
       };
+      expire_quotations: { Args: Record<PropertyKey, never>; Returns: number };
       export_stock_movements: {
         Args: {
           p_branch_id?: string;
@@ -8797,6 +8836,7 @@ export type Database = {
       get_purchase_invoice: { Args: { p_id: string }; Returns: Json };
       get_purchase_order: { Args: { p_id: string }; Returns: Json };
       get_purchase_return: { Args: { p_id: string }; Returns: Json };
+      get_quotation: { Args: { p_id: string }; Returns: Json };
       get_returnable_invoice: { Args: { p_invoice_id: string }; Returns: Json };
       get_sale: { Args: { p_id: string }; Returns: Json };
       get_sale_details: { Args: { p_sale_id: string }; Returns: Json };
@@ -9088,6 +9128,19 @@ export type Database = {
         };
         Returns: Json;
       };
+      list_quotations: {
+        Args: {
+          p_branch_id?: string;
+          p_customer_id?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_search?: string;
+          p_status?: string;
+          p_to?: string;
+        };
+        Returns: Json;
+      };
       list_sale_payment_accounts: { Args: Record<PropertyKey, never>; Returns: Json };
       list_sales_returns: { Args: { p_filters?: Json }; Returns: Json };
       list_shift_vaults: { Args: { p_branch_id: string }; Returns: Json };
@@ -9347,6 +9400,7 @@ export type Database = {
         Returns: Json;
       };
       reject_purchase_invoice: { Args: { p_id: string; p_reason: string }; Returns: Json };
+      reject_quotation: { Args: { p_id: string; p_reason: string }; Returns: Json };
       rename_cash_account: { Args: { p_id: string; p_name: string }; Returns: Json };
       rename_expense_category: { Args: { p_id: string; p_name: string }; Returns: Json };
       reopen_day: { Args: { p_id: string; p_reason: string }; Returns: Json };
@@ -9446,6 +9500,7 @@ export type Database = {
         Returns: Json;
       };
       send_purchase_order: { Args: { p_id: string }; Returns: Json };
+      send_quotation: { Args: { p_id: string }; Returns: Json };
       send_stock_transfer: { Args: { p_id: string }; Returns: Json };
       session_context: {
         Args: Record<PropertyKey, never>;
@@ -9607,6 +9662,17 @@ export type Database = {
       update_product: { Args: { p_changes: Json; p_id: string }; Returns: undefined };
       update_purchase_invoice: { Args: { p_changes: Json; p_id: string }; Returns: Json };
       update_purchase_order: { Args: { p_changes: Json; p_id: string }; Returns: Json };
+      update_quotation_draft: {
+        Args: {
+          p_customer_id: string;
+          p_expected_updated_at: string;
+          p_id: string;
+          p_lines: Json;
+          p_notes: string;
+          p_valid_until: string;
+        };
+        Returns: Json;
+      };
       update_stock_transfer: {
         Args: { p_id: string; p_lines: Json; p_notes: string | null };
         Returns: Json;
@@ -9747,7 +9813,7 @@ export type Database = {
       po_status: 'draft' | 'sent' | 'partially_received' | 'received' | 'cancelled';
       purchase_invoice_status: 'draft' | 'pending_approval' | 'approved' | 'rejected';
       purchase_refund_mode: 'supplier_credit' | 'cash';
-      quotation_status: 'draft' | 'sent' | 'accepted' | 'expired' | 'cancelled';
+      quotation_status: 'draft' | 'sent' | 'accepted' | 'expired' | 'cancelled' | 'rejected';
       refund_method: 'cash' | 'bank_transfer' | 'store_credit' | 'contract_adjustment';
       reservation_status: 'active' | 'released' | 'fulfilled';
       return_condition: 'resellable' | 'damaged';
@@ -10016,7 +10082,7 @@ export const Constants = {
       po_status: ['draft', 'sent', 'partially_received', 'received', 'cancelled'],
       purchase_invoice_status: ['draft', 'pending_approval', 'approved', 'rejected'],
       purchase_refund_mode: ['supplier_credit', 'cash'],
-      quotation_status: ['draft', 'sent', 'accepted', 'expired', 'cancelled'],
+      quotation_status: ['draft', 'sent', 'accepted', 'expired', 'cancelled', 'rejected'],
       refund_method: ['cash', 'bank_transfer', 'store_credit', 'contract_adjustment'],
       reservation_status: ['active', 'released', 'fulfilled'],
       return_condition: ['resellable', 'damaged'],

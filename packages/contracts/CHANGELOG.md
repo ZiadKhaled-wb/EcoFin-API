@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.60.0 - S09 quotations
+
+Quotation request/response schemas, decimal line prices, frozen tax snapshots and quotation error codes.
+
 ## 0.59.0
 
 - D02 sales and margin report: new `reports.ts` with SALES_REPORT_GROUP_BY / SalesReportGroupBy (day, month, branch, employee, category, product, sale_type, payment_type), SALES_REPORT_SORTS / SalesReportSort, SALES_REPORT_COST_SORTS, SalesReportSaleType, SALES_REPORT_MAX_DAYS, SALES_REPORT_MAX_PAGE_SIZE, SALES_REPORT_DEFAULT_PAGE_SIZE, salesReportDays, SalesReportQuery (dates `YYYY-MM-DD`, at most 366 days, `category_level` leaf | top, page_size 1-1000; strict; product / category filters refused for `payment_type`), SalesReportMeasures, SalesReportRow, SalesReportTotals, SalesReportCheck, SalesReport. Money and percentages are strings; every cost-derived value is `null` without `report.financial` (`can_see_cost` false). No new error code.

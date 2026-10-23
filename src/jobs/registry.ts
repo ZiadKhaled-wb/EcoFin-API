@@ -18,6 +18,7 @@ import { etaJobHandlers } from '../eta/jobs';
 import { etaRuntime } from '../eta/runtime';
 import { supabaseEtaStore } from '../eta/store';
 import { dayCheck } from './handlers/dayCheck';
+import { quotationExpire } from './handlers/quotationExpire';
 import { exportCleanup } from './handlers/exportCleanup';
 import { exportFull, pgSnapshot } from './handlers/exportFull';
 import { importApply } from './handlers/importApply';
@@ -39,6 +40,7 @@ export function jobHandlers(db: SupabaseClient, logger: Logger): Record<string, 
     'ledger.reconcile': ledgerReconcile(db),
     'installments.overdue': overdueCheck(db),
     'day.check': dayCheck(db),
+    'quotation.expire': quotationExpire(db),
     // M01 (D83): queued by public.queue_import, not daily.
     'import.apply': importApply(db),
     // M03 (D86): queued by public.start_full_export; export.cleanup is daily.
@@ -50,6 +52,7 @@ export function jobHandlers(db: SupabaseClient, logger: Logger): Record<string, 
 
 /** Local time in each shop's own time zone (organizations.timezone, Africa/Cairo by default). */
 export const DAILY_JOBS: readonly DailyJob[] = [
+  { type: 'quotation.expire', localTime: '00:15' },
   // Before the shop's day starts, so the morning's overdue list is ready.
   { type: 'installments.overdue', localTime: '00:30' },
   { type: 'ledger.reconcile', localTime: '03:00' },

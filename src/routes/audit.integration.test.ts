@@ -13,6 +13,8 @@ import {
   ErrorResponse,
   PAIRING_CODE_ALPHABET,
   PAIRING_CODE_LENGTH,
+  Quotation,
+  QuotationCreated,
 } from '@ziadkhaled-wb/contracts';
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
@@ -667,7 +669,88 @@ M01 Audit ${STAMP}-${ipCounter}
       }
     }
   }
+  async function quotationFixture(sent = false) {
+    const owner = await login('owner.one@ecotech.test');
+    const token = owner.accessToken;
+    const body = {
+      branch_id: BR1,
+      customer_id: await newCustomer(token),
+      valid_until: null,
+      notes: null,
+      lines: [
+        {
+          product_id: null,
+          description: 'Audit custom item',
+          quantity: 1,
+          unit_price: '114.00',
+          discount_amount: '0',
+        },
+      ],
+    };
+    const created = await send('post', '/api/quotations', {
+      token,
+      body,
+      key: 'f07-s09-' + STAMP + '-' + ipCounter,
+    });
+    expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+    const { id } = QuotationCreated.parse(created.res.body);
+    if (sent)
+      expect((await send('post', '/api/quotations/' + id + '/send', { token })).res.status).toBe(
+        200,
+      );
+    const read = await send('get', '/api/quotations/' + id, { token });
+    return { created, token, body, quote: Quotation.parse(read.res.body) };
+  }
   const drivers: Record<string, () => Promise<{ sent: Sent; org: string; status?: number }>> = {
+    'POST /api/quotations': async () => ({
+      sent: (await quotationFixture()).created,
+      org: SHOP_ONE,
+      status: 201,
+    }),
+    'PUT /api/quotations/:id': async () => {
+      const f = await quotationFixture();
+      return {
+        sent: await send('put', '/api/quotations/' + f.quote.id, {
+          token: f.token,
+          body: { ...f.body, notes: 'Updated quote', expected_updated_at: f.quote.updated_at },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/quotations/:id/send': async () => {
+      const f = await quotationFixture();
+      return {
+        sent: await send('post', '/api/quotations/' + f.quote.id + '/send', { token: f.token }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/quotations/:id/accept': async () => {
+      const f = await quotationFixture(true);
+      return {
+        sent: await send('post', '/api/quotations/' + f.quote.id + '/accept', { token: f.token }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/quotations/:id/reject': async () => {
+      const f = await quotationFixture(true);
+      return {
+        sent: await send('post', '/api/quotations/' + f.quote.id + '/reject', {
+          token: f.token,
+          body: { reason: 'Customer declined' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/quotations/:id/cancel': async () => {
+      const f = await quotationFixture();
+      return {
+        sent: await send('post', '/api/quotations/' + f.quote.id + '/cancel', {
+          token: f.token,
+          body: { reason: 'No longer needed' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
     'POST /api/day-closes': async () => {
       const owner = await login('owner.one@ecotech.test');
       return { sent: await k04Close(owner.accessToken), org: SHOP_ONE, status: 201 };
