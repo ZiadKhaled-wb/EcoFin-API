@@ -42,6 +42,7 @@ INSERT INTO public.customers(organization_id, full_name, phones, credit_limit, s
   FROM generate_series(1, 5000) g;
 CREATE TABLE p.cu AS SELECT row_number() OVER (ORDER BY id) AS n, id FROM public.customers
   WHERE organization_id = 'd1000000-0000-0000-0000-000000000001' AND full_name LIKE 'Perf debtor %';
+GRANT SELECT ON p.cu TO authenticated;
 INSERT INTO public.installment_policies(organization_id, version, max_months, markup_tiers, grace_days)
   VALUES ('d1000000-0000-0000-0000-000000000001', 9003, 24, '[{"pct":20,"up_to_months":24}]', 3);
 INSERT INTO public.cash_accounts(organization_id, name, kind, branch_id)
