@@ -458,3 +458,7 @@ See [S08 plan](plans/S08.md). Covers the Done when (an offline cash sale, the pa
 ## S09 - quotations (EC-76)
 
 See [S09 plan](plans/S09.md): server pricing, draft concurrency, transitions, expiry, isolation and AR/EN print. Order conversion belongs to S10.
+
+## D03 — receivables aging (EC-95)
+
+See [D03 plan](plans/D03.md). Covers the Done when (the total equals the sum of the open contract balances; by customer, branch and collector, the five buckets, principal and profit, drill-down to contracts; only `report.financial`; another shop's data is never reachable) and the D91 rules.

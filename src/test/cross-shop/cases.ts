@@ -6643,3 +6643,46 @@ crossShopCase({
     h.expect(await h.auditRowsFrom(SHOP_B, foreign.ip)).toBe(0);
   },
 });
+
+// D03 (D91). Receivables aging: a foreign shop header is refused, an organization id in the query is refused
+// (strict schema), and another shop's branch, collector (an employee) or customer is not found; a shop's report
+// never carries the other shop's balances.
+crossShopCase({
+  method: 'GET',
+  path: '/api/reports/receivables',
+  name: 'the receivables aging refuses a foreign header, an org id and ids of another shop',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const foreign = await h.call('GET', '/api/reports/receivables', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      query: 'group_by=customer',
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('GET', '/api/reports/receivables', {
+      token: a.accessToken,
+      query: `group_by=customer&organization_id=${SHOP_B}`,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const customer = await shopBCustomer(h, 'receivables');
+    for (const [query, code] of [
+      [`group_by=customer&branch_id=${SHOP_B_BR1}`, 'BRANCH_NOT_FOUND'],
+      [`group_by=customer&collector_id=${CASHIER_B}`, 'EMPLOYEE_NOT_FOUND'],
+      [`group_by=contract&customer_id=${customer.id}`, 'CUSTOMER_NOT_FOUND'],
+    ] as const) {
+      const other = await h.call('GET', '/api/reports/receivables', {
+        token: a.accessToken,
+        query,
+      });
+      h.expect(other.res.status, query).toBe(404);
+      h.expect(h.code(other.res), query).toBe(code);
+    }
+    const mine = await h.call('GET', '/api/reports/receivables', {
+      token: a.accessToken,
+      query: `group_by=customer&branch_id=${SHOP_A_BR1}`,
+    });
+    h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+    const rows = (mine.res.body as { rows: { key: string }[] }).rows;
+    h.expect(rows.some((r) => r.key === customer.id)).toBe(false);
+  },
+});

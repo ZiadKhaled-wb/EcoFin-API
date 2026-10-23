@@ -9784,6 +9784,20 @@ export type Database = {
       rename_cash_account: { Args: { p_id: string; p_name: string }; Returns: Json };
       rename_expense_category: { Args: { p_id: string; p_name: string }; Returns: Json };
       reopen_day: { Args: { p_id: string; p_reason: string }; Returns: Json };
+      report_receivables: {
+        Args: {
+          p_branch_id?: string;
+          p_collector_id?: string;
+          p_customer_id?: string;
+          p_group_by: string;
+          p_min_days?: number;
+          p_page?: number;
+          p_page_size?: number;
+          p_q?: string;
+          p_sort?: string;
+        };
+        Returns: Json;
+      };
       report_sales: {
         Args: {
           p_branch_id?: string;

@@ -3244,6 +3244,27 @@ export const openApiSpec = {
                 responses: { 200: { description: 'SalesReport' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
             },
         },
+        '/api/reports/receivables': {
+            get: {
+                tags: ['Reports'],
+                summary: 'Receivables aging: who owes the shop money today and how late (report.financial)',
+                description: 'D03 (D91). The open installment balances today (the shop\'s date): current schedule lines of active or rescheduled contracts, grouped by customer, the contract\'s selling branch, the customer\'s current collector (key none = no collector) or contract (the drill-down). Each row has outstanding, principal, profit and the buckets not due (not yet due, due today or inside the policy\'s grace days), 1-30, 31-60, 61-90 and over 90 days late (days counted from the due date, as the overdue list); no fees (rule 4). Every number is a SQL aggregate sent as a string. Totals are summed per contract; check is the rows of all pages minus the totals (must be 0), with principal + profit and the buckets adding up to the outstanding. Filters: branch, collector (uuid or none), customer, q (customer and contract groupings), min_days. Closed contracts (completed, written off, returned) are out. Works in an expired shop. BRANCH_NOT_FOUND, BRANCH_DENIED, EMPLOYEE_NOT_FOUND, CUSTOMER_NOT_FOUND (another shop\'s ids too).',
+                security: [{ bearerAuth: [] }],
+                parameters: [
+                    { $ref: '#/components/parameters/OrgId' },
+                    { name: 'group_by', in: 'query', required: true, schema: { type: 'string', enum: ['customer', 'branch', 'collector', 'contract'] } },
+                    { name: 'branch_id', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'collector_id', in: 'query', required: false, schema: { type: 'string', description: 'An employee id or none' } },
+                    { name: 'customer_id', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'q', in: 'query', required: false, schema: { type: 'string', maxLength: 100 } },
+                    { name: 'min_days', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 100000 } },
+                    { name: 'sort', in: 'query', required: false, schema: { type: 'string', enum: ['outstanding_desc', 'outstanding_asc', 'overdue_desc', 'late_90_plus_desc', 'max_days_late_desc', 'key_asc'] } },
+                    { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+                    { name: 'page_size', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 1000, default: 50 } },
+                ],
+                responses: { 200: { description: 'ReceivablesReport' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
         '/api/day-closes/{id}/reopen': {
             post: {
                 tags: ['Cash'],

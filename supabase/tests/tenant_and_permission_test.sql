@@ -953,7 +953,9 @@ INSERT INTO t.denial VALUES
  ('send_quotation','zz_s09_05_send','quotation.manage',$q$SELECT public.send_quotation((SELECT id FROM t.s09_docs WHERE tag='main'))$q$),
  ('accept_quotation','zz_s09_06_accept','quotation.manage',$q$SELECT public.accept_quotation((SELECT id FROM t.s09_docs WHERE tag='main'))$q$),
  ('reject_quotation','zz_s09_07_reject','quotation.manage',$q$SELECT public.reject_quotation((SELECT id FROM t.s09_docs WHERE tag='reject'),'Customer declined')$q$),
- ('cancel_quotation','zz_s09_08_cancel','quotation.manage',$q$SELECT public.cancel_quotation((SELECT id FROM t.s09_docs WHERE tag='cancel'),'Customer cancelled')$q$);
+ ('cancel_quotation','zz_s09_08_cancel','quotation.manage',$q$SELECT public.cancel_quotation((SELECT id FROM t.s09_docs WHERE tag='cancel'),'Customer cancelled')$q$),
+ -- D03: the receivables aging needs report.financial (a cashier has no such key).
+ ('report_receivables','zz_d03_1_report','report.financial',$q$SELECT public.report_receivables('customer')$q$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

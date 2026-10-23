@@ -342,7 +342,7 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/quotations/:id/cancel',
       ]),
     );
-    expect(keys).toHaveLength(311);
+    expect(keys).toHaveLength(312);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

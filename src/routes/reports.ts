@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { SalesReportQuery } from '@ziadkhaled-wb/contracts';
+import { ReceivablesQuery, SalesReportQuery } from '@ziadkhaled-wb/contracts';
 import { authenticate } from '../middleware/auth';
 import { loadRequestContext } from '../middleware/requestContext';
 import { authenticatedOnly } from '../middleware/permissions';
@@ -17,5 +17,14 @@ router.get(
   authenticatedOnly(),
   validate({ query: SalesReportQuery }),
   asyncHandler(controller.sales),
+);
+// D03 (D91). Receivables aging: the function checks report.financial in SQL the same way.
+router.get(
+  '/receivables',
+  authenticate,
+  loadRequestContext,
+  authenticatedOnly(),
+  validate({ query: ReceivablesQuery }),
+  asyncHandler(controller.receivables),
 );
 export default router;
