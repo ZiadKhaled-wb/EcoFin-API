@@ -58,3 +58,5 @@ Branch-scoped writes call `app.require_branch_access`; it also rejects inactive 
 
 Module-gated features call `app.require_module('<key>')` in SQL or `requireModule` in the API; plan limits are enforced by triggers, so don't re-check them.
 Tenant from token only · decimal money · stock/cash only through ledger inserts · one transaction per multi-table write · idempotency keys · no editing issued documents · types from shared contracts · permission + audit on every write · schema only through new migrations · no hard-coded UI text. Full list: the `ecotech-build` skill.
+
+Any new POS write path must state how it behaves offline. Offline sales are posted only by `app.offline_process`.

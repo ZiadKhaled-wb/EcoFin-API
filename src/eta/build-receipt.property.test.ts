@@ -9,7 +9,7 @@ import {
 } from '@ziadkhaled-wb/contracts';
 import { expect, it } from 'vitest';
 import { buildReceipt, type ReceiptSource } from './build-receipt';
-import { toJson } from './serialize';
+import { toJson } from '@ziadkhaled-wb/contracts';
 import { receiptUuid, type HasReceiptHeader } from './uuid';
 import { parseExactJson } from '../test/eta-json';
 

@@ -321,7 +321,28 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/returns/:id/receipt-prints',
       ]),
     );
-    expect(keys).toHaveLength(294);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'POST /api/offline/lease',
+        'POST /api/offline/sync',
+        'GET /api/offline/sales',
+        'GET /api/offline/sales/:id',
+        'POST /api/offline/sales/:id/resolve',
+        'POST /api/offline/import',
+        'GET /api/offline/settings',
+        'PUT /api/offline/settings',
+        'GET /api/health',
+        'GET /api/quotations',
+        'GET /api/quotations/:id',
+        'POST /api/quotations',
+        'PUT /api/quotations/:id',
+        'POST /api/quotations/:id/send',
+        'POST /api/quotations/:id/accept',
+        'POST /api/quotations/:id/reject',
+        'POST /api/quotations/:id/cancel',
+      ]),
+    );
+    expect(keys).toHaveLength(311);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

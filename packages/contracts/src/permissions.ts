@@ -110,6 +110,8 @@ export const PERMISSIONS = [
     description: 'See overdue contracts, warnings and legal referrals',
   },
   { key: 'overdue.handle', module: 'installments', description: 'Mark overdue warnings handled' },
+  // S08 (EC-75): the manager's review of offline sales.
+  { key: 'offline.resolve', module: 'sales', description: 'Review and resolve offline sales' },
 ] as const;
 
 export type PermissionDef = (typeof PERMISSIONS)[number];
@@ -179,6 +181,7 @@ export const PERMISSION_KEYS = [
   'collection.reverse',
   'overdue.view',
   'overdue.handle',
+  'offline.resolve',
 ] as const;
 
 export const PermissionKey = z.enum(PERMISSION_KEYS);
@@ -262,6 +265,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Readonly<Record<EmployeeRole, readonly Pe
     'legal.view',
     'overdue.view',
     'overdue.handle',
+    'offline.resolve',
   ],
   CASHIER: [
     'sale.create',

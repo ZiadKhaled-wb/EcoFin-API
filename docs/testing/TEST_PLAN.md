@@ -451,3 +451,10 @@ See [S05 plan](plans/S05.md). Covers the Done when (returning one item of an ins
 ## D02 — sales and margin report (EC-94)
 
 See [D02 plan](plans/D02.md). Covers the Done when (the report's totals match the sales and returns documents of the period for every grouping; every grouping and filter works; cost and margin only with `report.financial`; another shop's data is never reachable) and the D89 rules.
+
+## S08 — offline cash sales (EC-75)
+
+See [S08 plan](plans/S08.md). Covers the Done when (an offline cash sale, the page closed and reopened offline, then synced and replayed twice: one sale, one stock movement per line and one fiscal row accepted once by the fake ETA) and D1–D16: the lease, signed contents, receive and chain, the worker and fiscal release, manager resolution, import, the PIN and the PWA. Tests U1–U6, W1–W10, S1–S21, I1–I10, E1–E5 (E in EcoFin-Web `e2e/s08-offline.spec.ts`, Playwright project `offline`).
+## S09 - quotations (EC-76)
+
+See [S09 plan](plans/S09.md): server pricing, draft concurrency, transitions, expiry, isolation and AR/EN print. Order conversion belongs to S10.

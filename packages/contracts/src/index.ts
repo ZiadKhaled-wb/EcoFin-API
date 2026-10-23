@@ -1,4 +1,4 @@
-export const CONTRACTS_VERSION = '0.59.0';
+export const CONTRACTS_VERSION = '0.61.0';
 
 export * from './common.js';
 export * from './money.js';
@@ -56,3 +56,12 @@ export * from './warranty.js';
 export * from './eta.js';
 export * from './fiscal.js';
 export * from './devices.js';
+
+// S08: T02's receipt builder, serializer and QR text (moved here so the POS builds the same
+// receipt offline), and the offline sales protocol.
+export * from './eta/serialize.js';
+export * from './eta/receipt.js';
+export * from './eta/qr.js';
+export * from './eta/json.js';
+export * from './offline.js';
+export * from './quotations.js';

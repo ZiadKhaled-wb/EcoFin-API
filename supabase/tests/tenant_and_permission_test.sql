@@ -912,6 +912,48 @@ INSERT INTO t.denial VALUES
  ('reverse_migration_batch','zz_m02_4_reverse','import.data',$q$SELECT public.reverse_migration_batch(t.m02_job('opening_contracts','rev'),'TEST-1 denial')$q$),
  -- D02: the sales report needs report.view (a cashier has no such key).
  ('report_sales','zz_d02_1_report','report.view',$q$SELECT public.report_sales(DATE '2026-09-01',DATE '2026-09-30','month')$q$);
+-- S08: offline sales. The settings first (offline on); the owner's lease and sync come from the device
+-- of the owner's open shift (ETA is off for the denial shop by then); an unreadable item is answered
+-- item by item; a stored conflict of the denial shop is listed, read and accepted.
+INSERT INTO public.offline_sales (organization_id, branch_id, device_id, seq, number, idempotency_key, issued_at,
+                                  content, content_hash, signature, total, source, status, conflict_code)
+SELECT 'd1000000-0000-0000-0000-000000000001', 'd2000000-0000-0000-0000-000000000011', d.id, 1, 'OFF-D9-000001',
+       'denial-s08-offline', now(), x.c, encode(sha256(convert_to(x.c, 'UTF8')), 'hex'), repeat('A', 86) || '==',
+       1.00, 'sync', 'conflict', 'PRICE_MISMATCH'
+FROM (SELECT d.id FROM public.devices d WHERE d.organization_id = 'd1000000-0000-0000-0000-000000000001'
+      ORDER BY d.created_at, d.id LIMIT 1) d,
+     (SELECT jsonb_build_object('lines', jsonb_build_array(jsonb_build_object(
+                 'product_id', (SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-PH'),
+                 'unit_id', NULL, 'quantity', 1, 'unit_price', '1.00', 'tax_rate', '14.00', 'tax_amount', '0.12', 'line_total', '1.00')),
+             'subtotal', '1.00', 'tax_total', '0.12', 'total', '1.00',
+             'payments', jsonb_build_array(jsonb_build_object('method', 'cash', 'amount', '1.00', 'tendered', '1.00', 'change', '0.00')))::text AS c) x;
+INSERT INTO t.denial VALUES
+ ('set_offline_settings','zz_s08_1_settings_set','org.settings_manage',$q$SELECT public.set_offline_settings(true,'20000.00',12,100,'200000.00')$q$),
+ ('get_offline_settings','zz_s08_2_settings_get','org.settings_manage',$q$SELECT public.get_offline_settings()$q$),
+ ('issue_offline_lease','zz_s08_3_lease','sale.create',$q$SELECT public.issue_offline_lease('MFkw'||repeat('M',120),NULL)$q$),
+ ('sync_offline_sales','zz_s08_4_sync','sale.create',$q$SELECT public.sync_offline_sales(jsonb_build_array(jsonb_build_object('content','{}','signature',repeat('A',86)||'==')))$q$),
+ ('list_offline_sales','zz_s08_5_list','offline.resolve',$q$SELECT public.list_offline_sales(NULL,NULL)$q$),
+ ('get_offline_sale','zz_s08_6_get','offline.resolve',$q$SELECT public.get_offline_sale((SELECT id FROM public.offline_sales WHERE idempotency_key='denial-s08-offline'))$q$),
+ ('resolve_offline_sale','zz_s08_7_resolve','offline.resolve',$q$SELECT public.resolve_offline_sale((SELECT id FROM public.offline_sales WHERE idempotency_key='denial-s08-offline'),'accept','TEST-1 denial')$q$),
+ ('import_offline_sales','zz_s08_8_import','offline.resolve',$q$SELECT public.import_offline_sales((SELECT device_id FROM public.offline_sales WHERE idempotency_key='denial-s08-offline'),jsonb_build_array(jsonb_build_object('content','{}','signature',repeat('A',86)||'==')))$q$);
+-- S09: valid fixtures for the generic denial/owner-success matrix.
+CREATE TABLE t.s09_docs(tag text PRIMARY KEY,id uuid);
+GRANT SELECT ON t.s09_docs TO authenticated;
+SELECT t.as_user('d0000000-0000-0000-0000-000000000011','d1000000-0000-0000-0000-000000000001');
+INSERT INTO t.s09_docs SELECT tag,(public.create_quotation('d2000000-0000-0000-0000-000000000011',
+  (SELECT id FROM public.customers WHERE organization_id='d1000000-0000-0000-0000-000000000001' LIMIT 1),NULL,NULL,
+  '[{"description":"Custom quotation item","quantity":1,"unit_price":"114"}]','denial-s09-'||tag)->>'id')::uuid
+  FROM (VALUES('main'),('reject'),('cancel')) tags(tag);
+SELECT public.send_quotation(id) FROM t.s09_docs WHERE tag='reject';
+INSERT INTO t.denial VALUES
+ ('create_quotation','zz_s09_01_create','quotation.manage',$q$SELECT public.create_quotation('d2000000-0000-0000-0000-000000000011',NULL,NULL,NULL,'[{"description":"Item","quantity":1,"unit_price":"114"}]','denial-s09-main')$q$),
+ ('list_quotations','zz_s09_02_list','quotation.manage',$q$SELECT public.list_quotations()$q$),
+ ('get_quotation','zz_s09_03_get','quotation.manage',$q$SELECT public.get_quotation((SELECT id FROM t.s09_docs WHERE tag='main'))$q$),
+ ('update_quotation_draft','zz_s09_04_update','quotation.manage',$q$SELECT public.update_quotation_draft((SELECT id FROM t.s09_docs WHERE tag='main'),(public.get_quotation((SELECT id FROM t.s09_docs WHERE tag='main'))->>'customer_id')::uuid,NULL,NULL,'[{"description":"Updated","quantity":1,"unit_price":"114"}]',(public.get_quotation((SELECT id FROM t.s09_docs WHERE tag='main'))->>'updated_at')::timestamptz)$q$),
+ ('send_quotation','zz_s09_05_send','quotation.manage',$q$SELECT public.send_quotation((SELECT id FROM t.s09_docs WHERE tag='main'))$q$),
+ ('accept_quotation','zz_s09_06_accept','quotation.manage',$q$SELECT public.accept_quotation((SELECT id FROM t.s09_docs WHERE tag='main'))$q$),
+ ('reject_quotation','zz_s09_07_reject','quotation.manage',$q$SELECT public.reject_quotation((SELECT id FROM t.s09_docs WHERE tag='reject'),'Customer declined')$q$),
+ ('cancel_quotation','zz_s09_08_cancel','quotation.manage',$q$SELECT public.cancel_quotation((SELECT id FROM t.s09_docs WHERE tag='cancel'),'Customer cancelled')$q$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

@@ -1,6 +1,7 @@
 \ir helpers/test4_setup.sql
 \ir helpers/test4_snapshot.sql
 CREATE TABLE t.key_functions(signature text PRIMARY KEY);
+INSERT INTO t.key_functions VALUES ('public.create_quotation(uuid,uuid,date,text,jsonb,text)');
 INSERT INTO t.key_functions VALUES ('public.post_purchase_return(uuid,text,text,jsonb,text,uuid)'),
 ('public.admin_record_subscription_payment(uuid,numeric,date,date,text,boolean,uuid)'),
 ('public.post_stock_adjustment(uuid,text,text,jsonb,text)'),

@@ -13,7 +13,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import express, { type Request, type Response } from 'express';
 import { receiptUuid, type HasReceiptHeader } from '../eta/uuid';
-import type { EtaObject } from '../eta/serialize';
+import type { EtaObject } from '@ziadkhaled-wb/contracts';
 import { parseExactJson } from './eta-json';
 
 export interface FakeEtaCredentials {

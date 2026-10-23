@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseExactJson } from '../test/eta-json';
-import { cleanText, dec, EtaDecimal, serialize, toJson } from './serialize';
+import { cleanText, dec, EtaDecimal, serialize, toJson } from '@ziadkhaled-wb/contracts';
 
 // The SDK's JSON read the way the ETA reads it: every bare number keeps its text.
 const parseExact = parseExactJson;

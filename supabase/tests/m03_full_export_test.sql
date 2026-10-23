@@ -61,7 +61,9 @@ CREATE TABLE t.secret_ok(col text PRIMARY KEY,reason text NOT NULL);
 INSERT INTO t.secret_ok VALUES
  ('idempotency_key','the caller''s own retry key, not a credential'),
  ('permission_key','a permission name'),('feature_key','a feature name'),('plan_key','a plan name'),
- ('must_change_password','a flag, not a password'),('pairing_expires_at','a timestamp, not the code');
+ ('must_change_password','a flag, not a password'),('pairing_expires_at','a timestamp, not the code'),
+ ('content_hash','S08: a hash of exported content, restored with it'),('public_key','S08: a public key, not a secret'),
+ ('key_id','S08: the id of a public key');
 SELECT t.expect('no secret-looking column leaves the database (excluded, or allowed with a reason)',
   NOT EXISTS (SELECT 1 FROM unnest(app.export_tables()) x, unnest(app.export_columns(x)) c
               WHERE c ~* 'token|secret|password|hash|key|pairing' AND c NOT IN (SELECT col FROM t.secret_ok)),

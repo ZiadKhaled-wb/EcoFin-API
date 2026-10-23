@@ -23,6 +23,8 @@ export const PUBLIC_ROUTES: readonly string[] = [
   'POST /api/auth/password-reset/lookup',
   'POST /api/auth/password-reset/complete',
   'GET /health',
+  // S08: the POS's connectivity check; no session, no database.
+  'GET /api/health',
   'POST /api/auth/login',
   'POST /api/auth/refresh',
   'POST /api/auth/forgot-password',
@@ -76,6 +78,11 @@ export interface CrossShopHarness {
   ): Promise<{ id: string; token: string }>;
   /** audit_log rows in `orgId` written from `ip` since its latest call (service-role read, test only). */
   auditRowsFrom(orgId: string, ip: string): Promise<number>;
+  /**
+   * S08: runs the offline worker's checks and processing for a device's received sales (service
+   * role, test only), so the shift they belong to can close.
+   */
+  processOffline(deviceId: string): Promise<void>;
   /** An employee's permission overrides, branch ids and active flag (service-role read, test only). */
   accessOf(
     employeeId: string,

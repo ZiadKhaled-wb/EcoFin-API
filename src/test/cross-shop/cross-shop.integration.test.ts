@@ -11,6 +11,8 @@ import { createApp } from '../../app';
 import { getEnv } from '../../utils/env';
 import { registeredCases, type CrossShopHarness } from './harness';
 import { DEVICE_TOKEN_HEADER, pairTestDevice } from '../posDevice';
+import { etaHosts } from '../../eta/config';
+import { supabaseOfflineStore, verifyRow } from '../../offline/process';
 import './cases';
 
 const RUN = process.env['RUN_INTEGRATION'] === '1';
@@ -80,6 +82,14 @@ describe.skipIf(!RUN)('F05 cross-shop suite against local Supabase', () => {
           .gte('created_at', ipSince.get(ip) ?? new Date(0).toISOString());
         if (error) throw new Error(error.message);
         return count ?? 0;
+      },
+      async processOffline(deviceId) {
+        const store = supabaseOfflineStore(service);
+        const hosts = etaHosts(env);
+        for (const row of await store.loadReceived(deviceId, 50)) {
+          const checks = verifyRow(row, hosts);
+          await store.process(row.id, checks.signatureOk, checks.uuidOk, checks.qr);
+        }
       },
       async accessOf(employeeId) {
         const [o, b, e] = await Promise.all([
