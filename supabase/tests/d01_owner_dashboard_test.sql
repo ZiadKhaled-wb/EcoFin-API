@@ -361,8 +361,10 @@ SELECT t.expect('sales: main 4 sales, second 1 sale of 200, third none',
   AND t.doc('o-third')->'tiles'->'sales_today'->>'count'='0' AND t.doc('o-third')->'tiles'->'sales_today'->>'total'='0.00');
 SELECT t.expect('sales: shop b''s 999 sale and yesterday''s 70 are not counted anywhere',
   t.doc('o-all')->'tiles'->'sales_today'->>'total'<>'1094.00' AND (t.doc('o-all')->'tiles'->'sales_today'->>'total')::numeric=25000);
-SELECT t.expect('sales: K04''s paid by method for the same sales (its sales still count the voided bank sale of 100)',
-  (t.doc('k04-all')->'main'->'paid_by_method'->>'bank_transfer')::numeric - 100 = (t.doc('o-main')->'tiles'->'sales_today'->'paid_by_method'->>'bank_transfer')::numeric
+SELECT t.expect('sales: K04''s count, total, paid by method and on contract equal the tile (both leave the voided bank sale of 100 out, D94)',
+  (t.doc('k04-all')->'main'->>'count')::int = (t.doc('o-main')->'tiles'->'sales_today'->>'count')::int
+  AND (t.doc('k04-all')->'main'->>'total')::numeric = (t.doc('o-main')->'tiles'->'sales_today'->>'total')::numeric
+  AND (t.doc('k04-all')->'main'->'paid_by_method'->>'bank_transfer')::numeric = (t.doc('o-main')->'tiles'->'sales_today'->'paid_by_method'->>'bank_transfer')::numeric
   AND (t.doc('k04-all')->'main'->'paid_by_method'->>'cash')::numeric = (t.doc('o-main')->'tiles'->'sales_today'->'paid_by_method'->>'cash')::numeric
   AND (t.doc('k04-all')->'main'->>'on_contract')::numeric = (t.doc('o-main')->'tiles'->'sales_today'->>'on_contract')::numeric
   AND (t.doc('k04-all')->'second'->>'total')::numeric = (t.doc('o-second')->'tiles'->'sales_today'->>'total')::numeric,

@@ -107,7 +107,14 @@ export const DayCloseShift = z.object({
   counted: Money.nullable(),
   difference: Money.nullable(),
   difference_reason: z.string().nullable(),
+  /** The payments of the shift's counted sales (EC-149, D94: voids, collections and deposits apart). */
   payment_totals: DayCloseByMethod,
+  /** EC-149: the shift's takings, as on the shift summary. Absent in days closed before EC-149. */
+  sales_count: z.number().int().nonnegative().optional(),
+  sales_total: Money.optional(),
+  tax_total: Money.optional(),
+  collections: DayCloseByMethod.optional(),
+  deposits: DayCloseByMethod.optional(),
 });
 export type DayCloseShift = z.infer<typeof DayCloseShift>;
 
@@ -133,12 +140,14 @@ export const DayCloseTotals = z.object({
     paid_by_method: DayCloseByMethod,
     /** The part of installment sales financed by a contract. */
     on_contract: Money,
-    /** Voids made this day (the voided sale stays counted on its own day). */
+    /** Voids made this day. Since EC-149 (D94) the voided sales are out of every other sales figure. */
     voided: CountTotal,
   }),
   returns: z.object({
     count: z.number().int().nonnegative(),
     total: Money,
+    /** EC-149: the VAT of the returns. Absent in days closed before EC-149. */
+    tax_total: Money.optional(),
     refunded_by_method: DayCloseByMethod,
   }),
   collections: z.object({

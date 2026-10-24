@@ -224,3 +224,43 @@ describe('K04 error codes and permissions', () => {
     expect(PERMISSION_KEYS).toContain('day.reopen');
   });
 });
+
+describe('EC-149 day close figures (D94)', () => {
+  const base = {
+    id: ID,
+    branch_id: ID2,
+    branch_name: 'Main',
+    business_date: '2026-10-22',
+    status: 'closed',
+    issues: [],
+    note: null,
+    closed_by: { id: ID, name: 'Owner' },
+    closed_at: ts,
+    reopened_by: null,
+    reopened_at: null,
+    reopen_reason: null,
+    drift: false,
+  };
+  it('a day closed since EC-149 carries the returns VAT and each shift takings', () => {
+    const shift = {
+      ...totals.shifts.items[0],
+      sales_count: 3,
+      sales_total: '800.00',
+      tax_total: '98.25',
+      collections: { ...zeros, cash: '1000.00' },
+    };
+    const now = {
+      ...totals,
+      returns: { ...totals.returns, tax_total: '0.00' },
+      shifts: { ...totals.shifts, items: [shift] },
+    };
+    const parsed = DayClose.parse({ ...base, totals: now });
+    expect(parsed.totals.returns.tax_total).toBe('0.00');
+    expect(parsed.totals.shifts.items[0]?.collections?.cash).toBe('1000.00');
+  });
+  it('a day closed before EC-149 (no returns VAT, no shift takings) still parses', () => {
+    const parsed = DayClose.parse({ ...base, totals });
+    expect(parsed.totals.returns.tax_total).toBeUndefined();
+    expect(parsed.totals.shifts.items[0]?.sales_count).toBeUndefined();
+  });
+});

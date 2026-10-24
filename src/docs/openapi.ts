@@ -2823,7 +2823,7 @@ export const openApiSpec = {
             get: {
                 tags: ['Cash'],
                 summary: 'List shifts (shift.operate: own shifts; cash.view: the branches of the caller)',
-                description: 'K02 (D60). Newest first. S02 (D64): every shift carries sales_total and payment_totals (cash, bank_transfer, store_credit: the incoming payments of its sales). Filters: branch_id, employee_id, status (open | closed), from/to (the shop day the shift was opened on). Each shift carries its expected cash (open: the drawer ledger sum now; closed: the snapshot at closing), counted cash and difference. Works in an expired shop. Schema: ShiftListQuery → ShiftList.',
+                description: 'K02 (D60). Newest first. S02 (D64), EC-149 (D94): every shift carries sales_count, sales_total and tax_total of its sales without the voided ones, payment_totals (cash, bank_transfer, store_credit: the payments of those sales) and collections (by method: the collections taken on the shift). Filters: branch_id, employee_id, status (open | closed), from/to (the shop day the shift was opened on). Each shift carries its expected cash (open: the drawer ledger sum now; closed: the snapshot at closing), counted cash and difference. Works in an expired shop. Schema: ShiftListQuery → ShiftList.',
                 security: [{ bearerAuth: [] }],
                 parameters: [
                     { $ref: '#/components/parameters/OrgId' },
@@ -3192,7 +3192,7 @@ export const openApiSpec = {
             get: {
                 tags: ['Cash'],
                 summary: 'Business days of the caller\'s branches (day.close or cash.view)',
-                description: 'K04 (D84). Days of a range (default the last 30, at most 92) that have activity or a day close: status open | closed | reopened, who closed, the sales total and the count of blocking and warning issues (of the stored close, else of the last nightly check). Filters: branch_id, from, to, status. Works in an expired shop. BRANCH_NOT_FOUND for another shop\'s branch. Schema: DayCloseListQuery -> DayCloseListResponse.',
+                description: 'K04 (D84). Days of a range (default the last 30, at most 92) that have activity or a day close: status open | closed | reopened, who closed, the sales total (voided sales left out; a closed day: the stored total, EC-149 D94) and the count of blocking and warning issues (of the stored close, else of the last nightly check). Filters: branch_id, from, to, status. Works in an expired shop. BRANCH_NOT_FOUND for another shop\'s branch. Schema: DayCloseListQuery -> DayCloseListResponse.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'branch_id', in: 'query', required: false, schema: { type: 'string' } }, { name: 'from', in: 'query', required: false, schema: { type: 'string' } }, { name: 'to', in: 'query', required: false, schema: { type: 'string' } }, { name: 'status', in: 'query', required: false, schema: { type: 'string' } }],
                 responses: { 200: { description: 'DayCloseListResponse' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },

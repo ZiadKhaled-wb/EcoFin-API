@@ -40,7 +40,11 @@ const header = {
   count_breakdown: null,
   difference_reason: null,
   sales_total: '0.00',
+  sales_count: 0,
+  tax_total: '0.00',
   payment_totals: { cash: '0.00', bank_transfer: '0.00', store_credit: '0.00' },
+  collections: { cash: '0.00', bank_transfer: '0.00', store_credit: '0.00' },
+  deposits: { cash: '0.00', bank_transfer: '0.00', store_credit: '0.00' },
 };
 const shift = { ...header, movements: [] };
 

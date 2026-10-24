@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.65.0
+
+- EC-149 one sales rule (D94), additive only: `Shift` (and `ShiftSummary`) gain `sales_count`, `tax_total`, `collections` and `deposits` (by method); `sales_total` and `payment_totals` now leave voided sales out and `payment_totals` no longer holds collections or S10 order deposits. Day close: `totals.returns.tax_total` and, on each shift row, `sales_count`, `sales_total`, `tax_total`, `collections`, `deposits` (all optional: absent in days closed before EC-149); `totals.sales` leaves voided sales out (the `voided` line stays). No new error code, route or permission key.
+
 ## 0.64.0
 
 - S10 sales orders (EC-77): new `salesOrders.ts` with SalesOrderStatus, FulfilmentMode, OrderLineFulfilmentInput, SalesOrderLineInput, CreateSalesOrderBody, QuotationOrderLineOption, OrderFromQuotationBody, OrderFromQuotationParams, OrderDepositBody (S02 `SalePayments`), CancelSalesOrderBody (refund lines are S02 `SalePaymentInput`, `[]` without deposits), LinkOrderLineBody, ReserveOrderLineBody, SalesOrderIdParams, SalesOrderLineParams, SalesOrderLinePurchaseOrder, SalesOrderLine, SalesOrderPayment, SalesOrderBalances, SalesOrder, SalesOrderListQuery, SalesOrderList, DepositExceedsBalanceDetail, RefundMustEqualDepositsDetail. Money is decimal strings. Error codes ORDER_NOT_FOUND (404); ORDER_NOT_OPEN, ORDER_HAS_DELIVERIES, QUOTATION_NOT_ACCEPTED, QUOTATION_ALREADY_ORDERED, LINE_NOT_TO_ORDER, PO_LINE_OVERCOMMITTED, PO_NOT_OPEN, DEPOSIT_EXCEEDS_BALANCE (409); ORDER_LINES_INVALID, QUOTE_LINE_NEEDS_PRODUCT, UNITS_REQUIRED, PO_LINE_PRODUCT_MISMATCH, REFUND_MUST_EQUAL_DEPOSITS (422). The database's PO_NOT_FOUND is answered as the existing PURCHASE_ORDER_NOT_FOUND (404). No new permission key (`order.manage`, `order.cancel` exist).

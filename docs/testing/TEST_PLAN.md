@@ -466,3 +466,7 @@ See [D03 plan](plans/D03.md). Covers the Done when (the total equals the sum of 
 ## S10 - sales orders, deposits, reservations (EC-77)
 
 See [S10 plan](plans/S10.md): orders from scratch and from an accepted quote, reservations at once (serials included), reserved serials refused by the stock-movement trigger (decision 5), PO linking, deposits that are not sales (no sales row, tax or ETA receipt), cancel with a full refund exactly once, ledger reconciliation and the direct-DB security matrix. Tests O1-O16 (`supabase/tests/s10_sales_orders_test.sql`), A1-A4 (`src/routes/salesOrders.integration.test.ts`), W1-W4 and E1 (EcoFin-Web `e2e/s10-sales-orders.spec.ts`).
+
+## EC-149 — one sales rule (BUG-2, D94)
+
+See [EC-149 plan](plans/EC-149.md). Covers the Done when (the day close, the shift summary, the owner dashboard and the D02 report give the same sales total, count, cash and VAT for one day; VAT excludes the voids; the voided line still shows) and the edge cases (void after a return or after the shift closed, a return on a later day, closed days before and after the rule, an offline sale, two shifts on one day).
