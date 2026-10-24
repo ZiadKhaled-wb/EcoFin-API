@@ -954,6 +954,41 @@ INSERT INTO t.denial VALUES
  ('accept_quotation','zz_s09_06_accept','quotation.manage',$q$SELECT public.accept_quotation((SELECT id FROM t.s09_docs WHERE tag='main'))$q$),
  ('reject_quotation','zz_s09_07_reject','quotation.manage',$q$SELECT public.reject_quotation((SELECT id FROM t.s09_docs WHERE tag='reject'),'Customer declined')$q$),
  ('cancel_quotation','zz_s09_08_cancel','quotation.manage',$q$SELECT public.cancel_quotation((SELECT id FROM t.s09_docs WHERE tag='cancel'),'Customer cancelled')$q$);
+-- S10: a stocked product of its own (DENIAL-S10, 5 in stock, so the other cases' stock is untouched),
+-- an accepted quote, an open PO line of the product, and one to_order order per line/deposit/cancel
+-- case (no deposits on the cancel one, so its '[]' refund needs no shift). The deposit is cash in the
+-- owner's open shift (unit_5_sale_shift, on its paired device). Keyed calls replay as the same result.
+CREATE TABLE t.s10_docs(tag text PRIMARY KEY,id uuid);
+GRANT SELECT ON t.s10_docs TO authenticated;
+SELECT t.as_user('d0000000-0000-0000-0000-000000000011','d1000000-0000-0000-0000-000000000001');
+-- A fixed top id: earlier cases archive, count and transfer the first product ORDER BY id.
+INSERT INTO public.products (id, organization_id, name_ar, sku, cash_price, tax_class_id, is_serialized)
+SELECT 'fffff100-0000-0000-0000-000000000010', organization_id, 'Denial order sofa', 'DENIAL-S10', 100, tax_class_id, false
+FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-N02';
+SELECT public.post_stock_adjustment('d2000000-0000-0000-0000-000000000011','found',NULL,
+  jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-S10'),'quantity',5)),'denial-s10-stock');
+INSERT INTO t.s10_docs SELECT tag,(public.create_sales_order('d2000000-0000-0000-0000-000000000011','d9020000-0000-0000-0000-000000000001',NULL,NULL,
+  jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-S10'),
+    'quantity',1,'unit_price','100','fulfilment','to_order')),'denial-s10-fx-'||tag)->>'id')::uuid
+  FROM (VALUES('link'),('reserve'),('deposit'),('cancel')) tags(tag);
+INSERT INTO t.s10_docs SELECT tag||'_line',(SELECT l.id FROM public.sales_order_lines l WHERE l.order_id=d.id) FROM t.s10_docs d WHERE tag IN ('link','reserve');
+INSERT INTO t.s10_docs SELECT 'quote',(public.create_quotation('d2000000-0000-0000-0000-000000000011','d9020000-0000-0000-0000-000000000001',NULL,NULL,
+  jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-S10'),
+    'quantity',1,'unit_price','100')),'denial-s10-quote')->>'id')::uuid;
+SELECT public.send_quotation(id),public.accept_quotation(id) FROM t.s10_docs WHERE tag='quote';
+SELECT public.create_purchase_order((SELECT id FROM public.suppliers WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND name='TEST-1 denial PI supplier'),'d2000000-0000-0000-0000-000000000011',
+  jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-S10'),'quantity',2,'expected_unit_cost','10.00')),'denial-s10-po');
+INSERT INTO t.s10_docs SELECT 'po_line',l.id FROM public.purchase_order_lines l JOIN public.purchase_orders o ON o.id=l.po_id
+  WHERE o.organization_id='d1000000-0000-0000-0000-000000000001' AND o.idempotency_key='denial-s10-po';
+INSERT INTO t.denial VALUES
+ ('create_sales_order','zz_s10_1_create','order.manage',$q$SELECT public.create_sales_order('d2000000-0000-0000-0000-000000000011','d9020000-0000-0000-0000-000000000001',NULL,NULL,jsonb_build_array(jsonb_build_object('product_id',(SELECT id FROM public.products WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND sku='DENIAL-S10'),'quantity',1,'unit_price','100')),'denial-s10-create')$q$),
+ ('create_order_from_quotation','zz_s10_2_from_quote','order.manage',$q$SELECT public.create_order_from_quotation((SELECT id FROM t.s10_docs WHERE tag='quote'),NULL,'{"1":{"fulfilment":"to_order"}}','denial-s10-from-quote')$q$),
+ ('link_order_line_to_po','zz_s10_3_link','order.manage',$q$SELECT public.link_order_line_to_po((SELECT id FROM t.s10_docs WHERE tag='link_line'),(SELECT id FROM t.s10_docs WHERE tag='po_line'))$q$),
+ ('reserve_order_line','zz_s10_4_reserve','order.manage',$q$SELECT public.reserve_order_line((SELECT id FROM t.s10_docs WHERE tag='reserve_line'),NULL)$q$),
+ ('get_sales_order','zz_s10_5_get','order.manage',$q$SELECT public.get_sales_order((SELECT id FROM t.s10_docs WHERE tag='link'))$q$),
+ ('list_sales_orders','zz_s10_6_list','order.manage',$q$SELECT public.list_sales_orders()$q$),
+ ('record_order_deposit','zz_s10_7_deposit','order.manage',$q$SELECT public.record_order_deposit((SELECT id FROM t.s10_docs WHERE tag='deposit'),'[{"method":"cash","amount":"10.00"}]','denial-s10-deposit')$q$),
+ ('cancel_sales_order','zz_s10_8_cancel','order.cancel',$q$SELECT public.cancel_sales_order((SELECT id FROM t.s10_docs WHERE tag='cancel'),'Customer cancelled','[]','denial-s10-cancel')$q$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

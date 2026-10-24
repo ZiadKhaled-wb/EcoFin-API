@@ -306,6 +306,11 @@ SELECT t.expect('4.4 every table with idempotency_key has UNIQUE (organization_i
 -- function with a key fails 4.5 until its replay test is added and it is listed here.
 CREATE TABLE t.replay_tested (fn text PRIMARY KEY, where_tested text);
 INSERT INTO t.replay_tested VALUES ('public.create_quotation','s09_quotations_test.sql Q3: same id and number, one quotation');
+INSERT INTO t.replay_tested VALUES
+ ('public.create_sales_order','s10_sales_orders_test.sql O1 replay of the key returns the same order'),
+ ('public.create_order_from_quotation','s10_sales_orders_test.sql O4 replay returns the same order'),
+ ('public.record_order_deposit','s10_sales_orders_test.sql O9 replay of the key: same order, still one payment, one audit'),
+ ('public.cancel_sales_order','s10_sales_orders_test.sql O12 same key: the same result, one refund payment, no second cash movement, one audit');
 INSERT INTO t.replay_tested VALUES ('app.lock_idempotency_key', 'ledger_invariants 4.1-4.3, f10_ledger 6.1-6.5');
 INSERT INTO t.replay_tested VALUES ('public.admin_record_subscription_payment','p05_subscription_test.sql: replay same id, one payment and one audit');
 INSERT INTO t.replay_tested VALUES

@@ -740,3 +740,10 @@ EC-147: POS writes recheck the shift device on every call; only force_close_shif
 ### S09. Quotations (EC-76)
 
 Quotations are server-priced with T01; only drafts are editable (duplicate a sent quote to change it); expiry is computed on read and persisted by the F13 daily quotation.expire job; accepted quote conversion to an order belongs to S10.
+
+### D91. S10 sales orders, deposits, reservations (EC-77)
+- **Deposits:** Deposits carry no VAT and no ETA receipt; VAT and the receipt come with the delivery sale (S11). To confirm with the client's tax advisor.
+- **Reserved serials:** a reserved serial can't be moved out until its reservation is released (decision 5). `app.check_stock_movement`'s outgoing unit check is now `status <> 'in_stock'` (was `NOT IN ('in_stock','reserved')`), same error code and message.
+- **Cancel:** cancel refunds deposits in full; keeping a fee and installment contracts on orders are later stories.
+- **Where I left the spec:** S02's `post_sale_payments` needs a `sales` row, so deposits and refunds reuse its input parser, shop checks, numbering and shift/device helpers and post their rows in `app.s10_post_order_payments` (as N03 does). A deposit belongs to the shift's branch (N03 rule); cancel needs a shift only for a cash refund line. `REASON_REQUIRED` stays 400 (existing code); the SQL `PO_NOT_FOUND` is the API's `PURCHASE_ORDER_NOT_FOUND` (404). Branch-read policies added on `sales_orders`, `sales_order_lines`, `stock_reservations` only.
+- **Numbers:** contracts **0.62.0**, migration `20261103090000_s10_sales_orders.sql`, 8 new routes (319 in total), error codes `ORDER_NOT_FOUND` (404), `ORDER_NOT_OPEN`, `ORDER_HAS_DELIVERIES`, `QUOTATION_NOT_ACCEPTED`, `QUOTATION_ALREADY_ORDERED`, `LINE_NOT_TO_ORDER`, `PO_LINE_OVERCOMMITTED`, `PO_NOT_OPEN`, `DEPOSIT_EXCEEDS_BALANCE` (409), `ORDER_LINES_INVALID`, `QUOTE_LINE_NEEDS_PRODUCT`, `UNITS_REQUIRED`, `PO_LINE_PRODUCT_MISMATCH`, `REFUND_MUST_EQUAL_DEPOSITS` (422). Plan: `docs/testing/plans/S10.md`. Next free: 0.63.0 / D92.

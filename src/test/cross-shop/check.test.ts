@@ -342,7 +342,19 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/quotations/:id/cancel',
       ]),
     );
-    expect(keys).toHaveLength(311);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'GET /api/orders',
+        'GET /api/orders/:id',
+        'POST /api/orders',
+        'POST /api/quotations/:id/order',
+        'POST /api/orders/:id/deposits',
+        'POST /api/orders/:id/lines/:lineId/reserve',
+        'POST /api/orders/:id/lines/:lineId/link-po',
+        'POST /api/orders/:id/cancel',
+      ]),
+    );
+    expect(keys).toHaveLength(319);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

@@ -12,6 +12,7 @@ import authRoutes from './routes/auth.js';
 import employeesRoutes from './routes/employees.js';
 import warrantyRoutes from './routes/warranty.js';
 import quotationRoutes from './routes/quotations.js';
+import salesOrderRoutes from './routes/salesOrders.js';
 import filesRoutes from './routes/files.js';
 import healthRoutes from './routes/health.js';
 import meRoutes from './routes/me.js';
@@ -142,6 +143,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/employees', employeesRoutes);
   mountRouter(app, '/api/warranty', warrantyRoutes);
   mountRouter(app, '/api/quotations', quotationRoutes);
+  mountRouter(app, '/api/orders', salesOrderRoutes);
   mountRouter(app, '/api/imports', importsRoutes);
   mountRouter(app, '/api/day-closes', dayClosesRoutes);
   mountRouter(app, '/api/dashboard', dashboardRoutes);

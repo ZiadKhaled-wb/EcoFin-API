@@ -2,6 +2,10 @@
 \ir helpers/test4_snapshot.sql
 CREATE TABLE t.key_functions(signature text PRIMARY KEY);
 INSERT INTO t.key_functions VALUES ('public.create_quotation(uuid,uuid,date,text,jsonb,text)');
+INSERT INTO t.key_functions VALUES ('public.create_sales_order(uuid,uuid,text,text,jsonb,text)'),
+('public.create_order_from_quotation(uuid,text,jsonb,text)'),
+('public.record_order_deposit(uuid,jsonb,text)'),
+('public.cancel_sales_order(uuid,text,jsonb,text)');
 INSERT INTO t.key_functions VALUES ('public.post_purchase_return(uuid,text,text,jsonb,text,uuid)'),
 ('public.admin_record_subscription_payment(uuid,numeric,date,date,text,boolean,uuid)'),
 ('public.post_stock_adjustment(uuid,text,text,jsonb,text)'),

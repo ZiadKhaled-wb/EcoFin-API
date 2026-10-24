@@ -47,6 +47,8 @@ import {
   MigrationNotReversibleDetail,
   ExportRunningDetail,
   ExportTooSoonDetail,
+  DepositExceedsBalanceDetail,
+  RefundMustEqualDepositsDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 import type { ZodTypeAny } from 'zod';
@@ -153,6 +155,8 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   MIGRATION_NOT_REVERSIBLE: MigrationNotReversibleDetail,
   EXPORT_RUNNING: ExportRunningDetail,
   EXPORT_TOO_SOON: ExportTooSoonDetail,
+  DEPOSIT_EXCEEDS_BALANCE: DepositExceedsBalanceDetail,
+  REFUND_MUST_EQUAL_DEPOSITS: RefundMustEqualDepositsDetail,
 };
 
 /**
