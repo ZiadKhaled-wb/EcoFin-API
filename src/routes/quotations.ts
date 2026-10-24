@@ -4,6 +4,7 @@ import { loadRequestContext } from '../middleware/requestContext';
 import { requirePermission } from '../middleware/permissions';
 import { asyncHandler } from '../utils/asyncHandler';
 import * as c from '../controllers/quotations.controller';
+import * as orders from '../controllers/salesOrders.controller';
 const router = Router();
 router.use(authenticate, loadRequestContext);
 router.get('/', requirePermission('quotation.manage'), asyncHandler(c.list));
@@ -14,4 +15,6 @@ router.post('/:id/send', requirePermission('quotation.manage'), asyncHandler(c.s
 router.post('/:id/accept', requirePermission('quotation.manage'), asyncHandler(c.accept));
 router.post('/:id/reject', requirePermission('quotation.manage'), asyncHandler(c.reject));
 router.post('/:id/cancel', requirePermission('quotation.manage'), asyncHandler(c.cancel));
+// S10: the sales order made from an accepted quotation.
+router.post('/:id/order', requirePermission('order.manage'), asyncHandler(orders.fromQuotation));
 export default router;

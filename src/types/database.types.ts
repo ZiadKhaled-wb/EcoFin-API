@@ -8902,6 +8902,10 @@ export type Database = {
       cancel_import_job: { Args: { p_id: string }; Returns: Json };
       cancel_purchase_order: { Args: { p_id: string; p_reason: string }; Returns: Json };
       cancel_quotation: { Args: { p_id: string; p_reason: string }; Returns: Json };
+      cancel_sales_order: {
+        Args: { p_idempotency_key: string; p_order_id: string; p_reason: string; p_refund: Json };
+        Returns: Json;
+      };
       cancel_stock_count: { Args: { p_count_id: string }; Returns: Json };
       cancel_stock_transfer: { Args: { p_id: string }; Returns: Json };
       close_day: {
@@ -8984,6 +8988,15 @@ export type Database = {
         Args: { p_idempotency_key: string; p_lines?: Json; p_po_id: string };
         Returns: Json;
       };
+      create_order_from_quotation: {
+        Args: {
+          p_delivery_address: string;
+          p_idempotency_key: string;
+          p_line_options: Json;
+          p_quotation_id: string;
+        };
+        Returns: Json;
+      };
       create_password_reset: {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
         Returns: Json;
@@ -9020,6 +9033,17 @@ export type Database = {
           p_lines: Json;
           p_notes: string;
           p_valid_until: string;
+        };
+        Returns: Json;
+      };
+      create_sales_order: {
+        Args: {
+          p_branch_id: string;
+          p_customer_id: string;
+          p_delivery_address: string;
+          p_idempotency_key: string;
+          p_lines: Json;
+          p_notes: string;
         };
         Returns: Json;
       };
@@ -9219,6 +9243,7 @@ export type Database = {
       get_sale: { Args: { p_id: string }; Returns: Json };
       get_sale_details: { Args: { p_sale_id: string }; Returns: Json };
       get_sale_returnable: { Args: { p_sale_id: string }; Returns: Json };
+      get_sales_order: { Args: { p_id: string }; Returns: Json };
       get_sales_return: { Args: { p_id: string }; Returns: Json };
       get_settlement_quote: { Args: { p_contract_id: string }; Returns: Json };
       get_shift: { Args: { p_id: string }; Returns: Json };
@@ -9359,6 +9384,10 @@ export type Database = {
       jobs_succeed: { Args: { p_job_id: string; p_worker: string }; Returns: boolean };
       link_customer_guarantor: {
         Args: { p_customer_id: string; p_guarantor_id: string; p_relation: string };
+        Returns: Json;
+      };
+      link_order_line_to_po: {
+        Args: { p_order_line_id: string; p_po_line_id: string };
         Returns: Json;
       };
       list_branch_min_levels: { Args: { p_product_id: string }; Returns: Json };
@@ -9528,6 +9557,19 @@ export type Database = {
         Returns: Json;
       };
       list_sale_payment_accounts: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_sales_orders: {
+        Args: {
+          p_branch_id?: string;
+          p_customer_id?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_search?: string;
+          p_status?: string;
+          p_to?: string;
+        };
+        Returns: Json;
+      };
       list_sales_returns: { Args: { p_filters?: Json }; Returns: Json };
       list_shift_vaults: { Args: { p_branch_id: string }; Returns: Json };
       list_shifts: {
@@ -9764,6 +9806,10 @@ export type Database = {
       record_collection_receipt_print: { Args: { p_id: string }; Returns: Json };
       record_contract_document_print: { Args: { p_document: string; p_id: string }; Returns: Json };
       record_export_download: { Args: { p_file_id: string }; Returns: undefined };
+      record_order_deposit: {
+        Args: { p_idempotency_key: string; p_order_id: string; p_payments: Json };
+        Returns: Json;
+      };
       record_return_receipt_print: { Args: { p_id: string }; Returns: Json };
       record_sale_receipt_print: { Args: { p_sale_id: string }; Returns: Json };
       register_file: {
@@ -9843,6 +9889,10 @@ export type Database = {
       };
       resend_employee_invite: {
         Args: { p_employee_id: string; p_expires_at: string; p_token_hash: string };
+        Returns: Json;
+      };
+      reserve_order_line: {
+        Args: { p_order_line_id: string; p_unit_ids?: string[] };
         Returns: Json;
       };
       resolve_device: { Args: { p_token_hash: string }; Returns: Json };

@@ -212,6 +212,12 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   'POST /api/quotations/:id/accept': { action: 'quotation.accepted' },
   'POST /api/quotations/:id/reject': { action: 'quotation.rejected' },
   'POST /api/quotations/:id/cancel': { action: 'quotation.cancelled' },
+  'POST /api/orders': { action: 'sales_order.created' },
+  'POST /api/quotations/:id/order': { action: 'sales_order.created' },
+  'POST /api/orders/:id/deposits': { action: 'sales_order.deposit' },
+  'POST /api/orders/:id/lines/:lineId/reserve': { action: 'sales_order.line_reserved' },
+  'POST /api/orders/:id/lines/:lineId/link-po': { action: 'sales_order.line_linked' },
+  'POST /api/orders/:id/cancel': { action: 'sales_order.cancelled' },
   'POST /api/warranty/claims': { action: 'warranty_claim.opened' },
   'POST /api/warranty/claims/:id/move': { action: 'warranty_claim.moved' },
   'POST /api/warranty/claims/:id/refund': {

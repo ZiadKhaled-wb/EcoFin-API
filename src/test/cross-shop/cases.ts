@@ -42,6 +42,31 @@ for (const [method, path] of [
     },
   });
 }
+// S10: each route rejects another shop context before processing its payload.
+for (const [method, path] of [
+  ['GET', '/api/orders'],
+  ['GET', '/api/orders/:id'],
+  ['POST', '/api/orders'],
+  ['POST', '/api/quotations/:id/order'],
+  ['POST', '/api/orders/:id/deposits'],
+  ['POST', '/api/orders/:id/lines/:lineId/reserve'],
+  ['POST', '/api/orders/:id/lines/:lineId/link-po'],
+  ['POST', '/api/orders/:id/cancel'],
+]) {
+  crossShopCase({
+    method: method!,
+    path: path!,
+    name: 'S10 foreign shop context ' + method + ' ' + path,
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const url = path!.replace(':id', randomUUID()).replace(':lineId', randomUUID());
+      const result = await h.call(method!, url, { token: a.accessToken, orgId: SHOP_B });
+      h.expect(result.res.status).toBe(403);
+      h.expect(h.code(result.res)).toBe('SHOP_NOT_ALLOWED');
+      h.expect(await h.auditRowsFrom(SHOP_B, result.ip)).toBe(0);
+    },
+  });
+}
 crossShopCase({
   method: 'GET',
   path: '/api/subscription',

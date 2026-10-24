@@ -3548,6 +3548,90 @@ export const openApiSpec = {
                 },
             },
         },
+        '/api/orders': {
+            get: {
+                tags: ['Sales'],
+                summary: 'List sales orders of the caller\'s branches (order.manage)',
+                description: 'S10. Filters status (open | partially_delivered | delivered | cancelled), branch_id, customer_id, from/to (business date), search, page, page_size (1-100). Each order with its lines, payments and balances. Schema: SalesOrderListQuery -> SalesOrderList.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'status', in: 'query', schema: { type: 'string', enum: ['open', 'partially_delivered', 'delivered', 'cancelled'] } }, { name: 'branch_id', in: 'query', schema: { type: 'string', format: 'uuid' } }, { name: 'customer_id', in: 'query', schema: { type: 'string', format: 'uuid' } }, { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } }, { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } }, { name: 'search', in: 'query', schema: { type: 'string', maxLength: 200 } }, { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } }, { name: 'page_size', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } }],
+                responses: { 200: { description: 'SalesOrderList' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Sales'],
+                summary: 'Open a sales order for a customer (order.manage)',
+                description: 'S10. Lines: product, quantity, unit_price, discount_amount; fulfilment from_stock (serialized: unit_ids to hold) or to_order (optionally po_line_id). Totals and VAT are worked out by the server; client totals are ignored. Invalid lines: ORDER_LINES_INVALID. A PO line that is not found: PURCHASE_ORDER_NOT_FOUND. Numbered by the branch. The same Idempotency-Key returns the first order. Audited as sales_order.created. Schema: CreateSalesOrderBody -> SalesOrder.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 201: { description: 'SalesOrder' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/orders/{id}': {
+            get: {
+                tags: ['Sales'],
+                summary: 'Read a sales order with its lines, payments and balances (order.manage)',
+                description: 'S10. Each line with delivered, reserved, remaining, its reserved units and its purchase order line status; balances deposits_paid, financed, delivered_value, unpaid. Another shop or a branch the caller does not work in: ORDER_NOT_FOUND. Schema: SalesOrder.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'SalesOrder' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/quotations/{id}/order': {
+            post: {
+                tags: ['Sales'],
+                summary: 'Turn an accepted quotation into a sales order (order.manage)',
+                description: 'S10. Lines and prices come from the quotation; line_options, keyed by the quotation line_no, choose each line\'s fulfilment (a custom quotation line needs a product_id: QUOTE_LINE_NEEDS_PRODUCT). QUOTATION_NOT_FOUND, QUOTATION_NOT_ACCEPTED, QUOTATION_ALREADY_ORDERED; invalid line options: ORDER_LINES_INVALID. The same Idempotency-Key returns the first order. Audited as sales_order.created. Schema: OrderFromQuotationBody -> SalesOrder.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 201: { description: 'SalesOrder' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/orders/{id}/deposits': {
+            post: {
+                tags: ['Sales'],
+                summary: 'Take a deposit on an open sales order (order.manage)',
+                description: 'S10. Payment lines as on a sale (S02); cash goes into the caller\'s open shift on its POS device. Not more than the order still owes: DEPOSIT_EXCEEDS_BALANCE (details max). ORDER_NOT_FOUND, ORDER_NOT_OPEN. The same Idempotency-Key records the deposit once. Audited as sales_order.deposit. Schema: OrderDepositBody -> SalesOrder.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'SalesOrder' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/orders/{id}/lines/{lineId}/reserve': {
+            post: {
+                tags: ['Sales'],
+                summary: 'Hold stock for an order line (order.manage)',
+                description: 'S10. A serialized product needs unit_ids (UNITS_REQUIRED). A line that is not on the order in the path: ORDER_NOT_FOUND. Audited as sales_order.line_reserved. Schema: ReserveOrderLineBody -> SalesOrder.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'lineId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: false, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'SalesOrder' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/orders/{id}/lines/{lineId}/link-po': {
+            post: {
+                tags: ['Sales'],
+                summary: 'Link a to-order line to a purchase order line (order.manage)',
+                description: 'S10. Only a to_order line (LINE_NOT_TO_ORDER), the same product (PO_LINE_PRODUCT_MISMATCH), an open PO (PO_NOT_OPEN) with quantity left (PO_LINE_OVERCOMMITTED); a PO line that is not found: PURCHASE_ORDER_NOT_FOUND. A line that is not on the order in the path: ORDER_NOT_FOUND. Audited as sales_order.line_linked. Schema: LinkOrderLineBody -> SalesOrder.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'lineId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'SalesOrder' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/orders/{id}/cancel': {
+            post: {
+                tags: ['Sales'],
+                summary: 'Cancel a sales order and refund its deposits (order.cancel)',
+                description: 'S10. reason (3-500 characters, REASON_REQUIRED); refund lines must add up to the deposits exactly, [] when there are none (REFUND_MUST_EQUAL_DEPOSITS, details deposits and refund); a store-credit deposit is refunded only as store credit: the cash + bank lines may add up to at most the net cash + bank deposits (REFUND_METHOD_NOT_ALLOWED, 409, details cash_bank_max and cash_bank_refund); a cash refund comes from the caller\'s open shift on its POS device. ORDER_NOT_FOUND, ORDER_NOT_OPEN, ORDER_HAS_DELIVERIES. The same Idempotency-Key cancels once. Audited as sales_order.cancelled. Schema: CancelSalesOrderBody -> SalesOrder.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }],
+                requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+                responses: { 200: { description: 'SalesOrder' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
     },
 } as const;
 

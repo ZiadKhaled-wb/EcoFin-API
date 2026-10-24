@@ -15,6 +15,7 @@ import {
   PAIRING_CODE_LENGTH,
   Quotation,
   QuotationCreated,
+  SalesOrder,
 } from '@ziadkhaled-wb/contracts';
 import { createApp } from '../app';
 import { getEnv } from '../utils/env';
@@ -767,6 +768,40 @@ M01 Audit ${STAMP}-${ipCounter}
     const read = await send('get', '/api/quotations/' + id, { token });
     return { created, token, body, quote: Quotation.parse(read.res.body) };
   }
+  /** S10: an open order of one line (a new product and customer) in BR1. */
+  async function orderFixture(
+    opts: { fulfilment?: 'from_stock' | 'to_order'; stock?: boolean } = {},
+  ) {
+    const owner = await login('owner.one@ecotech.test');
+    const token = owner.accessToken;
+    const product = await newProduct(token);
+    if (opts.stock) {
+      const found = await send('post', '/api/stock/adjustments', {
+        token,
+        key: 'f07-s10-stock-' + STAMP + '-' + ipCounter,
+        body: { branch_id: BR1, reason: 'found', lines: [{ product_id: product, quantity: 1 }] },
+      });
+      expect(found.res.status, JSON.stringify(found.res.body)).toBe(201);
+    }
+    const created = await send('post', '/api/orders', {
+      token,
+      key: 'f07-s10-order-' + STAMP + '-' + ipCounter,
+      body: {
+        branch_id: BR1,
+        customer_id: await newCustomer(token),
+        lines: [
+          {
+            product_id: product,
+            quantity: 1,
+            unit_price: '100.00',
+            fulfilment: opts.fulfilment ?? 'to_order',
+          },
+        ],
+      },
+    });
+    expect(created.res.status, JSON.stringify(created.res.body)).toBe(201);
+    return { created, token, product, order: SalesOrder.parse(created.res.body) };
+  }
   const drivers: Record<string, () => Promise<{ sent: Sent; org: string; status?: number }>> = {
     'POST /api/quotations': async () => ({
       sent: (await quotationFixture()).created,
@@ -813,6 +848,92 @@ M01 Audit ${STAMP}-${ipCounter}
         sent: await send('post', '/api/quotations/' + f.quote.id + '/cancel', {
           token: f.token,
           body: { reason: 'No longer needed' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/orders': async () => ({
+      sent: (await orderFixture()).created,
+      org: SHOP_ONE,
+      status: 201,
+    }),
+    'POST /api/quotations/:id/order': async () => {
+      const f = await quotationFixture(true);
+      const accepted = await send('post', '/api/quotations/' + f.quote.id + '/accept', {
+        token: f.token,
+      });
+      expect(accepted.res.status, JSON.stringify(accepted.res.body)).toBe(200);
+      return {
+        sent: await send('post', '/api/quotations/' + f.quote.id + '/order', {
+          token: f.token,
+          key: 'f07-s10-from-quote-' + STAMP + '-' + ipCounter,
+          body: {
+            line_options: {
+              '1': { product_id: await newProduct(f.token), fulfilment: 'to_order' },
+            },
+          },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'POST /api/orders/:id/deposits': async () => {
+      const f = await orderFixture();
+      await openShift(f.token);
+      return {
+        sent: await send('post', '/api/orders/' + f.order.id + '/deposits', {
+          token: f.token,
+          pos,
+          key: 'f07-s10-deposit-' + STAMP + '-' + ipCounter,
+          body: { payments: [{ method: 'cash', amount: '10.00' }] },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/orders/:id/lines/:lineId/reserve': async () => {
+      const f = await orderFixture({ stock: true });
+      return {
+        sent: await send(
+          'post',
+          '/api/orders/' + f.order.id + '/lines/' + f.order.lines[0]!.id + '/reserve',
+          { token: f.token, body: {} },
+        ),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/orders/:id/lines/:lineId/link-po': async () => {
+      const f = await orderFixture();
+      const po = await send('post', '/api/purchase-orders', {
+        token: f.token,
+        key: 'f07-s10-po-' + STAMP + '-' + ipCounter,
+        body: {
+          supplier_id: await newSupplier(f.token),
+          branch_id: BR1,
+          lines: [{ product_id: f.product, quantity: 1, expected_unit_cost: '10.00' }],
+        },
+      });
+      expect(po.res.status, JSON.stringify(po.res.body)).toBe(201);
+      const read = await send('get', '/api/purchase-orders/' + (po.res.body as { id: string }).id, {
+        token: f.token,
+      });
+      const poLine = (read.res.body as { lines: { id: string }[] }).lines[0]!.id;
+      return {
+        sent: await send(
+          'post',
+          '/api/orders/' + f.order.id + '/lines/' + f.order.lines[0]!.id + '/link-po',
+          { token: f.token, body: { po_line_id: poLine } },
+        ),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/orders/:id/cancel': async () => {
+      const f = await orderFixture();
+      return {
+        sent: await send('post', '/api/orders/' + f.order.id + '/cancel', {
+          token: f.token,
+          pos,
+          key: 'f07-s10-cancel-' + STAMP + '-' + ipCounter,
+          body: { reason: 'Customer changed mind', refund: [] },
         }),
         org: SHOP_ONE,
       };
