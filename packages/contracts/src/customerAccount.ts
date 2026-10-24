@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { BusinessDate, IsoTimestamp, Money, Uuid } from './common.js';
 import { CustomerStatus } from './customers.js';
 import { InstallmentFrequency } from './settings.js';
+import { ContractLegalFlag } from './legal.js';
 import { ContractMigrationSource } from './migration.js';
 
 /**
@@ -106,6 +107,8 @@ export const CustomerContractSummary = z.object({
   is_migrated: z.boolean(),
   /** M02: what the old system remembered, null on a contract made here. */
   migration_source: ContractMigrationSource.nullable().optional(),
+  /** N09: the contract's open legal case, or null. Optional for an older server. */
+  legal_case: ContractLegalFlag.nullable().optional(),
   cash_price: Money,
   down_payment: Money,
   financed_amount: Money,

@@ -340,9 +340,18 @@ describe('cross-shop route check (D19)', () => {
         'POST /api/quotations/:id/accept',
         'POST /api/quotations/:id/reject',
         'POST /api/quotations/:id/cancel',
+        'GET /api/legal/cases',
+        'POST /api/legal/cases',
+        'GET /api/legal/cases/:id',
+        'PATCH /api/legal/cases/:id',
+        'POST /api/legal/cases/:id/status',
+        'POST /api/legal/cases/:id/hearings',
+        'PATCH /api/legal/cases/:id/hearings/:hearingId',
+        'POST /api/legal/cases/:id/notes',
+        'GET /api/legal/lawyers',
       ]),
     );
-    expect(keys).toHaveLength(312);
+    expect(keys).toHaveLength(321);
   });
 
   it('a new route without a case fails (exit 1) and is named', () => {

@@ -6686,3 +6686,117 @@ crossShopCase({
     h.expect(rows.some((r) => r.key === customer.id)).toBe(false);
   },
 });
+
+// L01 + N09 (D92). The legal module: a foreign shop header is refused, an organization id in the
+// request is refused, and another shop's (here unknown) case, hearing or contract is not found
+// (LEGAL_CASE_NOT_FOUND / HEARING_NOT_FOUND / CONTRACT_NOT_FOUND). Nothing is written.
+const L01_UNKNOWN = '00000000-0000-4000-8000-0000000c0116';
+const L01_HEARING = '00000000-0000-4000-8000-0000000c0117';
+for (const path of ['/api/legal/cases', '/api/legal/lawyers'] as const) {
+  crossShopCase({
+    method: 'GET',
+    path,
+    name: `${path} refuses a foreign header and an org id; shop A reads only its own`,
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const foreign = await h.call('GET', path, { token: a.accessToken, orgId: SHOP_B });
+      h.expect(foreign.res.status).toBe(403);
+      const injected = await h.call('GET', path, {
+        token: a.accessToken,
+        query: 'organization_id=' + SHOP_B,
+      });
+      h.expect(injected.res.status).toBe(400);
+      const mine = await h.call('GET', path, { token: a.accessToken });
+      h.expect(mine.res.status, JSON.stringify(mine.res.body)).toBe(200);
+    },
+  });
+}
+for (const [method, suffix, body] of [
+  ['GET', '/api/legal/cases/:id', undefined],
+  ['PATCH', '/api/legal/cases/:id', { court: 'Cross-shop check' }],
+  ['POST', '/api/legal/cases/:id/status', { status: 'filed' }],
+  ['POST', '/api/legal/cases/:id/hearings', { hearing_date: '2030-01-01' }],
+  ['POST', '/api/legal/cases/:id/notes', { note: 'Cross-shop check' }],
+] as const) {
+  crossShopCase({
+    method,
+    path: suffix,
+    name: `${method} ${suffix}: refuses a foreign header, an org id and an unknown or other-shop case id`,
+    async run(h) {
+      const a = await h.login(OWNER_A);
+      const path = suffix.replace(':id', L01_UNKNOWN);
+      const withBody = body === undefined ? {} : { body };
+      const foreign = await h.call(method, path, {
+        token: a.accessToken,
+        orgId: SHOP_B,
+        ...withBody,
+      });
+      h.expect(foreign.res.status).toBe(403);
+      if (body !== undefined) {
+        const injected = await h.call(method, path, {
+          token: a.accessToken,
+          body: { ...body, organization_id: SHOP_B },
+        });
+        h.expect(injected.res.status).toBe(400);
+      }
+      const missing = await h.call(method, path, { token: a.accessToken, ...withBody });
+      h.expect(missing.res.status, JSON.stringify(missing.res.body)).toBe(404);
+      h.expect(h.code(missing.res)).toBe('LEGAL_CASE_NOT_FOUND');
+      h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+      h.expect(await h.auditRowsFrom(SHOP_B, missing.ip)).toBe(0);
+    },
+  });
+}
+crossShopCase({
+  method: 'PATCH',
+  path: '/api/legal/cases/:id/hearings/:hearingId',
+  name: 'a hearing: refuses a foreign header, an org id and an unknown or other-shop case or hearing id',
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const path = `/api/legal/cases/${L01_UNKNOWN}/hearings/${L01_HEARING}`;
+    const body = { outcome: 'Cross-shop check' };
+    const foreign = await h.call('PATCH', path, { token: a.accessToken, orgId: SHOP_B, body });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('PATCH', path, {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('PATCH', path, { token: a.accessToken, body });
+    h.expect(missing.res.status).toBe(404);
+    h.expect(h.code(missing.res)).toBe('LEGAL_CASE_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_B, missing.ip)).toBe(0);
+  },
+});
+crossShopCase({
+  method: 'POST',
+  path: '/api/legal/cases',
+  name: "opening a case refuses a foreign header, an org id and another shop's contract",
+  async run(h) {
+    const a = await h.login(OWNER_A);
+    const body = { contract_id: L01_UNKNOWN };
+    const key = 'l01-cross-shop-' + randomUUID();
+    const foreign = await h.call('POST', '/api/legal/cases', {
+      token: a.accessToken,
+      orgId: SHOP_B,
+      body,
+      idempotencyKey: key,
+    });
+    h.expect(foreign.res.status).toBe(403);
+    const injected = await h.call('POST', '/api/legal/cases', {
+      token: a.accessToken,
+      body: { ...body, organization_id: SHOP_B },
+      idempotencyKey: key,
+    });
+    h.expect(injected.res.status).toBe(400);
+    const missing = await h.call('POST', '/api/legal/cases', {
+      token: a.accessToken,
+      body,
+      idempotencyKey: key,
+    });
+    h.expect(missing.res.status, JSON.stringify(missing.res.body)).toBe(404);
+    h.expect(h.code(missing.res)).toBe('CONTRACT_NOT_FOUND');
+    h.expect(await h.auditRowsFrom(SHOP_A, missing.ip)).toBe(0);
+    h.expect(await h.auditRowsFrom(SHOP_B, missing.ip)).toBe(0);
+  },
+});

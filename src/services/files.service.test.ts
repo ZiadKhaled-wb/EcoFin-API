@@ -359,3 +359,105 @@ describe('S12 claim photos', () => {
     expect(storageMock.createSignedUrl).not.toHaveBeenCalled();
   });
 });
+
+describe('legal case files (L01, D92)', () => {
+  const CASE = '55555555-5555-4555-8555-555555555555';
+  const notFound = { message: 'LEGAL_CASE_NOT_FOUND', code: 'P0001', details: '', hint: '' };
+
+  it("checks the case with the case read before an upload; a colleague's case is not found", async () => {
+    perms.keys = ['legal.manage'];
+    db.queue({ data: null, error: notFound });
+    expect(
+      await codeOf(
+        upload({
+          purpose: 'legal_document',
+          entityType: 'legal_case',
+          entityId: CASE,
+          file: { buffer: PDF, originalname: 'claim.pdf' },
+        }),
+      ),
+    ).toBe('LEGAL_CASE_NOT_FOUND');
+    expect(db.rpc).toHaveBeenCalledWith('get_legal_case', { p_id: CASE });
+    expect(storageMock.putObject).not.toHaveBeenCalled();
+  });
+
+  it('does not use the table read for a case (the tables have no direct grant)', async () => {
+    perms.keys = ['legal.manage'];
+    db.queue(
+      { data: {}, error: null }, // get_legal_case: the caller may see the case
+      { data: FILE_ID, error: null }, // register_file
+      {
+        data: {
+          id: FILE_ID,
+          purpose: 'legal_document',
+          mime: 'application/pdf',
+          size_bytes: PDF.length,
+          original_name: 'claim.pdf',
+          entity_type: 'legal_case',
+          entity_id: CASE,
+          created_at: '2026-10-05T12:00:00Z',
+        },
+        error: null,
+      },
+    );
+    const out = await upload({
+      purpose: 'legal_document',
+      entityType: 'legal_case',
+      entityId: CASE,
+      file: { buffer: PDF, originalname: 'claim.pdf' },
+    });
+    expect(out.entityType).toBe('legal_case');
+    expect(db.from).not.toHaveBeenCalledWith('legal_cases');
+    expect(db.rpc).toHaveBeenNthCalledWith(1, 'get_legal_case', { p_id: CASE });
+  });
+
+  it('refuses a signed link to the papers of a case the caller can not see', async () => {
+    perms.keys = ['legal.view'];
+    db.queue(
+      {
+        data: {
+          id: FILE_ID,
+          purpose: 'legal_document',
+          path: `${ORG}/legal_document/2026/10/a.pdf`,
+          entity_type: 'legal_case',
+          entity_id: CASE,
+          deleted_at: null,
+        },
+        error: null,
+      },
+      { data: null, error: notFound },
+    );
+    expect(await codeOf(getFileUrl(ctx, FILE_ID, SETTINGS))).toBe('LEGAL_CASE_NOT_FOUND');
+    expect(storageMock.createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it('gives the link when the case read passes', async () => {
+    perms.keys = ['legal.view'];
+    db.queue(
+      {
+        data: {
+          id: FILE_ID,
+          purpose: 'legal_document',
+          path: `${ORG}/legal_document/2026/10/a.pdf`,
+          entity_type: 'legal_case',
+          entity_id: CASE,
+          deleted_at: null,
+        },
+        error: null,
+      },
+      { data: {}, error: null },
+    );
+    const out = await getFileUrl(ctx, FILE_ID, SETTINGS);
+    expect(out.url).toContain('signed.example');
+    expect(db.rpc).toHaveBeenCalledWith('get_legal_case', { p_id: CASE });
+  });
+
+  it('lists no files of a case the caller can not see', async () => {
+    perms.keys = ['legal.view'];
+    db.queue({ data: null, error: notFound });
+    expect(await codeOf(listFiles(ctx, { entityType: 'legal_case', entityId: CASE }))).toBe(
+      'LEGAL_CASE_NOT_FOUND',
+    );
+    expect(db.from).not.toHaveBeenCalledWith('files');
+  });
+});

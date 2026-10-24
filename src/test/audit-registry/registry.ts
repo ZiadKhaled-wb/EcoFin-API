@@ -130,6 +130,14 @@ export const AUDIT_REGISTRY: Readonly<Record<string, AuditExpectation>> = {
   // contract.legal_referred for the ones it makes; on a shop with nothing late, none).
   'POST /api/overdue/warnings/:id/handle': { action: 'overdue.warning_handled' },
   'POST /api/overdue/legal-referrals/:id/dismiss': { action: 'contract.legal_referral_dismissed' },
+  // L01 (D92): opening also blocks an active customer (customer.status_set); closing a case writes
+  // legal.case_closed instead of legal.case_status_changed (same route).
+  'POST /api/legal/cases': { action: 'legal.case_opened', also: ['customer.status_set'] },
+  'PATCH /api/legal/cases/:id': { action: 'legal.case_updated' },
+  'POST /api/legal/cases/:id/status': { action: 'legal.case_status_changed' },
+  'POST /api/legal/cases/:id/hearings': { action: 'legal.hearing_added' },
+  'PATCH /api/legal/cases/:id/hearings/:hearingId': { action: 'legal.hearing_updated' },
+  'POST /api/legal/cases/:id/notes': { action: 'legal.note_added' },
   // N05: the settlement pays through N03's core (collection.created, contract.completed).
   'POST /api/contracts/:id/settle': {
     action: 'contract.settled_early',

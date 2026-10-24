@@ -26,7 +26,10 @@ $$;
 CREATE TABLE t.no_select_policy_ok (table_name text PRIMARY KEY, reason text NOT NULL);
 INSERT INTO t.no_select_policy_ok VALUES
   ('password_resets','O02: service-only pre-session reset tokens; no app table access'),
-  ('jobs', 'platform job queue (D34): service role only; no policy = app users see nothing');
+  ('jobs', 'platform job queue (D34): service role only; no policy = app users see nothing'),
+  ('legal_cases', 'L01 (D92): no direct reads; a lawyer sees only their own cases, so every read goes through get_legal_case / list_legal_cases (app.can_see_legal_case)'),
+  ('legal_hearings', 'L01 (D92): no direct reads; read through the case functions (app.can_see_legal_case)'),
+  ('legal_case_notes', 'L01 (D92): no direct reads; read through the case functions (app.can_see_legal_case)');
 
 -- 5. public functions authenticated may EXECUTE without app.require_permission.
 CREATE TABLE t.no_permission_ok (function_name text PRIMARY KEY, reason text NOT NULL);
@@ -124,6 +127,9 @@ INSERT INTO t.no_permission_ok VALUES
   ('list_sales_returns', 'S05: read-only list of returns; app.return_read_guard (refund.create, sale.create, report.view or cash.view) so an expired shop can still read'),
   ('get_sales_return', 'S05: read-only return; app.return_read_guard and the return''s branch among the caller''s'),
   ('list_legal_referrals', 'N04: read-only legal referrals list (app.list_overdue_actions); app.has_permission(overdue.view) and the installments module'),
+  ('get_legal_case', 'L01: read-only legal case; app.legal_read_guard (legal.view and the legal module) and app.can_see_legal_case (the owner, or the assigned lawyer), so an expired shop can still read'),
+  ('list_legal_cases', 'L01: read-only legal cases the caller may see (the owner all, a lawyer only theirs); app.legal_read_guard (legal.view and the legal module), so an expired shop can still read'),
+  ('list_lawyers', 'L01: read-only pick list of the shop''s active lawyers; app.legal_read_guard (legal.view and the legal module) and the owner only'),
   ('get_collection', 'N03: read-only collection receipt; checks app.has_permission(collection.create or collection.reverse) and the installments module'),
   ('preview_installment_terms', 'N01: read-only installment terms preview (nothing written); checks app.has_permission(installment.create) so an expired shop can still preview'),
   ('get_sale', 'S01: read-only sale; own sales with sale.create, the caller''s branches with report.view or cash.view'),
