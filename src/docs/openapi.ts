@@ -3625,7 +3625,7 @@ export const openApiSpec = {
             post: {
                 tags: ['Sales'],
                 summary: 'Cancel a sales order and refund its deposits (order.cancel)',
-                description: 'S10. reason (3-500 characters, REASON_REQUIRED); refund lines must add up to the deposits exactly, [] when there are none (REFUND_MUST_EQUAL_DEPOSITS, details deposits and refund); a cash refund comes from the caller\'s open shift on its POS device. ORDER_NOT_FOUND, ORDER_NOT_OPEN, ORDER_HAS_DELIVERIES. The same Idempotency-Key cancels once. Audited as sales_order.cancelled. Schema: CancelSalesOrderBody -> SalesOrder.',
+                description: 'S10. reason (3-500 characters, REASON_REQUIRED); refund lines must add up to the deposits exactly, [] when there are none (REFUND_MUST_EQUAL_DEPOSITS, details deposits and refund); a store-credit deposit is refunded only as store credit: the cash + bank lines may add up to at most the net cash + bank deposits (REFUND_METHOD_NOT_ALLOWED, 409, details cash_bank_max and cash_bank_refund); a cash refund comes from the caller\'s open shift on its POS device. ORDER_NOT_FOUND, ORDER_NOT_OPEN, ORDER_HAS_DELIVERIES. The same Idempotency-Key cancels once. Audited as sales_order.cancelled. Schema: CancelSalesOrderBody -> SalesOrder.',
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }],
                 requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },

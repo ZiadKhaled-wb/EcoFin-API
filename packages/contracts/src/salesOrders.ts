@@ -160,3 +160,9 @@ export type SalesOrderList = z.infer<typeof SalesOrderList>;
 export const DepositExceedsBalanceDetail = z.object({ max: Money });
 /** DETAIL of REFUND_MUST_EQUAL_DEPOSITS. */
 export const RefundMustEqualDepositsDetail = z.object({ deposits: Money, refund: Money });
+/** DETAIL of REFUND_METHOD_NOT_ALLOWED: store-credit deposits go back as store credit, so the cash +
+ * bank refund lines may add up to at most the net deposits paid in cash + bank. */
+export const RefundMethodNotAllowedDetail = z.object({
+  cash_bank_max: Money,
+  cash_bank_refund: Money,
+});

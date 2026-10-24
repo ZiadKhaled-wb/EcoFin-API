@@ -510,6 +510,29 @@ SET ROLE authenticated;
 SELECT t.unchanged('O11 a cash refund beyond the drawer (0) is refused',t.cancel('r','Customer changed mind',t.lines(t.pay('cash','500.00')),'s10-cancel-funds'),'INSUFFICIENT_FUNDS');
 RESET ROLE;
 
+-- ---------------------------------------------------------------- O11b refund methods: store credit goes back as store credit
+-- Mona has 1100 credit and the manager's drawer is 0. Deposits: 1000 store credit + 500 cash.
+SELECT t.as_user('a7100000-0000-0000-8000-000000000004',t.org('a'));
+SET ROLE authenticated;
+SELECT t.order('m','s10-order-m',t.lines(t.ln('sofa',5,'380','to_order')));
+SELECT t.run('dm',t.dep('m',t.lines(t.pay('store_credit','1000.00'),t.pay('cash','500.00')),'s10-dep-m001'));
+SELECT t.unchanged('O11b deposits 1000 store credit + 500 cash: a 1500 cash refund is refused',
+  t.cancel('m','Customer changed mind',t.lines(t.pay('cash','1500.00')),'s10-cancel-m-cash'),'REFUND_METHOD_NOT_ALLOWED');
+-- 1500 store credit is allowed (run, then rolled back, so the real cancel below can follow).
+DO $$ BEGIN
+  BEGIN
+    EXECUTE t.cancel('m','Customer changed mind',t.lines(t.pay('store_credit','1500.00')),'s10-cancel-m-sc');
+    RAISE EXCEPTION 'S10_SC_REFUND_OK';
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM t.expect('O11b deposits 1000 store credit + 500 cash: a 1500 store credit refund is allowed',SQLERRM='S10_SC_REFUND_OK',SQLERRM);
+  END;
+END $$;
+SELECT t.run('cm',t.cancel('m','Customer changed mind',t.lines(t.pay('store_credit','1000.00'),t.pay('cash','500.00')),'s10-cancel-m-ok'));
+RESET ROLE;
+SELECT t.expect('O11b deposits 1000 store credit + 500 cash: refund 1000 store credit + 500 cash is allowed; credit and drawer back',
+  t.doc('cm')->>'status'='cancelled' AND t.balances('m')->>'deposits_paid'='0.00' AND t.credit('mona')=1100 AND t.bal(t.drawer('manager'))=0
+  AND (SELECT count(*)=2 FROM t.pays('m','out')),concat_ws(' ',t.doc('cm')->>'status',t.credit('mona'),t.bal(t.drawer('manager'))));
+
 -- ---------------------------------------------------------------- O12 cancel exactly once
 SELECT t.as_user('a7100000-0000-0000-8000-000000000004',t.org('a'));
 SET ROLE authenticated;
@@ -571,7 +594,7 @@ SELECT t.expect('O14 grants: deposit and cancel for authenticated only; their he
 
 -- ---------------------------------------------------------------- O15 the ledgers reconcile after the full flow
 SELECT t.expect('O15 flow ran: deposits and refunds posted in shop a',
-  (SELECT count(*) FROM public.payment_allocations a JOIN public.payments p ON p.id=a.payment_id WHERE a.organization_id=t.org('a') AND a.order_id IS NOT NULL AND p.direction='out')=5);
+  (SELECT count(*) FROM public.payment_allocations a JOIN public.payments p ON p.id=a.payment_id WHERE a.organization_id=t.org('a') AND a.order_id IS NOT NULL AND p.direction='out')=7);
 SELECT t.expect('O15 stock levels = stock ledger sums (product, branch, state), none below zero',NOT EXISTS(
   SELECT 1 FROM (SELECT product_id,branch_id,stock_state,on_hand FROM public.stock_levels WHERE organization_id=t.org('a')) l
   FULL JOIN (SELECT product_id,branch_id,stock_state,sum(quantity) ledger FROM public.stock_movements WHERE organization_id=t.org('a') GROUP BY 1,2,3) m

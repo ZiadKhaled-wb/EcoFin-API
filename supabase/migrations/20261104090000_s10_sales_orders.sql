@@ -527,6 +527,7 @@ CREATE FUNCTION public.cancel_sales_order(p_order_id uuid, p_reason text, p_refu
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE v_org uuid; v_emp uuid; v_o public.sales_orders; v_dep numeric; v_sum numeric := 0; v_shift public.shifts; v_res record;
   v_refund jsonb := COALESCE(p_refund,'[]'::jsonb); v_posted jsonb := '[]'; v_reason text := btrim(p_reason);
+  v_dep_cash_bank numeric := 0; v_ref_cash_bank numeric := 0;
 BEGIN
   v_emp:=app.require_permission('order.cancel'); v_org:=app.current_org_id();
   IF p_idempotency_key IS NULL OR length(p_idempotency_key) NOT BETWEEN 8 AND 128 THEN RAISE EXCEPTION 'VALIDATION_FAILED'; END IF;
@@ -549,6 +550,18 @@ BEGIN
   IF v_sum<>v_dep OR (v_dep=0 AND jsonb_array_length(v_refund)>0) THEN
     RAISE EXCEPTION 'REFUND_MUST_EQUAL_DEPOSITS' USING ERRCODE='P0001',
       DETAIL=jsonb_build_object('deposits',v_dep::numeric(18,2)::text,'refund',v_sum::numeric(18,2)::text)::text;
+  END IF;
+  -- A store-credit deposit goes back only as store credit: the cash + bank refund lines can't exceed the
+  -- net deposits paid in cash + bank (read under the order lock). Cash/bank deposits may go back any way.
+  IF v_sum>0 THEN
+    SELECT COALESCE(sum(CASE WHEN p.direction='in' THEN a.amount ELSE -a.amount END),0) INTO v_dep_cash_bank
+      FROM public.payment_allocations a JOIN public.payments p ON p.id=a.payment_id AND p.organization_id=a.organization_id
+     WHERE a.order_id=v_o.id AND a.organization_id=v_org AND p.method IN ('cash','bank_transfer');
+    SELECT COALESCE(sum(l.amount),0) INTO v_ref_cash_bank FROM app.sale_payments_input(v_refund) l WHERE l.method IN ('cash','bank_transfer');
+    IF v_ref_cash_bank>v_dep_cash_bank THEN
+      RAISE EXCEPTION 'REFUND_METHOD_NOT_ALLOWED' USING ERRCODE='P0001',
+        DETAIL=jsonb_build_object('cash_bank_max',greatest(v_dep_cash_bank,0)::numeric(18,2)::text,'cash_bank_refund',v_ref_cash_bank::numeric(18,2)::text)::text;
+    END IF;
   END IF;
   IF v_sum>0 AND EXISTS(SELECT 1 FROM app.sale_payments_input(v_refund) l WHERE l.method='cash') THEN
     v_shift:=app.s10_shift(v_org,v_emp,'order.cancel');

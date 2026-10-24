@@ -226,6 +226,31 @@ describe('S10 sales orders service', () => {
       statusCode: 404,
     });
   });
+  it('maps REFUND_METHOD_NOT_ALLOWED to 409 with its detail on cancel', async () => {
+    const { db, ctx } = fixture();
+    db.queue({
+      data: null,
+      error: {
+        message: 'REFUND_METHOD_NOT_ALLOWED',
+        details: '{"cash_bank_max":"500.00","cash_bank_refund":"1500.00"}',
+      },
+    });
+    await expect(
+      so.cancel(
+        ctx,
+        ID,
+        CancelSalesOrderBody.parse({
+          reason: 'changed mind',
+          refund: [{ method: 'cash', amount: '1500.00' }],
+        }),
+        's10-cancel-key',
+      ),
+    ).rejects.toMatchObject({
+      code: 'REFUND_METHOD_NOT_ALLOWED',
+      statusCode: 409,
+      details: { cash_bank_max: '500.00', cash_bank_refund: '1500.00' },
+    });
+  });
   for (const [code, status] of [
     ['ORDER_NOT_FOUND', 404],
     ['ORDER_NOT_OPEN', 409],

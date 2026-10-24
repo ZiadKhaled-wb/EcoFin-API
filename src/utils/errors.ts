@@ -52,6 +52,7 @@ import {
   ExportTooSoonDetail,
   DepositExceedsBalanceDetail,
   RefundMustEqualDepositsDetail,
+  RefundMethodNotAllowedDetail,
   type ErrorCode,
 } from '@ziadkhaled-wb/contracts';
 import type { ZodTypeAny } from 'zod';
@@ -163,6 +164,7 @@ const DETAIL_SCHEMAS: Partial<Record<ErrorCode, ZodTypeAny>> = {
   EXPORT_TOO_SOON: ExportTooSoonDetail,
   DEPOSIT_EXCEEDS_BALANCE: DepositExceedsBalanceDetail,
   REFUND_MUST_EQUAL_DEPOSITS: RefundMustEqualDepositsDetail,
+  REFUND_METHOD_NOT_ALLOWED: RefundMethodNotAllowedDetail,
 };
 
 /**
