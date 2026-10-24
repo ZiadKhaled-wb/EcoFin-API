@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   CurrentShift,
+  ShiftSummary,
   ShiftCashBody,
   ShiftCloseBody,
   ShiftDifferenceDetail,
@@ -76,5 +77,46 @@ describe('K02 shift contracts', () => {
     expect(errorCodeHttpStatus.SHIFT_REQUIRED).toBe(409);
     expect(errorCodeHttpStatus.SHIFT_DIFFERENCE_REASON_REQUIRED).toBe(400);
     expect(errorCodeHttpStatus.DEVICE_INVALID).toBe(400);
+  });
+});
+
+describe('EC-149 shift takings (D94)', () => {
+  const zeros = { cash: '0.00', bank_transfer: '0.00', store_credit: '0.00' };
+  const shift = {
+    id: BRANCH,
+    number: 'MAIN-SH-26-000001',
+    branch_id: BRANCH,
+    device_id: SAFE,
+    device_name: 'POS 1',
+    employee_id: SAFE,
+    employee_name: 'Cashier',
+    drawer_account_id: SAFE,
+    status: 'closed',
+    opening_float: '100.00',
+    opened_at: '2026-10-22T08:00:00.000Z',
+    closed_at: '2026-10-22T20:00:00.000Z',
+    closed_by_name: 'Cashier',
+    expected_cash: '29400.00',
+    counted_cash: '29400.00',
+    difference: '0.00',
+    count_breakdown: { '200': 147 },
+    difference_reason: null,
+    sales_total: '69950.00',
+    sales_count: 3,
+    tax_total: '8590.35',
+    payment_totals: { ...zeros, cash: '27200.00', bank_transfer: '22750.00' },
+    collections: { ...zeros, cash: '2200.00' },
+    deposits: { ...zeros, bank_transfer: '1000.00' },
+  };
+  it('a shift answers its sales count, VAT and collections apart from the sales money', () => {
+    expect(ShiftSummary.safeParse(shift).success).toBe(true);
+  });
+  it('the takings fields are required on a shift', () => {
+    const { collections: _c, ...noCollections } = shift;
+    const { sales_count: _n, ...noCount } = shift;
+    const { deposits: _d, ...noDeposits } = shift;
+    expect(ShiftSummary.safeParse(noDeposits).success).toBe(false);
+    expect(ShiftSummary.safeParse(noCollections).success).toBe(false);
+    expect(ShiftSummary.safeParse(noCount).success).toBe(false);
   });
 });

@@ -1095,5 +1095,17 @@ SELECT t.expect('S5 app.post_sale_core_full is executable by neither authenticat
   NOT has_function_privilege('authenticated','app.post_sale_core_full(uuid, uuid, public.shifts, jsonb, uuid, numeric, text, jsonb, jsonb, text, uuid, numeric, jsonb)','EXECUTE')
   AND NOT has_function_privilege('anon','app.post_sale_core_full(uuid, uuid, public.shifts, jsonb, uuid, numeric, text, jsonb, jsonb, text, uuid, numeric, jsonb)','EXECUTE'));
 
+-- EC-149 (D94): an accepted offline sale is a sale like any other in its day's and its shift's numbers.
+SELECT t.expect('EC-149 an accepted offline sale counts in its day close sales and in its shift''s takings',
+  (SELECT (app.day_close_compute(s.organization_id,s.branch_id,s.business_date)#>>'{totals,sales,count}')::int
+            = (SELECT count(*) FROM public.sales x WHERE x.organization_id=s.organization_id AND x.branch_id=s.branch_id
+                 AND x.business_date=s.business_date
+                 AND NOT EXISTS (SELECT 1 FROM public.sales_returns r WHERE r.sale_id=x.id AND r.kind='void'))
+          AND (app.shift_takings(s.organization_id,s.shift_id)->>'sales_count')::int
+            = (SELECT count(*) FROM public.sales x WHERE x.shift_id=s.shift_id
+                 AND NOT EXISTS (SELECT 1 FROM public.sales_returns r WHERE r.sale_id=x.id AND r.kind='void'))
+          AND s.shift_id IS NOT NULL
+   FROM public.sales s WHERE s.id=(t.sale('sr')).id));
+
 SELECT name,ok,detail FROM t.results WHERE NOT COALESCE(ok,false);
 SELECT count(*) FILTER(WHERE ok) passed,count(*) FILTER(WHERE NOT COALESCE(ok,false)) failed FROM t.results;

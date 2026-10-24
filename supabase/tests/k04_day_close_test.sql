@@ -197,15 +197,18 @@ SELECT t.as_user(t.u('owner'),t.org('a'));
 SET ROLE authenticated;
 INSERT INTO t.docs SELECT 'p2',t.preview('second');
 RESET ROLE;
-SELECT t.expect('totals: sales count, total, tax and discount = the day''s sales rows',
-  (t.doc('p')#>>'{totals,sales,count}')::int=(SELECT count(*) FROM public.sales WHERE branch_id=t.id('main') AND business_date=t.today())
-  AND (t.doc('p')#>>'{totals,sales,total}')::numeric=(SELECT sum(total) FROM public.sales WHERE branch_id=t.id('main') AND business_date=t.today())
-  AND (t.doc('p')#>>'{totals,sales,tax_total}')::numeric=(SELECT sum(tax_total) FROM public.sales WHERE branch_id=t.id('main') AND business_date=t.today())
-  AND (t.doc('p')#>>'{totals,sales,count}')::int=4 AND (t.doc('p')#>>'{totals,sales,total}')::numeric=12900,
+SELECT t.expect('totals: sales count, total, tax and discount = the day''s sales rows without the voided one (D94)',
+  (t.doc('p')#>>'{totals,sales,count}')::int=(SELECT count(*) FROM public.sales x WHERE branch_id=t.id('main') AND business_date=t.today()
+       AND NOT EXISTS (SELECT 1 FROM public.sales_returns r WHERE r.sale_id=x.id AND r.kind='void'))
+  AND (t.doc('p')#>>'{totals,sales,total}')::numeric=(SELECT sum(total) FROM public.sales x WHERE branch_id=t.id('main') AND business_date=t.today()
+       AND NOT EXISTS (SELECT 1 FROM public.sales_returns r WHERE r.sale_id=x.id AND r.kind='void'))
+  AND (t.doc('p')#>>'{totals,sales,tax_total}')::numeric=(SELECT sum(tax_total) FROM public.sales x WHERE branch_id=t.id('main') AND business_date=t.today()
+       AND NOT EXISTS (SELECT 1 FROM public.sales_returns r WHERE r.sale_id=x.id AND r.kind='void'))
+  AND (t.doc('p')#>>'{totals,sales,count}')::int=3 AND (t.doc('p')#>>'{totals,sales,total}')::numeric=12800,
   t.doc('p')#>>'{totals,sales}');
-SELECT t.expect('totals: paid by method = the sales'' payments (cash 300 + 200 + 2000 down, bank 300 + 100)',
+SELECT t.expect('totals: paid by method = the counted sales'' payments (cash 300 + 200 + 2000 down, bank 300; the voided 100 out)',
   (t.doc('p')#>>'{totals,sales,paid_by_method,cash}')::numeric=2500
-  AND (t.doc('p')#>>'{totals,sales,paid_by_method,bank_transfer}')::numeric=400
+  AND (t.doc('p')#>>'{totals,sales,paid_by_method,bank_transfer}')::numeric=300
   AND (t.doc('p')#>>'{totals,sales,paid_by_method,store_credit}')::numeric=0
   AND (t.doc('p')#>>'{totals,sales,on_contract}')::numeric=(SELECT financed_amount FROM public.contracts WHERE id=(t.doc('inst')->'contract'->>'id')::uuid)
   AND (t.doc('p')#>>'{totals,sales,voided,count}')::int=1 AND (t.doc('p')#>>'{totals,sales,voided,total}')::numeric=100,
@@ -253,7 +256,10 @@ SELECT t.expect('shifts: the closed shift with expected 3950, counted 3940, diff
   AND (t.doc('p')#>>'{totals,shifts,items,0,difference}')::numeric=-10
   AND t.doc('p')#>>'{totals,shifts,items,0,difference_reason}'='Ten pounds short'
   AND (t.doc('p')#>>'{totals,shifts,difference_total}')::numeric=-10
-  AND (t.doc('p')#>>'{totals,shifts,items,0,payment_totals,cash}')::numeric=3500,
+  AND (t.doc('p')#>>'{totals,shifts,items,0,payment_totals,cash}')::numeric=2500
+  AND (t.doc('p')#>>'{totals,shifts,items,0,collections,cash}')::numeric=1000
+  AND (t.doc('p')#>>'{totals,shifts,items,0,sales_total}')::numeric=12800
+  AND (t.doc('p')#>>'{totals,shifts,items,0,sales_count}')::int=3,
   t.doc('p')#>>'{totals,shifts}');
 SELECT t.expect('issues: a normal day has no ledger or document problem; the shift difference is info',
   NOT ('DOCUMENT_WITHOUT_LEDGER'=ANY(t.codes(t.doc('p')))) AND NOT ('LEDGER_MISMATCH'=ANY(t.codes(t.doc('p'))))
@@ -365,7 +371,8 @@ SELECT t.expect('get: the stored close without drift',
 SELECT t.expect('list: today''s main day is closed with its sales total; the manager sees only the main branch',
   (SELECT bool_and(x->>'branch_id'=t.id('main')::text) FROM jsonb_array_elements(t.doc('list')->'items') x)
   AND (SELECT count(*)=1 FROM jsonb_array_elements(t.doc('list')->'items') x
-       WHERE x->>'status'='closed' AND x->>'id'=t.id('dc')::text AND (x->>'sales_total')::numeric=12900)
+       WHERE x->>'status'='closed' AND x->>'id'=t.id('dc')::text
+         AND x->>'sales_total'=t.doc('close')#>>'{totals,sales,total}' AND (x->>'sales_total')::numeric=12800)
   AND jsonb_array_length(t.doc('list-closed')->'items')=1,
   t.doc('list')::text);
 SELECT t.expect('alerts: an answer with a branches list (today is never an unclosed day)',
