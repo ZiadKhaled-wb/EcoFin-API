@@ -536,6 +536,58 @@ M01 Audit ${STAMP}-${ipCounter}
     return { id: emp.data.id as string, authId: user.data.user.id };
   }
 
+  /** L01: a throwaway LAWYER employee of shop one (the plan has the legal module), made once. */
+  let legalLawyer = '';
+  async function lawyerEmployee(): Promise<string> {
+    if (legalLawyer) return legalLawyer;
+    const email = `f07.lawyer.${STAMP}@ecotech.test`;
+    const user = await service.auth.admin.createUser({
+      email,
+      password: TEMP_PASSWORD,
+      email_confirm: true,
+    });
+    if (user.error) throw new Error(user.error.message);
+    const emp = await service
+      .from('employees')
+      .insert({
+        organization_id: SHOP_ONE,
+        auth_user_id: user.data.user.id,
+        full_name: `F07 lawyer ${STAMP}`,
+        email,
+        role: 'LAWYER',
+        default_branch_id: BR1,
+      })
+      .select('id')
+      .single();
+    if (emp.error) throw new Error(emp.error.message);
+    legalLawyer = emp.data.id as string;
+    return legalLawyer;
+  }
+  /** L01: a legal referral on a new N02 contract, and the owner's token to open a case from it. */
+  async function legalContract(): Promise<{ contractId: string; token: string }> {
+    const referral = await overdueAction('legal_referral');
+    const row = await service
+      .from('overdue_actions')
+      .select('contract_id')
+      .eq('id', referral)
+      .single();
+    if (row.error) throw new Error(row.error.message);
+    const owner = await login('owner.one@ecotech.test');
+    return { contractId: row.data.contract_id as string, token: owner.accessToken };
+  }
+  /** L01: an open case on a new contract (written through the API, not through a driver). */
+  async function legalCase(
+    extra: object = {},
+  ): Promise<{ id: string; token: string; hearing?: string }> {
+    const { contractId, token } = await legalContract();
+    const opened = await send('post', '/api/legal/cases', {
+      token,
+      key: `f07-legal-${STAMP}-${ipCounter}`,
+      body: { contract_id: contractId, ...extra },
+    });
+    expect(opened.res.status, JSON.stringify(opened.res.body)).toBe(201);
+    return { id: (opened.res.body as { id: string }).id, token };
+  }
   // O03: shop one's paired POS computer; the shifts of this test are opened from it.
   let pos = '';
   beforeAll(async () => {
@@ -1633,6 +1685,80 @@ M01 Audit ${STAMP}-${ipCounter}
         sent: await send('post', `/api/overdue/legal-referrals/${id}/dismiss`, {
           token: owner.accessToken,
           body: { reason: 'Audit check' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    // L01 (D92): opening also blocks the (active) customer of the new contract.
+    'POST /api/legal/cases': async () => {
+      const { contractId, token } = await legalContract();
+      return {
+        sent: await send('post', '/api/legal/cases', {
+          token,
+          key: `f07-legal-open-${STAMP}-${ipCounter}`,
+          body: { contract_id: contractId, court: 'Audit court' },
+        }),
+        org: SHOP_ONE,
+        status: 201,
+      };
+    },
+    'PATCH /api/legal/cases/:id': async () => {
+      const c = await legalCase();
+      return {
+        sent: await send('patch', `/api/legal/cases/${c.id}`, {
+          token: c.token,
+          body: { court: 'Audit court', case_type: 'Civil' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/legal/cases/:id/status': async () => {
+      // Filed needs a lawyer, a court and a court case number.
+      const c = await legalCase({
+        lawyer_employee_id: await lawyerEmployee(),
+        court: 'Audit court',
+        case_number: `${STAMP}/${ipCounter}`,
+      });
+      return {
+        sent: await send('post', `/api/legal/cases/${c.id}/status`, {
+          token: c.token,
+          body: { status: 'filed' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/legal/cases/:id/hearings': async () => {
+      const c = await legalCase();
+      return {
+        sent: await send('post', `/api/legal/cases/${c.id}/hearings`, {
+          token: c.token,
+          body: { hearing_date: '2031-01-15', notes: 'Audit hearing' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'PATCH /api/legal/cases/:id/hearings/:hearingId': async () => {
+      const c = await legalCase();
+      const added = await send('post', `/api/legal/cases/${c.id}/hearings`, {
+        token: c.token,
+        body: { hearing_date: '2031-01-15' },
+      });
+      expect(added.res.status, JSON.stringify(added.res.body)).toBe(200);
+      const hearingId = (added.res.body as { hearings: { id: string }[] }).hearings[0]!.id;
+      return {
+        sent: await send('patch', `/api/legal/cases/${c.id}/hearings/${hearingId}`, {
+          token: c.token,
+          body: { outcome: 'Adjourned' },
+        }),
+        org: SHOP_ONE,
+      };
+    },
+    'POST /api/legal/cases/:id/notes': async () => {
+      const c = await legalCase();
+      return {
+        sent: await send('post', `/api/legal/cases/${c.id}/notes`, {
+          token: c.token,
+          body: { note: 'Audit note' },
         }),
         org: SHOP_ONE,
       };

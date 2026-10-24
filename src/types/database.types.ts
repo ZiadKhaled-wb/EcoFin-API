@@ -3301,8 +3301,10 @@ export type Database = {
           lawyer_employee_id: string | null;
           next_hearing_date: string | null;
           number: string;
+          opened_on: string;
           organization_id: string;
           outcome: string | null;
+          outcome_kind: string | null;
           status: Database['public']['Enums']['legal_status'];
           updated_at: string;
           updated_by: string | null;
@@ -3322,8 +3324,10 @@ export type Database = {
           lawyer_employee_id?: string | null;
           next_hearing_date?: string | null;
           number: string;
+          opened_on: string;
           organization_id: string;
           outcome?: string | null;
+          outcome_kind?: string | null;
           status?: Database['public']['Enums']['legal_status'];
           updated_at?: string;
           updated_by?: string | null;
@@ -3343,8 +3347,10 @@ export type Database = {
           lawyer_employee_id?: string | null;
           next_hearing_date?: string | null;
           number?: string;
+          opened_on?: string;
           organization_id?: string;
           outcome?: string | null;
+          outcome_kind?: string | null;
           status?: Database['public']['Enums']['legal_status'];
           updated_at?: string;
           updated_by?: string | null;
@@ -8794,6 +8800,8 @@ export type Database = {
     Functions: {
       accept_invite: { Args: { p_auth_user_id: string; p_token_hash: string }; Returns: Json };
       accept_quotation: { Args: { p_id: string }; Returns: Json };
+      add_legal_case_note: { Args: { p_body: Json; p_case_id: string }; Returns: Json };
+      add_legal_hearing: { Args: { p_body: Json; p_case_id: string }; Returns: Json };
       admin_change_plan: {
         Args: { p_organization_id: string; p_plan_key: string; p_reason: string };
         Returns: undefined;
@@ -9196,6 +9204,7 @@ export type Database = {
         Returns: Json;
       };
       get_import_job: { Args: { p_id: string }; Returns: Json };
+      get_legal_case: { Args: { p_id: string }; Returns: Json };
       get_migration_report: { Args: { p_filters?: Json }; Returns: Json };
       get_my_wallet: { Args: Record<PropertyKey, never>; Returns: Json };
       get_offline_sale: { Args: { p_id: string }; Returns: Json };
@@ -9444,6 +9453,8 @@ export type Database = {
       };
       list_import_jobs: { Args: { p_filters?: Json }; Returns: Json };
       list_installment_policies: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_lawyers: { Args: Record<PropertyKey, never>; Returns: Json };
+      list_legal_cases: { Args: { p_filters?: Json }; Returns: Json };
       list_legal_referrals: { Args: { p_filters?: Json }; Returns: Json };
       list_migration_signoffs: { Args: Record<PropertyKey, never>; Returns: Json };
       list_offline_sales: { Args: { p_branch_id?: string; p_status?: string }; Returns: Json };
@@ -9641,6 +9652,7 @@ export type Database = {
         Args: { p_id: string; p_qr?: string; p_signature_ok: boolean; p_uuid_ok: boolean };
         Returns: Json;
       };
+      open_legal_case: { Args: { p_body: Json; p_idempotency_key: string }; Returns: Json };
       open_shift: {
         Args: {
           p_branch_id: string;
@@ -10006,6 +10018,7 @@ export type Database = {
       };
       set_expense_category_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
       set_guarantor_archived: { Args: { p_archived: boolean; p_id: string }; Returns: Json };
+      set_legal_case_status: { Args: { p_body: Json; p_id: string }; Returns: Json };
       set_offline_settings: {
         Args: {
           p_enabled: boolean;
@@ -10070,6 +10083,11 @@ export type Database = {
         Returns: Json;
       };
       update_guarantor: { Args: { p_body: Json; p_id: string }; Returns: Json };
+      update_legal_case: { Args: { p_body: Json; p_id: string }; Returns: Json };
+      update_legal_hearing: {
+        Args: { p_body: Json; p_case_id: string; p_hearing_id: string };
+        Returns: Json;
+      };
       update_org_profile: { Args: { p_changes: Json }; Returns: undefined };
       update_org_settings: { Args: { p_changes: Json }; Returns: undefined };
       update_org_settings_p03: { Args: { p_changes: Json }; Returns: undefined };

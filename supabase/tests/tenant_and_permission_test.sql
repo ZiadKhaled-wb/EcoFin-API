@@ -956,6 +956,55 @@ INSERT INTO t.denial VALUES
  ('cancel_quotation','zz_s09_08_cancel','quotation.manage',$q$SELECT public.cancel_quotation((SELECT id FROM t.s09_docs WHERE tag='cancel'),'Customer cancelled')$q$),
  -- D03: the receivables aging needs report.financial (a cashier has no such key).
  ('report_receivables','zz_d03_1_report','report.financial',$q$SELECT public.report_receivables('customer')$q$);
+-- L01: a legal case of shop A, on its own copy of the N02 denial contract (made on first use, like the
+-- N05 copies). The writes take legal.manage, the reads legal.view; opening is owner only, so a role
+-- with legal.manage but not the owner is refused too (see supabase/tests/l01_legal_module_test.sql).
+-- The status case closes the case, so it sorts after the hearing and note cases. The case names sort after zz_n02 (the contract copies need the denial contract) and the reads run after
+-- the writes, because a STABLE read can't see a row made by its own call.
+CREATE FUNCTION t.l01_referral(p_tag text) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $f$
+DECLARE v_id uuid; c uuid := t.n05_contract(p_tag);
+BEGIN
+    SELECT id INTO v_id FROM public.overdue_actions WHERE contract_id=c AND kind='legal_referral';
+    IF v_id IS NULL THEN
+        INSERT INTO public.overdue_actions(organization_id,kind,contract_id,customer_id,branch_id,schedule_line_id,business_date,days_late,overdue_amount,status)
+        SELECT k.organization_id,'legal_referral',k.id,k.customer_id,k.branch_id,(SELECT id FROM public.schedule_lines WHERE contract_id=k.id ORDER BY seq LIMIT 1),
+               current_date,70,1,'open' FROM public.contracts k WHERE k.id=c
+        RETURNING id INTO v_id;
+    END IF;
+    RETURN c;
+END $f$;
+CREATE FUNCTION t.l01_case() RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $f$
+DECLARE v_id uuid; v_cid uuid; c public.contracts;
+BEGIN
+    SELECT id INTO v_id FROM public.legal_cases WHERE organization_id='d1000000-0000-0000-0000-000000000001' AND idempotency_key='denial-l01-case';
+    IF v_id IS NULL THEN
+        v_cid := t.n05_contract('l01c');          -- a separate statement: it must see the copy it just made
+        SELECT * INTO c FROM public.contracts WHERE id=v_cid;
+        INSERT INTO public.legal_cases(organization_id,number,contract_id,customer_id,status,claim_amount,opened_on,idempotency_key)
+        VALUES (c.organization_id,'DENIAL-LC-1',c.id,c.customer_id,'preparing',1,current_date,'denial-l01-case') RETURNING id INTO v_id;
+    END IF;
+    RETURN v_id;
+END $f$;
+CREATE FUNCTION t.l01_hearing() RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER AS $f$
+DECLARE v_id uuid; v_case uuid := t.l01_case();
+BEGIN
+    SELECT id INTO v_id FROM public.legal_hearings WHERE case_id=v_case;
+    IF v_id IS NULL THEN
+        INSERT INTO public.legal_hearings(organization_id,case_id,hearing_date)
+        VALUES ('d1000000-0000-0000-0000-000000000001',v_case,current_date+30) RETURNING id INTO v_id;
+    END IF;
+    RETURN v_id;
+END $f$;
+INSERT INTO t.denial VALUES
+ ('open_legal_case','zz_n9_l01_1_open','legal.manage',$q$SELECT public.open_legal_case(jsonb_build_object('contract_id',t.l01_referral('l01o')),'denial-l01-open')$q$),
+ ('update_legal_case','zz_n9_l01_2_update','legal.manage',$q$SELECT public.update_legal_case(t.l01_case(),'{"court":"Denial court"}')$q$),
+ ('set_legal_case_status','zz_n9_l01_6_status','legal.manage',$q$SELECT public.set_legal_case_status(t.l01_case(),'{"status":"closed","outcome_kind":"withdrawn"}')$q$),
+ ('add_legal_hearing','zz_n9_l01_3_hearing','legal.manage',$q$SELECT public.add_legal_hearing(t.l01_case(),'{"hearing_date":"2030-01-01"}')$q$),
+ ('update_legal_hearing','zz_n9_l01_4_hearing_update','legal.manage',$q$SELECT public.update_legal_hearing(t.l01_case(),t.l01_hearing(),'{"notes":"Denial note"}')$q$),
+ ('add_legal_case_note','zz_n9_l01_5_note','legal.manage',$q$SELECT public.add_legal_case_note(t.l01_case(),'{"note":"Denial note"}')$q$),
+ ('get_legal_case','zz_n9_l01_7_get','legal.view',$q$SELECT public.get_legal_case(t.l01_case())$q$),
+ ('list_legal_cases','zz_n9_l01_8_list','legal.view',$q$SELECT public.list_legal_cases('{"status":"all"}')$q$),
+ ('list_lawyers','zz_n9_l01_9_lawyers','legal.view',$q$SELECT public.list_lawyers()$q$);
 CREATE TABLE t.write_functions AS
 SELECT p.proname::text AS fn FROM pg_proc p
 WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'

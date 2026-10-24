@@ -32,6 +32,7 @@ export const openApiSpec = {
         { name: 'Access (F06)', description: 'Permissions and branch scope' },
         { name: 'Audit (F07)', description: 'Search the shop audit log (audit.view)' },
         { name: 'Devices', description: 'POS devices and pairing a computer with one (O03)' },
+        { name: 'Legal', description: 'Legal cases, hearings and notes (L01, N09)' },
     ],
     components: {
         securitySchemes: {
@@ -2417,6 +2418,92 @@ export const openApiSpec = {
                 security: [{ bearerAuth: [] }],
                 parameters: [{ $ref: '#/components/parameters/OrgId' }],
                 responses: { 200: { description: 'OverdueRunResult' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/legal/cases': {
+            get: {
+                tags: ['Legal'],
+                summary: 'List legal cases (legal.view)',
+                description: 'L01 + N09 (D92). status open (default) | closed | all, lawyer_id (the owner only; ignored for a lawyer), q (case number, court case number, contract number, customer name or phone), limit 1-100 (default 25), cursor. Open cases first, the soonest next hearing first (none last), then opened_on newest first. Module legal (MODULE_NOT_IN_PLAN). The owner sees every case; a lawyer only the cases assigned to them (a case of another lawyer, a case of another shop and a missing id all answer LEGAL_CASE_NOT_FOUND). A case never changes what a customer owes: no fee, no cost, no charge (rule 4). Schema: LegalCaseListQuery -> LegalCaseListResponse.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'LegalCaseListResponse' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' } },
+            },
+            post: {
+                tags: ['Legal'],
+                summary: 'Open a legal case (owner)',
+                description: 'L01 + N09 (D92). The OWNER only (PERMISSION_DENIED otherwise). The contract must be active or rescheduled with an overdue amount or an open N04 legal referral (LEGAL_CONTRACT_NOT_DEFAULTED, 422). One open case per contract (LEGAL_CASE_ALREADY_OPEN, 409, details legal_case_id). The claim defaults to what the contract still owes (remaining) and cannot be higher (LEGAL_CLAIM_TOO_HIGH, 422, details remaining); the lawyer must be an active LAWYER employee (LAWYER_INVALID). One transaction: the case (LC number, status preparing, opened_on today), the optional first note, the referral becomes case_opened, an active customer is blocked from new installment sales (audit customer.status_set, warning). Audit legal.case_opened. The same Idempotency-Key and body returns the same case; another body IDEMPOTENCY_CONFLICT. Nothing is written to payments, schedule lines or any cash or ledger table. Schema: OpenLegalCaseBody -> LegalCaseDetail.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', minLength: 8, maxLength: 128 } }],
+                responses: { 201: { description: 'LegalCaseDetail' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/legal/cases/{id}': {
+            get: {
+                tags: ['Legal'],
+                summary: 'Get a legal case (legal.view)',
+                description: 'L01 + N09 (D92). The case with the guarantors of the contract, all hearings, the notes (newest first), the amounts (claim, total payable, paid before the case, paid since it was opened, remaining) and up to 50 collections since it was opened, the N04 referral it came from and the outcome. Module legal (MODULE_NOT_IN_PLAN). The owner sees every case; a lawyer only the cases assigned to them (a case of another lawyer, a case of another shop and a missing id all answer LEGAL_CASE_NOT_FOUND). A case never changes what a customer owes: no fee, no cost, no charge (rule 4). Schema: LegalCaseDetail.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'LegalCaseDetail' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+            patch: {
+                tags: ['Legal'],
+                summary: 'Change the details of a legal case (legal.manage)',
+                description: 'L01 + N09 (D92). court, case_type, case_number, claim_amount (only while preparing: LEGAL_CASE_FILED, 409; above 0 and not above the remaining: LEGAL_CLAIM_TOO_HIGH) and lawyer_employee_id (the owner only; LAWYER_INVALID). A filed case keeps its lawyer, court and court case number. A closed case: LEGAL_CASE_CLOSED (409). Audit legal.case_updated with the before and after of what changed. Answers the case detail. Schema: UpdateLegalCaseBody -> LegalCaseDetail.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'LegalCaseDetail' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' }, 422: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/legal/cases/{id}/status': {
+            post: {
+                tags: ['Legal'],
+                summary: 'Move a legal case along (legal.manage)',
+                description: 'L01 + N09 (D92). preparing -> filed -> in_court -> judgment, judgment -> in_court (an appeal), and any open status -> closed; any other move is LEGAL_STATUS_INVALID (409, details from and to), and a closed case never reopens. Filed needs a lawyer, a court and a court case number (VALIDATION_FAILED naming the field). Closing needs outcome_kind (paid, settled_out_of_court, judgment_enforced, withdrawn, dismissed_by_court, other) and an outcome note for other; it changes nothing on the contract or the customer (a write-off or settlement is done by hand with N05, unblocking with R01). Audit legal.case_status_changed or legal.case_closed. Answers the case detail. Schema: SetLegalCaseStatusBody -> LegalCaseDetail.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'LegalCaseDetail' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/legal/cases/{id}/hearings': {
+            post: {
+                tags: ['Legal'],
+                summary: 'Add a hearing (legal.manage)',
+                description: 'L01 + N09 (D92). hearing_date (a past date is allowed: recording history) and optional notes. Only on an open case (LEGAL_CASE_CLOSED). The case\'s next hearing is the earliest hearing from today on with no outcome yet. Audit legal.hearing_added. Answers the case detail. Schema: AddHearingBody -> LegalCaseDetail.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'LegalCaseDetail' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/legal/cases/{id}/hearings/{hearingId}': {
+            patch: {
+                tags: ['Legal'],
+                summary: 'Change a hearing or record its outcome (legal.manage)',
+                description: 'L01 + N09 (D92). Any of hearing_date, outcome (up to 500) and notes (up to 2000). A hearing of another case is HEARING_NOT_FOUND (404). Only on an open case. Audit legal.hearing_updated. Answers the case detail. Schema: UpdateHearingBody -> LegalCaseDetail.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'hearingId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'LegalCaseDetail' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' }, 409: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/legal/cases/{id}/notes': {
+            post: {
+                tags: ['Legal'],
+                summary: 'Add a note to a legal case (legal.manage)',
+                description: 'L01 + N09 (D92). A note of 1-2000 characters. Notes are append-only: no edit and no delete. Allowed on a closed case too (follow-up after the judgment). Audit legal.note_added. Answers the case detail. Schema: AddCaseNoteBody -> LegalCaseDetail.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }, { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'LegalCaseDetail' }, 400: { $ref: '#/components/responses/Error' }, 403: { $ref: '#/components/responses/Error' }, 404: { $ref: '#/components/responses/Error' } },
+            },
+        },
+        '/api/legal/lawyers': {
+            get: {
+                tags: ['Legal'],
+                summary: 'List the shop\'s lawyers (owner)',
+                description: 'L01 + N09 (D92). The shop\'s active LAWYER employees { id, full_name, phone, open_cases }, for the owner only (PERMISSION_DENIED otherwise). Schema: LawyerListResponse.',
+                security: [{ bearerAuth: [] }],
+                parameters: [{ $ref: '#/components/parameters/OrgId' }],
+                responses: { 200: { description: 'LawyerListResponse' }, 403: { $ref: '#/components/responses/Error' } },
             },
         },
         '/api/sales/quote': {

@@ -91,6 +91,13 @@ function entityTable(entityType: string): SameOrgTable {
   return ENTITY_TABLES[entityType as EntityType];
 }
 
+/**
+ * L01 (D92): a legal case is not readable table-wise (the tables have no direct grant); the case read\n * itself answers LEGAL_CASE_NOT_FOUND for another shop's case and for a lawyer's colleague's case.\n * It also checks the module and legal.view, so a lawyer can't list or open another lawyer's papers.\n */
+async function assertLegalCaseAccess(ctx: RequestContext, caseId: string): Promise<void> {
+  const result = await ctx.db.rpc('get_legal_case', { p_id: caseId });
+  if (result.error) fail(result.error, 'legal case file access');
+}
+
 /** The entity a file points at. An entity id must belong to the caller's shop (404 otherwise). */
 async function resolveEntity(
   ctx: RequestContext,
@@ -103,7 +110,10 @@ async function resolveEntity(
     return { entityType: null, entityId: null };
   }
   const table = entityTable(entityType);
-  if (entityId !== undefined) await assertSameOrg(ctx, table, [entityId]);
+  if (entityId !== undefined) {
+    if (entityType === 'legal_case') await assertLegalCaseAccess(ctx, entityId);
+    else await assertSameOrg(ctx, table, [entityId]);
+  }
   return { entityType, entityId: entityId ?? null };
 }
 
@@ -220,6 +230,9 @@ export async function getFileUrl(
     const claim = await ctx.db.rpc('get_warranty_claim', { p_claim_id: data.entity_id });
     if (claim.error) fail(claim.error, 'claim photo access');
   }
+  if (data.entity_type === 'legal_case' && data.entity_id) {
+    await assertLegalCaseAccess(ctx, data.entity_id);
+  }
 
   const path = assertOwnPath(ctx, data.path);
   if (data.purpose === 'export') {
@@ -244,7 +257,8 @@ export async function listFiles(
     if (claim.error) fail(claim.error, 'claim photo list');
   }
   const table = entityTable(query.entityType);
-  await assertSameOrg(ctx, table, [query.entityId]);
+  if (query.entityType === 'legal_case') await assertLegalCaseAccess(ctx, query.entityId);
+  else await assertSameOrg(ctx, table, [query.entityId]);
 
   const { data, error } = await ctx.db
     .from('files')
