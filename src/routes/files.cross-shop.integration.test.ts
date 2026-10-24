@@ -131,6 +131,29 @@ describe.skipIf(!RUN)('TEST-1: F14 files across shops with real shop B data', ()
       expect(await filesFor(customerB)).toBe(before);
     });
 
+    // L01 (D92): a legal case is read through get_legal_case (the tables have no direct grant), so
+    // a case that is not the caller's (another shop's, another lawyer's, missing) is one answer.
+    it("the files of a legal case that is not the caller's read like a missing record: 404 LEGAL_CASE_NOT_FOUND", async () => {
+      const list = await request(app)
+        .get('/api/files')
+        .query({ entityType: 'legal_case', entityId: NO_SUCH_ID })
+        .set('X-Forwarded-For', nextIp())
+        .set('Authorization', `Bearer ${tokenA}`);
+      expect(list.status).toBe(404);
+      expect(code(list)).toBe('LEGAL_CASE_NOT_FOUND');
+      const before = await filesFor(NO_SUCH_ID);
+      const upload = await request(app)
+        .post('/api/files')
+        .set('X-Forwarded-For', nextIp())
+        .set('Authorization', `Bearer ${tokenA}`)
+        .field('purpose', 'legal_document')
+        .field('entityType', 'legal_case')
+        .field('entityId', NO_SUCH_ID)
+        .attach('file', PNG, { filename: 'claim.png', contentType: 'image/png' });
+      expect(upload.status).toBe(404);
+      expect(code(upload)).toBe('LEGAL_CASE_NOT_FOUND');
+      expect(await filesFor(NO_SUCH_ID)).toBe(before);
+    });
     it('aiming the request at shop B is refused before anything is read (403 SHOP_NOT_ALLOWED)', async () => {
       const res = await request(app)
         .get(`/api/files/${fileB}/url`)
@@ -164,6 +187,19 @@ describe.skipIf(!RUN)('TEST-1: F14 files across shops with real shop B data', ()
       expect(signed.data).toBeNull();
     });
 
+    it('the legal tables can not be read or written directly (L01): a lawyer would see every case', async () => {
+      for (const table of ['legal_cases', 'legal_hearings', 'legal_case_notes'] as const) {
+        const read = await asA.from(table).select('id').limit(1);
+        expect(read.error, table).not.toBeNull();
+        expect(read.data, table).toBeNull();
+      }
+      const write = await asA.from('legal_case_notes').insert({
+        organization_id: SHOP_ONE,
+        case_id: NO_SUCH_ID,
+        note: 'direct write',
+      });
+      expect(write.error).not.toBeNull();
+    });
     it('direct table writes are refused (no INSERT/UPDATE grant for authenticated)', async () => {
       const insert = await asA
         .from('customers')

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { BusinessDate, IsoTimestamp, Money, Uuid } from './common.js';
 import { CustomerStatus } from './customers.js';
+import { OverdueLegalFlag } from './legal.js';
 import { InstallmentFrequency } from './settings.js';
 
 /**
@@ -84,6 +85,8 @@ export const OverdueContractRow = z.object({
   legal_referral: z
     .object({ id: Uuid, status: OverdueActionStatus, business_date: BusinessDate })
     .nullable(),
+  /** N09: the contract's open legal case, or null. Optional for an older server. */
+  legal_case: OverdueLegalFlag.nullable().optional(),
 });
 export type OverdueContractRow = z.infer<typeof OverdueContractRow>;
 

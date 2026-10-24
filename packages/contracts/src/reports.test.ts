@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  RECEIVABLES_BUCKETS,
+  RECEIVABLES_GROUP_BY,
+  ReceivablesQuery,
+  ReceivablesReport,
+  ReceivablesRow,
   SALES_REPORT_COST_SORTS,
   SALES_REPORT_GROUP_BY,
   SalesReport,
@@ -203,5 +208,164 @@ describe('D02 sales report contract', () => {
     ).toBe(false);
     expect(SalesReport.safeParse({ ...report, sort: 'best' }).success).toBe(false);
     expect(SalesReport.safeParse({ ...report, page_size: 1001 }).success).toBe(false);
+  });
+});
+
+const aging = {
+  outstanding: '24000.00',
+  principal: '20000.00',
+  profit: '4000.00',
+  not_due: '22000.00',
+  late_1_30: '2000.00',
+  late_31_60: '0.00',
+  late_61_90: '0.00',
+  late_90_plus: '0.00',
+  overdue: '2000.00',
+  overdue_pct: '8.3',
+  contracts: 2,
+  customers: 1,
+  overdue_contracts: 1,
+  max_days_late: 30,
+  oldest_due_date: '2026-09-23',
+  migrated_contracts: 0,
+};
+const split = { amount: '0.00', principal: '0.00', profit: '0.00' };
+const receivables = {
+  as_of: '2026-10-23',
+  generated_at: ts,
+  group_by: 'customer',
+  filters: { branch_id: null, collector_id: 'none', customer_id: null, q: null, min_days: null },
+  sort: 'outstanding_desc',
+  rows: [
+    {
+      key: ID,
+      label: 'Amal',
+      sub_label: '01022220001',
+      last_payment_at: ts,
+      customer: { id: ID, name: 'Amal', phone: '01022220001' },
+      collector: { id: ID, name: 'Collector' },
+      ...aging,
+    },
+    { key: 'none', label: null, sub_label: null, last_payment_at: null, collector: null, ...aging },
+  ],
+  totals: {
+    ...aging,
+    buckets: {
+      not_due: split,
+      late_1_30: split,
+      late_31_60: split,
+      late_61_90: split,
+      late_90_plus: split,
+    },
+  },
+  check: {
+    rows_match: true,
+    contracts_checked: 2,
+    contracts_without_schedule: 0,
+    differences: {
+      outstanding: '0.00',
+      principal: '0.00',
+      not_due: '0.00',
+      late_1_30: '0.00',
+      late_31_60: '0.00',
+      late_61_90: '0.00',
+      late_90_plus: '0.00',
+    },
+  },
+  total_count: 2,
+  page: 1,
+  page_size: 50,
+};
+
+describe('D03 receivables aging contract', () => {
+  it('has four groupings and five buckets', () => {
+    expect(RECEIVABLES_GROUP_BY).toEqual(['customer', 'branch', 'collector', 'contract']);
+    expect(RECEIVABLES_BUCKETS).toEqual([
+      'not_due',
+      'late_1_30',
+      'late_31_60',
+      'late_61_90',
+      'late_90_plus',
+    ]);
+  });
+
+  it('parses a query, fills the defaults and coerces query strings', () => {
+    expect(ReceivablesQuery.parse({ group_by: 'branch' })).toEqual({
+      group_by: 'branch',
+      page: 1,
+      page_size: 50,
+    });
+    expect(
+      ReceivablesQuery.parse({
+        group_by: 'customer',
+        min_days: '61',
+        q: ' amal ',
+        page_size: '1000',
+      }),
+    ).toMatchObject({ min_days: 61, q: 'amal', page_size: 1000 });
+  });
+
+  it('accepts a collector id or none, and nothing else', () => {
+    expect(ReceivablesQuery.safeParse({ group_by: 'customer', collector_id: ID }).success).toBe(
+      true,
+    );
+    expect(ReceivablesQuery.safeParse({ group_by: 'customer', collector_id: 'none' }).success).toBe(
+      true,
+    );
+    expect(ReceivablesQuery.safeParse({ group_by: 'customer', collector_id: 'all' }).success).toBe(
+      false,
+    );
+  });
+
+  it('allows a search only with the customer or contract grouping, at most 100 characters', () => {
+    expect(ReceivablesQuery.safeParse({ group_by: 'contract', q: 'K-1' }).success).toBe(true);
+    expect(ReceivablesQuery.safeParse({ group_by: 'branch', q: 'K-1' }).success).toBe(false);
+    expect(ReceivablesQuery.safeParse({ group_by: 'customer', q: 'x'.repeat(101) }).success).toBe(
+      false,
+    );
+  });
+
+  it('refuses unknown fields (an organization id), a bad grouping, sort, min_days and page size', () => {
+    for (const bad of [
+      { group_by: 'customer', organization_id: ID },
+      { group_by: 'product' },
+      { group_by: 'customer', sort: 'profit_desc' },
+      { group_by: 'customer', min_days: 0 },
+      { group_by: 'customer', page_size: 1001 },
+      { group_by: 'customer', branch_id: 'x' },
+    ]) {
+      expect(ReceivablesQuery.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it('parses a report with rows of every shape, a null overdue %, and refuses money as a number', () => {
+    expect(ReceivablesReport.parse(receivables).rows).toHaveLength(2);
+    expect(
+      ReceivablesRow.parse({
+        ...aging,
+        key: ID,
+        label: 'K-000001',
+        sub_label: 'Amal',
+        last_payment_at: null,
+        overdue_pct: null,
+        max_days_late: null,
+        customer: { id: ID, name: 'Amal', phone: null },
+        branch: { id: ID, name: 'Main', code: null },
+        contract: {
+          id: ID,
+          number: 'K-000001',
+          frequency: 'monthly',
+          status: 'rescheduled',
+          is_migrated: true,
+          next_due_date: '2026-11-01',
+        },
+      }).contract?.is_migrated,
+    ).toBe(true);
+    expect(
+      ReceivablesReport.safeParse({
+        ...receivables,
+        totals: { ...receivables.totals, outstanding: 24000 },
+      }).success,
+    ).toBe(false);
   });
 });

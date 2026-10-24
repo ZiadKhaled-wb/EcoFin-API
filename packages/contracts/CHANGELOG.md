@@ -1,9 +1,16 @@
 # Changelog
 
-## 0.62.0
+## 0.64.0
 
 - S10 sales orders (EC-77): new `salesOrders.ts` with SalesOrderStatus, FulfilmentMode, OrderLineFulfilmentInput, SalesOrderLineInput, CreateSalesOrderBody, QuotationOrderLineOption, OrderFromQuotationBody, OrderFromQuotationParams, OrderDepositBody (S02 `SalePayments`), CancelSalesOrderBody (refund lines are S02 `SalePaymentInput`, `[]` without deposits), LinkOrderLineBody, ReserveOrderLineBody, SalesOrderIdParams, SalesOrderLineParams, SalesOrderLinePurchaseOrder, SalesOrderLine, SalesOrderPayment, SalesOrderBalances, SalesOrder, SalesOrderListQuery, SalesOrderList, DepositExceedsBalanceDetail, RefundMustEqualDepositsDetail. Money is decimal strings. Error codes ORDER_NOT_FOUND (404); ORDER_NOT_OPEN, ORDER_HAS_DELIVERIES, QUOTATION_NOT_ACCEPTED, QUOTATION_ALREADY_ORDERED, LINE_NOT_TO_ORDER, PO_LINE_OVERCOMMITTED, PO_NOT_OPEN, DEPOSIT_EXCEEDS_BALANCE (409); ORDER_LINES_INVALID, QUOTE_LINE_NEEDS_PRODUCT, UNITS_REQUIRED, PO_LINE_PRODUCT_MISMATCH, REFUND_MUST_EQUAL_DEPOSITS (422). The database's PO_NOT_FOUND is answered as the existing PURCHASE_ORDER_NOT_FOUND (404). No new permission key (`order.manage`, `order.cancel` exist).
 
+## 0.63.0
+
+- L01 + N09 legal module (EC-108, EC-88; D92): new `legal.ts` with LEGAL_CASE_STATUSES / LegalCaseStatus (preparing, filed, in_court, judgment, closed), LEGAL_OUTCOME_KINDS / LegalOutcomeKind, LEGAL_NEXT_STATUSES / legalNextStatuses (the allowed moves), ContractLegalFlag and OverdueLegalFlag (the N09 flag), LegalCaseRow, LegalCaseListQuery, LegalCaseListResponse (`rows`, `next_cursor`), LegalCaseGuarantor, LegalHearing, LegalCaseNote, LegalCaseAmounts, LegalCaseCollection, LegalCaseDetail, LegalCaseIdParams, LegalHearingParams, OpenLegalCaseBody, UpdateLegalCaseBody, SetLegalCaseStatusBody, AddHearingBody, UpdateHearingBody, AddCaseNoteBody, Lawyer, LawyerListResponse, LegalCaseAlreadyOpenDetail, LegalClaimTooHighDetail, LegalStatusInvalidDetail. Optional `legal_case` on `Contract`, the customer account's contract rows and `OverdueContractRow`. Error codes LEGAL_CASE_NOT_FOUND, HEARING_NOT_FOUND (404), LEGAL_CASE_ALREADY_OPEN, LEGAL_CASE_CLOSED, LEGAL_CASE_FILED, LEGAL_STATUS_INVALID (409), LEGAL_CONTRACT_NOT_DEFAULTED, LEGAL_CLAIM_TOO_HIGH, LAWYER_INVALID (422). Money is a string; no fee, cost or charge member (rule 4). No new permission key.
+
+## 0.62.0
+
+- D03 receivables aging: in `reports.ts`, RECEIVABLES_GROUP_BY / ReceivablesGroupBy (customer, branch, collector, contract), RECEIVABLES_SORTS / ReceivablesSort, RECEIVABLES_BUCKETS / ReceivablesBucket (not_due, late_1_30, late_31_60, late_61_90, late_90_plus), RECEIVABLES_NO_COLLECTOR (`none`), RECEIVABLES_MAX_MIN_DAYS, RECEIVABLES_MAX_Q, ReceivablesQuery (strict; `collector_id` a uuid or `none`; `q` only with the customer or contract grouping, at most 100 characters; `min_days` 1-100000; page_size 1-1000), ReceivablesMeasures, ReceivablesRow (customer / collector / branch / contract references by grouping), ReceivablesBucketSplit, ReceivablesTotals (each bucket split into principal and profit), ReceivablesCheck, ReceivablesReport. Money and percentages are strings; no fee member (rule 4). No new error code.
 ## 0.61.0
 
 - S08 offline cash sales (EC-75): T02's receipt builder, serializer, QR text and JSON helpers now live in contracts (`eta/serialize`, `eta/receipt`, `eta/qr`, `eta/json`) so the POS builds the same receipt offline, and the offline sales protocol (`offline.ts`). Published alone as 0.60.0.

@@ -41,6 +41,7 @@ import installmentsRoutes from './routes/installments.js';
 import contractsRoutes from './routes/contracts.js';
 import collectionsRoutes from './routes/collections.js';
 import overdueRoutes from './routes/overdue.js';
+import legalRoutes from './routes/legal.js';
 import contractChangeRoutes from './routes/contractChanges.js';
 import walletsRoutes from './routes/wallets.js';
 import importsRoutes from './routes/imports.js';
@@ -128,6 +129,7 @@ export function createApp(options: CreateAppOptions = {}) {
   mountRouter(app, '/api/contracts', contractsRoutes);
   mountRouter(app, '/api/collections', collectionsRoutes);
   mountRouter(app, '/api/overdue', overdueRoutes);
+  mountRouter(app, '/api/legal', legalRoutes);
   mountRouter(app, '/api/contract-changes', contractChangeRoutes);
   mountRouter(app, '/api/wallets', walletsRoutes);
   mountRouter(app, '/api/collectors', collectorsRoutes);
